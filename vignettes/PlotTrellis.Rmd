@@ -24,16 +24,15 @@ want to iterate on plotting code themselves.
 # Installation
 
 ```{r install, eval=FALSE}
-install.packages("PlotTrellis", repos = c("https://<user>.r-universe.dev", getOption("repos")))
+if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+pak::pkg_install("aleks-wehi/PlotTrellis")
 ```
 
 # Launching the app
 
 ```{r setup}
 library(PlotTrellis)
-if (interactive()) {
-  PlotTrellisApp(project_dir = tempdir())
-}
+PlotTrellisApp(project_dir = "~/plottrellis-demo", launch.browser = FALSE)
 ```
 
 `project_dir` is where this project's settings and cache/downloaded-script state live -- pass a
