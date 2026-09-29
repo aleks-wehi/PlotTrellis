@@ -1,11 +1,10 @@
-# Phase G.1 step 1 verify: assemble_download_script()'s discovery/pasting
-# mechanism has no automated coverage otherwise (the 3 bugs fixed in
-# 205d546 -- backtick-quoting `%||%`, all.names=TRUE for dot-prefixed
-# helpers, environment(sys.function()) instead of a hardcoded namespace --
-# were all found by manually running a generated script, not a test). This
-# doesn't re-do that full end-to-end execution check (real UniProt/data
-# access, a real installed-with-srcref build); it's a cheap regression guard
-# against the exact 3 bugs recurring.
+# assemble_download_script()'s discovery/pasting mechanism has no other
+# automated coverage: past bugs here (backtick-quoting `%||%`, all.names=TRUE
+# for dot-prefixed helpers, environment(sys.function()) instead of a
+# hardcoded namespace) were all found by manually running a generated
+# script, not a test. This doesn't re-do that full end-to-end execution check
+# (real UniProt/data access); it's a cheap regression guard against those
+# specific bugs recurring.
 
 test_that("assemble_download_script() produces syntactically valid, self-contained R code", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")

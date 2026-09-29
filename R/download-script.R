@@ -1,9 +1,10 @@
 # Download script assembly: no template, no token-filling. A downloaded
 # script is exactly the subset of this package's own R/ source that render_all()
-# actually needs, pasted verbatim (recovered via each function's srcref) plus a
-# small generated data block (deparsed entries/region_params/settings) and one
-# render_all() call at the end -- R/ is the single source of truth for what a
-# viz DOES; this only decides what to paste and in what order.
+# actually needs, pasted verbatim (recovered from PT_SOURCE_TEXT, captured at
+# build time -- see data-raw/build-source-text.R) plus a small generated data
+# block (deparsed entries/region_params/settings) and one render_all() call at
+# the end -- R/ is the single source of truth for what a viz DOES; this only
+# decides what to paste and in what order.
 #
 # What to paste is discovered, not hand-listed: starting from render_all() and
 # every settings_<key>()/render_<key>()/load_<key>() function, codetools::findGlobals()
@@ -32,13 +33,16 @@
   "AnnotationDbi", "strawr", "grid", "ggplot2", "svglite"
 )
 
-# One object's source text, function or constant. Functions: `srcref`
-# (comments/formatting preserved) -- requires the installed package to carry
-# source references (`Config/needs-source: yes`-equivalent install option; see
-# phase-G.1.md's "Self-contained download script" note for the concrete check).
-# Non-function top-level values (e.g. SCALE_BAR_TYPES): no srcref attribute
-# exists for these, so `deparse()` is the fallback -- loses comments but is
-# exactly value-equivalent, which is all correctness requires here.
+# One object's source text, function or constant. Functions: exact original
+# text (comments/formatting preserved), read from PT_SOURCE_TEXT
+# (R/sysdata.rda, built by data-raw/build-source-text.R) rather than the
+# live object's own `srcref` attribute -- an installed package doesn't carry
+# srcrefs by default (needs R_KEEP_PKG_SOURCE=yes/--with-keep.source, which
+# no ordinary install sets), so reading srcref at runtime broke this for
+# every normal install. Non-function top-level values (e.g. SCALE_BAR_TYPES):
+# never had a srcref either way, so `deparse()` is the fallback -- loses
+# comments but is exactly value-equivalent, which is all correctness
+# requires here.
 .pt_source_text <- function(name, ns) {
   obj <- get(name, envir = ns)
   # Backticks make the LHS valid for both ordinary names and non-syntactic
@@ -47,12 +51,12 @@
   # identical.
   lhs <- paste0("`", name, "`")
   if (is.function(obj)) {
-    sref <- attr(obj, "srcref")
-    if (is.null(sref)) {
-      stop("PlotTrellis: '", name, "' has no srcref -- was the installed package built ",
-           "with source references retained? See phase-G.1.md step 1.")
+    src <- PT_SOURCE_TEXT[[name]]
+    if (is.null(src)) {
+      stop("PlotTrellis: '", name, "' has no captured source text -- was ",
+           "data-raw/build-source-text.R run after this function was added to R/?")
     }
-    paste0(lhs, " <- ", paste(as.character(sref), collapse = "\n"))
+    paste0(lhs, " <- ", src)
   } else {
     paste0(lhs, " <- ", paste(deparse(obj), collapse = "\n"))
   }
