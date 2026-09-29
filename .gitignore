@@ -1,0 +1,20 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+inst/doc
+
+# R CMD build/check scratch output (regenerated locally, never committed)
+*.Rcheck/
+*.tar.gz
+
+# Real test fixture data (genome caches, ATAC/HiC/junction/quant files) --
+# too large and licensed to commit; helper-fixtures.R skips tests that need
+# it when this folder is absent (e.g. on R-universe's build farm).
+/data/
+
+# Golden-image snapshots stored gzipped in git (see helper-gz-snapshots.R);
+# the plain .svg is regenerated on disk before tests run and must not be
+# committed (BUGS.md #45 -- testthat also prunes these as "unused" if they
+# land here uncommitted anyway, but keep them out of `git add` regardless).
+tests/testthat/_snaps/**/*.svg

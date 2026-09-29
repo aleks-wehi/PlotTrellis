@@ -1,0 +1,52 @@
+Package: PlotTrellis
+Title: Composable Genomic Track Visualisations for Non-Coders
+Version: 0.0.0.9000
+Authors@R: person("Aleksander", "Pacnik", email = "pacnik.a@wehi.edu.au", role = c("aut", "cre"))
+Description: A plotgardener-based genomic track composer that lets biologists
+    build common EDA visualisations (coverage, Hi-C, splice junctions,
+    transcript structure, protein domains) via a Shiny interface, without
+    writing code, and download a standalone R script that reproduces the
+    exact figure offline.
+License: Artistic-2.0
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.3)
+Imports:
+    shiny,
+    sortable,
+    jsonlite,
+    plotgardener,
+    rtracklayer,
+    GenomicFeatures,
+    GenomicRanges,
+    IRanges,
+    GenomeInfoDb,
+    AnnotationDbi,
+    txdbmaker,
+    svglite,
+    S4Vectors,
+    tools,
+    codetools,
+    grid,
+    grDevices,
+    methods,
+    stats,
+    utils,
+    strawr,
+    data.table,
+    RSQLite,
+    later,
+    ggplot2
+Suggests:
+    testthat (>= 3.0.0),
+    vdiffr,
+    httptest2,
+    knitr,
+    rmarkdown,
+    BiocStyle,
+    org.Mm.eg.db,
+    org.Hs.eg.db
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
