@@ -32,7 +32,7 @@ pak::pkg_install("aleks-wehi/PlotTrellis")
 
 ```{r setup}
 library(PlotTrellis)
-PlotTrellisApp(project_dir = "~/plottrellis-demo", launch.browser = FALSE)
+PlotTrellisApp(project_dir = tempdir())
 ```
 
 `project_dir` is where this project's settings and cache/downloaded-script state live -- pass a
