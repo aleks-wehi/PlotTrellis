@@ -18,13 +18,23 @@
 #   gzip -9 -c tests/testthat/_snaps/foo/bar.svg > tests/testthat/_snaps_gz/foo/bar.svg.gz
 #   rm tests/testthat/_snaps/foo/bar.svg
 
-snaps_gz_dir <- testthat::test_path("_snaps_gz")
-snap_gz_files <- list.files(snaps_gz_dir, pattern = "\\.svg\\.gz$", recursive = TRUE, full.names = TRUE)
-for (gz_path in snap_gz_files) {
-  rel_path <- sub("\\.gz$", "", substring(gz_path, nchar(snaps_gz_dir) + 2))
-  svg_path <- testthat::test_path("_snaps", rel_path)
-  dir.create(dirname(svg_path), recursive = TRUE, showWarnings = FALSE)
-  con <- gzfile(gz_path, "rt")
-  writeLines(readLines(con, warn = FALSE), svg_path)
-  close(con)
+# Gated on PT_TEST_DATA_AVAILABLE (helper-fixtures.R, sourced first -- "f" <
+# "g") -- every expect_doppelganger() call is behind
+# skip_if_not(PT_TEST_DATA_AVAILABLE) too, so without fixture data none of
+# these references would ever be touched by a test in the run. Decompressing
+# them anyway left all 45 sitting in _snaps/ untouched, and testthat's own
+# unused-snapshot pruning (see above) turns that into an R CMD check FAILURE
+# on any machine without /vast data -- R-universe's build farm, CRAN, any
+# fresh clone -- every single time.
+if (PT_TEST_DATA_AVAILABLE) {
+  snaps_gz_dir <- testthat::test_path("_snaps_gz")
+  snap_gz_files <- list.files(snaps_gz_dir, pattern = "\\.svg\\.gz$", recursive = TRUE, full.names = TRUE)
+  for (gz_path in snap_gz_files) {
+    rel_path <- sub("\\.gz$", "", substring(gz_path, nchar(snaps_gz_dir) + 2))
+    svg_path <- testthat::test_path("_snaps", rel_path)
+    dir.create(dirname(svg_path), recursive = TRUE, showWarnings = FALSE)
+    con <- gzfile(gz_path, "rt")
+    writeLines(readLines(con, warn = FALSE), svg_path)
+    close(con)
+  }
 }

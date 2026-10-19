@@ -57,6 +57,7 @@ for (cs in single_cases) {
     flank_pct <- if (is.null(cs$flank_pct)) 0.15 else cs$flank_pct
     title     <- paste0(gsub("_", "-", module), "-", dataset, "-", tolower(sample))
     test_that(paste0(module, " renders correctly (", dataset, " dataset)"), {
+      skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
       rows          <- test_rows(dataset)
       region_params <- test_region(dataset, flank_pct = flank_pct)
       settings      <- test_settings(dataset)
@@ -114,6 +115,7 @@ for (cs in pair_cases) {
     treatment <- cs$treatment
     title     <- paste0(gsub("_", "-", module), "-", dataset, "-pair")
     test_that(paste0(module, " pair renders correctly (", dataset, " dataset)"), {
+      skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
       rows          <- test_rows(dataset)
       region_params <- test_region(dataset)
       settings      <- test_settings(dataset)
