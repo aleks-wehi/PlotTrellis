@@ -26,7 +26,7 @@ render_protein_domains <- function(entry, dict, ctx) {
     if (pd_text_w(full, fontsize, fontfamily) <= maxw) return(full)
     n <- nchar(note)
     repeat {
-      candidate <- paste0(substr(note, 1, n), "…", suffix)
+      candidate <- paste0(substr(note, 1, n), "\u2026", suffix)
       if (n <= 1 || pd_text_w(candidate, fontsize, fontfamily) <= maxw) return(candidate)
       n <- n - 1
     }

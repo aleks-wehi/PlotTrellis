@@ -28,12 +28,15 @@ suppressMessages({
 })
 
 # Real fixture data (genome caches, ATAC/HiC/junction/quant files) lives in a
-# gitignored data/ folder at the package root, not shipped with the package
+# gitignored data/ folder (the package root by default; in the monorepo, its
+# root data/ via PT_TEST_DATA_DIR), not shipped with the package
 # (far too large, and licensed test data) -- every test_that() below starts
 # with skip_if_not(PT_TEST_DATA_AVAILABLE, ...) so `R CMD check` on a machine
 # without this data (e.g. R-universe's build farm) reports these as skipped,
-# not failed.
-DATA_ROOT <- testthat::test_path("..", "..", "data")
+# not failed. PT_TEST_DATA_DIR overrides the location (the monorepo keeps the
+# fixtures at its root data/, see scripts/sync-plottrellis-to-public.sh).
+DATA_ROOT <- Sys.getenv("PT_TEST_DATA_DIR")
+if (!nzchar(DATA_ROOT)) DATA_ROOT <- testthat::test_path("..", "..", "data")
 PT_TEST_DATA_AVAILABLE <- dir.exists(DATA_ROOT)
 
 # ---- Genome fixtures --------------------------------------------------------

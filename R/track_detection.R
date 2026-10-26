@@ -6,7 +6,7 @@ detect_generic <- function(sample_row, viz, data_type, path_field = "file") {
     safe_n <- gsub("[^A-Za-z0-9._-]", "_", inst$name)
     item <- list(
       key        = paste0(viz, "_", safe_n, "_", safe_s),
-      label      = paste0(inst$name, " · ", sample_row$display),
+      label      = paste0(inst$name, " \u00B7 ", sample_row$display),
       type       = viz,
       sample     = sample_row$display,
       file       = if (path_field == "file") inst$path else NA_character_,
@@ -80,7 +80,7 @@ detect_tpm_usage <- function(sample_row) {
   safe_s <- gsub("[^A-Za-z0-9._-]", "_", sample_row$display)
   list(
     key = paste0("tpm_usage_", safe_s),
-    label = paste0("Transcript counts · ", sample_row$display),
+    label = paste0("Transcript counts \u00B7 ", sample_row$display),
     type = "tpm_usage", sample = sample_row$display, file = NA_character_, colour_key = sample_row$display,
     junction_path = junc, quant_path = quant,
     broken = !file.exists(quant)
@@ -113,9 +113,9 @@ build_comparison_track_items <- function(samples_list) {
       control   <- samples_list[[i]]
       treatment <- samples_list[[j]]
       if (identical(control$display, treatment$display)) next
-      for (item in detect_pair_generic(control, treatment, "bw_diff_stacked", "bw", " diff (stacked) · ", path_field = "path")) items[[item$key]] <- item
-      for (item in detect_pair_generic(control, treatment, "junctions_mirrored_diff", "paired-end", " mirrored diff · ", path_field = "path")) items[[item$key]] <- item
-      for (item in detect_pair_generic(control, treatment, "junctions_mirrored_diff_tpm_scaled", "paired-end", " mirrored diff (TPM-scaled) · ", path_field = "path", enrich = enrich_junctions_tpm_scaled)) items[[item$key]] <- item
+      for (item in detect_pair_generic(control, treatment, "bw_diff_stacked", "bw", " diff (stacked) \u00B7 ", path_field = "path")) items[[item$key]] <- item
+      for (item in detect_pair_generic(control, treatment, "junctions_mirrored_diff", "paired-end", " mirrored diff \u00B7 ", path_field = "path")) items[[item$key]] <- item
+      for (item in detect_pair_generic(control, treatment, "junctions_mirrored_diff_tpm_scaled", "paired-end", " mirrored diff (TPM-scaled) \u00B7 ", path_field = "path", enrich = enrich_junctions_tpm_scaled)) items[[item$key]] <- item
     }
   }
   items

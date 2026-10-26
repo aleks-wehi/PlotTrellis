@@ -74,7 +74,7 @@ render_junctions_mirrored_diff <- function(entry, dict, ctx) {
   mixed_text(
     list(
       list(text = paste0(entry$name, " mirrored diff"), colour = ctx$fontcol, fontface = "bold"),
-      list(text = " · ", colour = ctx$fontcol),
+      list(text = " \u00B7 ", colour = ctx$fontcol),
       list(text = entry$treatment_label, colour = entry$treatment_colour),
       list(text = " (Cmp) vs ", colour = ctx$fontcol),
       list(text = entry$control_label, colour = entry$control_colour),

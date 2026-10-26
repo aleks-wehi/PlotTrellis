@@ -20,7 +20,7 @@ render_bed <- function(entry, dict, ctx) {
   )
   mixed_text(
     list(list(text = entry$name, colour = ctx$fontcol, fontface = "bold"),
-         list(text = paste0(" · ", entry$sample), colour = entry$colour)),
+         list(text = paste0(" \u00B7 ", entry$sample), colour = entry$colour)),
     x = ctx$track_x + 0.05, y = ctx$y + 0.02, fontsize = ctx$fontsize - 1, fontfamily = ctx$font
   )
   invisible(NULL)

@@ -75,7 +75,7 @@ render_bw_diff_stacked <- function(entry, dict, ctx) {
 
   mixed_text(
     list(list(text = paste0(entry$name, " diff (stacked)"), colour = ctx$fontcol, fontface = "bold"),
-         list(text = " · ", colour = ctx$fontcol),
+         list(text = " \u00B7 ", colour = ctx$fontcol),
          list(text = entry$treatment_label, colour = entry$treatment_colour),
          list(text = " (Cmp) vs ", colour = ctx$fontcol),
          list(text = entry$control_label, colour = entry$control_colour),

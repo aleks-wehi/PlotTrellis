@@ -53,7 +53,7 @@ render_sashimi <- function(entry, dict, ctx) {
     x = ctx$track_x, y = ctx$y, width = ctx$track_w, height = ctx$height
   )
 
-  label <- sprintf(" · %s (max_h=%d reads)", entry$sample, max(arches$nSupport))
+  label <- sprintf(" \u00B7 %s (max_h=%d reads)", entry$sample, max(arches$nSupport))
   mixed_text(
     list(list(text = entry$name, colour = ctx$fontcol, fontface = "bold"), list(text = label, colour = entry$colour)),
     x = ctx$track_x + 0.05, y = ctx$y + 0.08, fontsize = ctx$fontsize - 1, fontfamily = ctx$font

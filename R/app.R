@@ -40,6 +40,11 @@
 #' @export
 PlotTrellisApp <- function(project_dir = tools::R_user_dir("PlotTrellis", which = "config"), ...) {
 
+# tools::R_user_dir() only returns the path, it doesn't create it -- on a
+# genuinely first run (nothing has ever written here before) the wizard's
+# Save handler's writeLines(SETTINGS_JSON) fails with "No such file or
+# directory" otherwise.
+dir.create(project_dir, recursive = TRUE, showWarnings = FALSE)
 SETTINGS_JSON <- file.path(project_dir, "project_settings.json")
 
 DEFAULT_SETTINGS <- list(
@@ -317,7 +322,7 @@ RENDER_CFG <- list(
 
 # Bolds whatever precedes the first " · " in a label (or the whole label if it has none); format-driven, not an enumerated word list (Phase C.0 decision 14), since bw.R's tracks can start with an arbitrary user-given instance name an enumerated list couldn't anticipate.
 format_track_label <- function(label) {
-  sub("^([^·]+?)( · |$)", "<strong>\\1</strong>\\2", label)
+  sub("^([^\u00B7]+?)( \u00B7 |$)", "<strong>\\1</strong>\\2", label)
 }
 
 # Gene symbol -> coords + user-facing error, shared by Compose's and Gene Report's gene-name lookup observers so the two can never disagree on error wording.
@@ -332,9 +337,9 @@ resolve_gene_region <- function(sym, txdb, flank_pct) {
 # Shared by Compose's and Gene Report's Generate buttons; both carry "generate-btn" so the spinner/double-click JS gate (which matches on that class, not a hardcoded id) covers both.
 generate_button_ui <- function(id, enabled) {
   if (enabled)
-    actionButton(id, "Generate figure →", class = "btn-success btn-lg generate-btn")
+    actionButton(id, "Generate figure \u2192", class = "btn-success btn-lg generate-btn")
   else
-    tags$button("Generate figure →",
+    tags$button("Generate figure \u2192",
                 class = "btn btn-success btn-lg generate-btn", disabled = "disabled")
 }
 
@@ -344,7 +349,7 @@ collapsible_panel <- function(section_id, title, ..., wrapper_id = NULL, wrapper
     div(class = "panel-heading",
       tags$h4(class = "panel-title",
         tags$a(href = paste0("#", section_id, "-body"), `data-toggle` = "collapse",
-          tags$span(class = "collapse-arrow", if (collapsed) "▸" else "▾"), paste0(" ", title)
+          tags$span(class = "collapse-arrow", if (collapsed) "\u25B8" else "\u25BE"), paste0(" ", title)
         )
       )
     ),
@@ -366,10 +371,14 @@ DEFAULT_SAMPLE_COLS <- setNames(
   UNIQUE_SAMPLES
 )
 
+# Main chromosomes first (chr1..chrN, chrX, chrY, chrM), then every
+# alt/random/fix/chrUn contig alphabetically below them -- kept, not filtered
+# (Phase I.1 step 6 decision).
 sort_chrs <- function(chrs) {
   is_std <- base::grepl("^chr[0-9]+$", chrs)
   nums   <- suppressWarnings(as.integer(base::sub("^chr", "", chrs)))
-  c(chrs[is_std][order(nums[is_std])], sort(chrs[!is_std]))
+  sex_mt <- intersect(c("chrX", "chrY", "chrM"), chrs)
+  c(chrs[is_std][order(nums[is_std])], sex_mt, sort(setdiff(chrs[!is_std], sex_mt)))
 }
 fmt_num <- function(x, digits = 2) {
   s <- formatC(round(x, digits), format = "f", digits = digits)
@@ -451,7 +460,7 @@ track_labels <- function(keys) {
 sort_keys_by_label <- function(keys) {
   label_parts <- function(label) {
     label <- tolower(label)
-    idx <- regexpr(" · ", label, fixed = TRUE)
+    idx <- regexpr(" \u00B7 ", label, fixed = TRUE)
     if (idx == -1) return(c(label, ""))
     c(substr(label, 1, idx - 1),
       substr(label, idx + attr(idx, "match.length"), nchar(label)))
@@ -800,14 +809,14 @@ ui <- navbarPage(
       setTimeout(function() { $('[data-toggle=\"tooltip\"]').tooltip(); }, 250);
     });
 
-    // ── Loading overlay ─────────────────────────────────────────────────────
+    // -- Loading overlay --
     // Injected into <body> directly so position:fixed works as a true viewport overlay
     // (navbarPage wraps non-tabPanel children as <li> items which breaks fixed positioning)
     $(document).ready(function() {
       $('body').append(
         '<div id=\"loading-overlay\" style=\"display:none;\">' +
         '<div class=\"plottrellis-spinner\"></div>' +
-        '<p style=\"margin-top:12px;font-size:14px;color:#555;\">Rendering…</p>' +
+        '<p style=\"margin-top:12px;font-size:14px;color:#555;\">Rendering\\u2026</p>' +
         '</div>'
       );
     });
@@ -894,11 +903,11 @@ ui <- navbarPage(
 
     // Keep collapse arrow in sync with open/close state
     $(document).on('hide.bs.collapse', '.plottrellis-section .collapse', function() {
-      $(this).closest('.plottrellis-section').find('.collapse-arrow').text('▸');
+      $(this).closest('.plottrellis-section').find('.collapse-arrow').text('\\u25B8');
       $(this).closest('.plottrellis-section').addClass('collapsed-panel');
     });
     $(document).on('show.bs.collapse', '.plottrellis-section .collapse', function() {
-      $(this).closest('.plottrellis-section').find('.collapse-arrow').text('▾');
+      $(this).closest('.plottrellis-section').find('.collapse-arrow').text('\\u25BE');
       $(this).closest('.plottrellis-section').removeClass('collapsed-panel');
     });
 
@@ -928,7 +937,7 @@ ui <- navbarPage(
     # decision 7) -- it's a separate, more destructive action from editing
     # settings, not a sub-item of it.
     div(id = "topbar-actions",
-      actionButton("open_settings", "Edit project settings ▸",
+      actionButton("open_settings", "Edit project settings \u25B8",
                    class = "btn-default btn-sm"),
       actionButton("clear_caches_btn", "Clear all caches...",
                    class = "btn-warning btn-sm"),
@@ -1061,7 +1070,7 @@ ui <- navbarPage(
               group_name  = "tracks",
               orientation = "horizontal",
               add_rank_list(
-                text     = "Available tracks (drag → to figure)",
+                text     = "Available tracks (drag \u2192 to figure)",
                 labels   = track_labels(COMPOSE_AVAILABLE_KEYS),
                 input_id = "available_tracks"
               ),
@@ -1367,7 +1376,7 @@ server <- function(input, output, session) {
     len   <- CHR_LENGTHS[[input$region_chr]] %||% Inf
     start <- as.integer(input$region_range[1])
     end   <- as.integer(input$region_range[2])
-    if (is.na(start) || start < 1)  return(list(valid = FALSE, msg = "Start must be ≥ 1"))
+    if (is.na(start) || start < 1)  return(list(valid = FALSE, msg = "Start must be \u2265 1"))
     if (is.na(end) || end <= start) return(list(valid = FALSE, msg = "End must be > start"))
     if (end > len)                  return(list(valid = FALSE, msg = "End exceeds chromosome length"))
     list(valid = TRUE, chrom = input$region_chr, start = start, end = end)
@@ -1402,7 +1411,7 @@ server <- function(input, output, session) {
       r <- state$gene_region
       div(class = "alert alert-success",
           strong("Found: "),
-          paste0(r$chrom, ":", format_coord(r$start), " – ", format_coord(r$end),
+          paste0(r$chrom, ":", format_coord(r$start), " \u2013 ", format_coord(r$end),
                  " (", format_bp(r$end - r$start), ")"))
     }
   })
@@ -1896,9 +1905,9 @@ server <- function(input, output, session) {
         style = "text-align:center;",
         tags$div(class = "zoom-group-label",
                  "Zoom in"),
-        actionButton("zoom_in_15x", "1.5×", class = "btn-default"),
-        actionButton("zoom_in_3x",  "3×",   class = "btn-default"),
-        actionButton("zoom_in_10x", "10×",  class = "btn-default")
+        actionButton("zoom_in_15x", "1.5\u00D7", class = "btn-default"),
+        actionButton("zoom_in_3x",  "3\u00D7",   class = "btn-default"),
+        actionButton("zoom_in_10x", "10\u00D7",  class = "btn-default")
       ),
       tags$div(
         style = "width:1px; background:#ddd; align-self:stretch; margin-top:22px;"
@@ -1907,9 +1916,9 @@ server <- function(input, output, session) {
         style = "text-align:center;",
         tags$div(class = "zoom-group-label",
                  "Zoom out"),
-        actionButton("zoom_out_15x", "1.5×", class = "btn-default"),
-        actionButton("zoom_out_3x",  "3×",   class = "btn-default"),
-        actionButton("zoom_out_10x", "10×",  class = "btn-default")
+        actionButton("zoom_out_15x", "1.5\u00D7", class = "btn-default"),
+        actionButton("zoom_out_3x",  "3\u00D7",   class = "btn-default"),
+        actionButton("zoom_out_10x", "10\u00D7",  class = "btn-default")
       )
     )
   })

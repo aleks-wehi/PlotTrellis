@@ -42,7 +42,7 @@ wiz_clean_optional_text <- function(v) {
 # A native browser tooltip (title attribute), not a JS/CSS framework widget -- used wherever a field's purpose isn't obvious from its name alone.
 wiz_help <- function(label_text, help_text) {
   tagList(label_text, tags$span(
-    "ⓘ", title = help_text, class = "wiz-help-icon",
+    "\u24D8", title = help_text, class = "wiz-help-icon",
     style = "cursor:help; color:#888; margin-left:4px; font-size:12px;"
   ))
 }
@@ -56,7 +56,7 @@ wiz_shared_form <- function(cfg, is_edit) {
     # file, and is never triggered by Save.
     div(class = "wiz-export-bar",
         style = "text-align:right; padding:6px 0; margin-bottom:12px; border-bottom:1px solid #ddd;",
-        actionButton("wiz_export_samples", "⤓ Export settings to txt", class = "btn-outline-secondary btn-sm"),
+        actionButton("wiz_export_samples", "\u2913 Export settings to txt", class = "btn-outline-secondary btn-sm"),
         tags$div(class = "text-muted", style = "font-size:11px; margin-top:2px;",
                  "Writes the current settings below to a samples.txt file. Export only, does not import.")
     ),

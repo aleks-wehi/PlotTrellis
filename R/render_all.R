@@ -109,10 +109,10 @@ render_all <- function(items, region_params, settings, device_fn = NULL) {
     types    <- vapply(title_items, `[[`, character(1), "viz")
     types    <- types[types != "genes"]  # annotation overlay, not a data type
     gene     <- region_params$gene
-    gene_lbl <- if (is.null(gene) || is.na(gene) || nchar(trimws(gene)) == 0) "" else paste0(gene, " · ")
+    gene_lbl <- if (is.null(gene) || is.na(gene) || nchar(trimws(gene)) == 0) "" else paste0(gene, " \u00B7 ")
     paste0(
-      gene_lbl, paste(toupper(unique(types)), collapse = " + "), " · ",
-      region_params$chrom, ":", format_bp_generic(region_params$start, 3), "–", format_bp_generic(region_params$end, 3)
+      gene_lbl, paste(toupper(unique(types)), collapse = " + "), " \u00B7 ",
+      region_params$chrom, ":", format_bp_generic(region_params$start, 3), "\u2013", format_bp_generic(region_params$end, 3)
     )
   }
 

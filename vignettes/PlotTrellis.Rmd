@@ -30,7 +30,7 @@ pak::pkg_install("aleks-wehi/PlotTrellis")
 
 # Launching the app
 
-```{r setup}
+```{r setup, eval=FALSE}
 library(PlotTrellis)
 PlotTrellisApp(project_dir = tempdir())
 ```

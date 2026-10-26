@@ -1,2 +1,4 @@
 ^data-raw$
 ^\.Rproj\.user$
+^launch\.R$
+^data$

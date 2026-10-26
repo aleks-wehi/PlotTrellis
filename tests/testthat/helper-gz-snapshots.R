@@ -22,10 +22,10 @@
 # "g") -- every expect_doppelganger() call is behind
 # skip_if_not(PT_TEST_DATA_AVAILABLE) too, so without fixture data none of
 # these references would ever be touched by a test in the run. Decompressing
-# them anyway left all 45 sitting in _snaps/ untouched, and testthat's own
-# unused-snapshot pruning (see above) turns that into an R CMD check FAILURE
-# on any machine without /vast data -- R-universe's build farm, CRAN, any
-# fresh clone -- every single time.
+# them anyway just leaves all 45 for testthat's unused-snapshot pruning (see
+# above) to delete again. Pruning deletes but doesn't fail the test run
+# (BUGS.md #50 spike, 2026-10-27: 39 pruned, still FAIL 0), and the plain
+# _snaps/*.svg are untracked, so this only avoids wasted work.
 if (PT_TEST_DATA_AVAILABLE) {
   snaps_gz_dir <- testthat::test_path("_snaps_gz")
   snap_gz_files <- list.files(snaps_gz_dir, pattern = "\\.svg\\.gz$", recursive = TRUE, full.names = TRUE)

@@ -106,9 +106,9 @@ render_junctions_mirrored_diff_tpm_scaled <- function(entry, dict, ctx) {
   mixed_text(
     list(
       list(text = paste0(entry$name, " mirrored diff (TPM-scaled)"), colour = ctx$fontcol, fontface = "bold"),
-      list(text = " · ", colour = ctx$fontcol),
+      list(text = " \u00B7 ", colour = ctx$fontcol),
       list(text = entry$treatment_label, colour = entry$treatment_colour),
-      list(text = sprintf(" (Cmp, ×%.2f gene-TPM scaled) vs ", d$height_scale_treat), colour = ctx$fontcol),
+      list(text = sprintf(" (Cmp, \u00D7%.2f gene-TPM scaled) vs ", d$height_scale_treat), colour = ctx$fontcol),
       list(text = entry$control_label, colour = entry$control_colour),
       list(text = " (Ref)", colour = ctx$fontcol)
     ),
