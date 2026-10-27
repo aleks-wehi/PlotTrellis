@@ -64,6 +64,9 @@ n_arcs <- function(svg) lengths(regmatches(svg, gregexpr("<polygon", svg, fixed 
 has_text <- function(svg, label) grepl(paste0(">", label, "</text>"), svg, fixed = TRUE)
 
 skip_no_synth <- function() {
+  # R-universe Windows checks render these tracks without the SVG text these
+  # tests read (2026-10-27); they run on Linux and macOS.
+  skip_on_os("windows")
   skip_if_not_installed("org.Mm.eg.db")
   skip_if_not_installed("txdbmaker")
 }
