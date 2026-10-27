@@ -85,13 +85,16 @@ render_junctions_mirrored_diff <- function(entry, dict, ctx) {
 
   axis_x         <- ctx$track_x - 0.08
   content_bottom <- mid_y + half_h
-  plotSegments(axis_x, content_top, axis_x, content_bottom, default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
-  plotSegments(axis_x - 0.04, content_top,    axis_x, content_top,    default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
-  plotSegments(axis_x - 0.04, mid_y,          axis_x, mid_y,          default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
-  plotSegments(axis_x - 0.04, content_bottom, axis_x, content_bottom, default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
-  plotText(sprintf("%d", as.integer(round(d$shared_max))), x = axis_x - 0.06, y = content_top,    just = c("right", "center"), fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = ctx$fontcol)
-  plotText("0",                                             x = axis_x - 0.06, y = mid_y,          just = c("right", "center"), fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = ctx$fontcol)
-  plotText(sprintf("%d", as.integer(round(d$shared_max))), x = axis_x - 0.06, y = content_bottom, just = c("right", "center"), fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+  # Value axis, off with the rest of the track axes (show_track_axes).
+  if (isTRUE(ctx$show_track_axes)) {
+    plotSegments(axis_x, content_top, axis_x, content_bottom, default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
+    plotSegments(axis_x - 0.04, content_top,    axis_x, content_top,    default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
+    plotSegments(axis_x - 0.04, mid_y,          axis_x, mid_y,          default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
+    plotSegments(axis_x - 0.04, content_bottom, axis_x, content_bottom, default.units = "inches", lwd = 1, linecolor = ctx$fontcol)
+    plotText(sprintf("%d", as.integer(round(d$shared_max))), x = axis_x - 0.06, y = content_top,    just = c("right", "center"), fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+    plotText("0",                                             x = axis_x - 0.06, y = mid_y,          just = c("right", "center"), fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+    plotText(sprintf("%d", as.integer(round(d$shared_max))), x = axis_x - 0.06, y = content_bottom, just = c("right", "center"), fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+  }
 
   legend_h <- min(ctx$height * 0.6, 1.0)
   legend_x <- ctx$track_x + ctx$track_w + 0.2

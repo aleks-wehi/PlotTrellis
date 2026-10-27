@@ -3,7 +3,9 @@
 # Rendering pipeline: 4-script assembly → source() → SVG
 # Single-script principle: downloaded R script is exactly what was sourced.
 #
-# Package entry point. Everything below used to be a Shiny app.R sourced
+# The exported entry points (run_plottrellis() and friends) are in R/entry-points.R; this file
+# holds the project-settings defaults/reader and the composer app builder (.pt_composer_app()).
+# The composer used to be a Shiny app.R sourced
 # directly by Shiny (which lands ui/server-supporting code in separate
 # envs, hence the old file's APP_DIR/SCRIPTS_DIR/SETTINGS_JSON/
 # DEFAULT_SETTINGS/CFG assign(envir = globalenv()) calls and its many
@@ -11,43 +13,17 @@
 # ui/server and every helper below share this function's own lexical scope
 # by ordinary closure, and every former source()d file is just another
 # function in this package's namespace, loaded once at package-load time.
-# `project_dir` is where this project's project_settings.json (and its
-# downloaded-script/cache state) lives -- defaults to a per-user config dir
-# so multiple projects can each pass their own.
-#' Launch the PlotTrellis Shiny app
-#'
-#' Starts the PlotTrellis genomic track composer: a 2-page Shiny app
-#' (Compose | Output) that lets you build plotgardener-based visualisations
-#' without writing code, and download a standalone R script that reproduces
-#' the exact figure offline. Blocks until the app is closed; on first run (or
-#' when re-entering project settings), automatically launches the setup
-#' wizard first and continues straight into the composer once it's saved --
-#' no separate re-launch needed.
-#'
-#' @param project_dir Directory holding this project's `project_settings.json`
-#'   and its cache/downloaded-script state. Defaults to a per-user config
-#'   directory (via [tools::R_user_dir()]) so multiple projects can each pass
-#'   their own.
-#' @param ... Passed through to [shiny::runApp()] (e.g. `launch.browser`,
-#'   `port`, `host`).
-#' @return Invisibly, the return value of the final [shiny::runApp()] call
-#'   (e.g. once the browser tab is closed) -- not a `shiny.appobj`, since this
-#'   function itself runs the app rather than returning one to run.
-#' @examples
-#' if (interactive()) {
-#'   PlotTrellisApp(project_dir = tempdir())
-#' }
-#' @export
-PlotTrellisApp <- function(project_dir = tools::R_user_dir("PlotTrellis", which = "config"), ...) {
 
-# tools::R_user_dir() only returns the path, it doesn't create it -- on a
-# genuinely first run (nothing has ever written here before) the wizard's
-# Save handler's writeLines(SETTINGS_JSON) fails with "No such file or
-# directory" otherwise.
-dir.create(project_dir, recursive = TRUE, showWarnings = FALSE)
-SETTINGS_JSON <- file.path(project_dir, "project_settings.json")
+# A function, not a top-level constant: app.R collates before genomes.R, so a
+# top-level list(orgdb = GENOME_PRESETS$...) would fail at install.
+.pt_default_settings <- function() list(
+  # Kept as ONE flat list (.pt_read_settings()'s modifyList(), RENDER_CFG,
+  # wizard.R's wiz_collect_flat_settings()/original_snapshot$flat all rely
+  # on that); the three banners below only group the declaration. The core
+  # import keys (.PT_CORE_SETTINGS, R/wizard.R) are set in the wizard; every
+  # other key in the composer's Figure settings panel (Phase I.3 step 28).
 
-DEFAULT_SETTINGS <- list(
+  # ---- Core import: identifies/locates the data (genome, data root, samples) ----
   # rationale: see solutions/concepts/19-relocated-code-rationale.md, "app.R:54"
   gtf_path            = "",
   orgdb               = GENOME_PRESETS$mm39$orgdb,
@@ -68,6 +44,8 @@ DEFAULT_SETTINGS <- list(
   # is the sole identifying field (no sample_id/replicate); a replicate is
   # just a separate entry with its own distinct condition string.
   samples     = list(),
+
+  # ---- Rendering / display: how any track is drawn or filtered ----
   font        = "DejaVu Sans",
   fontsize    = 8L,
   page_w      = 9,
@@ -78,6 +56,8 @@ DEFAULT_SETTINGS <- list(
   # this setting leaves untouched). On by default: reading real values off a
   # track without asking a bioinformatician is the whole point of this app.
   show_track_axes = TRUE,
+  show_title      = TRUE,   # the figure's title line (custom or auto)
+  show_scale_bar  = TRUE,   # the genomic scale bar on the first coverage-type track
   hic_norm    = "KR",
   hic_style   = "rectangle",
   zrange_cap  = NULL,   # NULL = auto (colour scale runs to the observed max, see viz/hic.R)
@@ -86,14 +66,6 @@ DEFAULT_SETTINGS <- list(
   hic_res_mode    = "auto", # "auto" | "finest"
   hic_max_bins_per_view = 500, # bin-count ceiling for Hi-C auto-resolution selection
   gene_flank_pct  = 15,     # % of gene length added to each side of gene view
-  # Used by bw_diff_stacked's gain/loss colours (VIZ_CONVENTIONS.md §6)
-  diff_colour_lo  = "#0033CC",  # vivid blue, highly downregulated
-  diff_colour_hi  = "#CC0000",  # vivid red,  highly upregulated
-  # Junctions mirrored diff track (BUGS.md #4): hard ceiling on the opacity
-  # scale (log2FC that maps to full opacity), so one small/sparse arc's
-  # outsized ratio can't stretch the scale and wash out every other arc's
-  # opacity.
-  junction_opacity_cap = 2,
   # Minimum pooled nSupport for a paired-end arc (BED12 splice junction or
   # BEDPE loop call) to be drawn. Default 0 (show everything) -- unlike a
   # real read count, a BEDPE score column's scale/meaning is caller-specific
@@ -105,17 +77,6 @@ DEFAULT_SETTINGS <- list(
   # utils/transcript_filter.R's comment for why this is a plain absolute
   # expression floor rather than a statistical test.
   min_display_tpm = 1,
-  # Fixed ROLE colour for every 2-sample comparison track (VIZ_CONVENTIONS.md §3.2)
-  # -- Reference/Comparison always render in these two colours regardless of
-  # either condition's own identity/PALETTE colour, so "which one is the
-  # baseline" reads at a glance instead of depending on an arbitrary sample hue.
-  # THESE TWO DEFAULTS ARE DUPLICATED (by necessity -- same pattern as
-  # diff_colour_lo/diff_colour_hi below) in utils/wizard.R's colour <input>
-  # `value=` and in RENDER_CFG's fallback chain -- if you change either
-  # hex here, change it in those two places too. Full rationale + the exact
-  # checklist of every spot these values live: VIZ_CONVENTIONS.md §3.2.
-  reference_colour  = "#4D4D4D", # neutral grey, always the Reference condition
-  comparison_colour = "#56B4E9", # colour-blind-safe blue, always the Comparison condition
   uniprot_reviewed_only = FALSE, # UniProt link-out: Swiss-Prot only if TRUE
   # Junction/arc tracks (feature 25, solutions/concepts/18-bed12-bedpe-arc-format.md):
   # whether an arc with only ONE anchor inside the plotted region is
@@ -124,17 +85,51 @@ DEFAULT_SETTINGS <- list(
   # Off by default -- BEDPE-sourced long-range pairs (e.g. Hi-C loops) are
   # the case expected to actually need this; splice junctions rarely span
   # far enough past a gene's view for it to matter.
-  arc_clip_partial = FALSE
+  arc_clip_partial = FALSE,
+  junction_height  = 0.85,  # inches, each sashimi (junction arc) track
+
+  # ---- Visual diff: only affects 2-sample comparison tracks ----
+  # Used by bw_diff_stacked's gain/loss colours (VIZ_CONVENTIONS.md §6)
+  diff_colour_lo  = "#0033CC",  # vivid blue, highly downregulated
+  diff_colour_hi  = "#CC0000",  # vivid red,  highly upregulated
+  # Junctions mirrored diff track (BUGS.md #4): hard ceiling on the opacity
+  # scale (log2FC that maps to full opacity), so one small/sparse arc's
+  # outsized ratio can't stretch the scale and wash out every other arc's
+  # opacity.
+  junction_opacity_cap = 2,
+  # bw_diff_stacked: tint of the shared (overlap) layer, 0 = white to 1 = the full
+  # reference colour.
+  diff_shared_alpha = 0.15,
+  # Fixed ROLE colour for every 2-sample comparison track (VIZ_CONVENTIONS.md §3.2)
+  # -- Reference/Comparison always render in these two colours regardless of
+  # either condition's own identity/PALETTE colour, so "which one is the
+  # baseline" reads at a glance instead of depending on an arbitrary sample hue.
+  # THESE TWO DEFAULTS ARE DUPLICATED (by necessity -- same pattern as
+  # diff_colour_lo/diff_colour_hi above) in utils/wizard.R's colour <input>
+  # `value=` and in RENDER_CFG's fallback chain -- if you change either
+  # hex here, change it in those two places too. Full rationale + the exact
+  # checklist of every spot these values live: VIZ_CONVENTIONS.md §3.2.
+  reference_colour  = "#4D4D4D", # neutral grey, always the Reference condition
+  comparison_colour = "#56B4E9"  # colour-blind-safe blue, always the Comparison condition
 )
 
-read_settings <- function() {
+.pt_read_settings <- function(SETTINGS_JSON, DEFAULT_SETTINGS) {
   if (!file.exists(SETTINGS_JSON)) return(DEFAULT_SETTINGS)
   # simplifyDataFrame = FALSE: jsonlite's default simplification turns
   # `samples[]` (an array of same-shaped objects) into a data.frame instead
   # of a list of lists, which crashes load_samples_from_settings()'s
   # `s$condition`/`s$data` access (`$` on an atomic column vector). Scalars
   # are unaffected -- only array-of-objects simplification is disabled.
-  parsed <- jsonlite::fromJSON(SETTINGS_JSON, simplifyDataFrame = FALSE)
+  parsed <- tryCatch(jsonlite::fromJSON(SETTINGS_JSON, simplifyDataFrame = FALSE), error = function(e) {
+    # Feature 43: point at the project_samples.txt the wizard's Save keeps beside it.
+    txt <- file.path(dirname(SETTINGS_JSON), "project_samples.txt")
+    stop("Can't read ", SETTINGS_JSON, " (", conditionMessage(e), "). ",
+         if (file.exists(txt)) paste0("Rebuild it from the project_samples.txt saved beside it: parse_samples_txt(",
+                                      encodeString(txt, quote = "\""), ", project_dir = ",
+                                      encodeString(dirname(SETTINGS_JSON), quote = "\""), ", overwrite = TRUE)")
+         else "Delete it and run the setup wizard again, or rebuild it from a samples.txt with parse_samples_txt(..., overwrite = TRUE).",
+         call. = FALSE)
+  })
   cfg <- modifyList(DEFAULT_SETTINGS, parsed)
   # modifyList()'s default (keep.null = FALSE) recurses into any key that's a
   # list on BOTH sides instead of overwriting it outright -- `samples` is
@@ -146,37 +141,26 @@ read_settings <- function() {
   cfg
 }
 
-# Loops internally so the wizard-to-app transition needs no manual
-# re-launch: CFG/WIZARD_EDIT_MODE are re-read each pass since a completed
-# wizard Save (or the main app's "Edit project settings" restart) changes
-# both on disk/env between iterations. Mirrors the restart contract
-# wizard.R already relies on (stopApp(returnValue = "restart"/"edit_settings")),
-# now consumed here directly instead of only by the pre-package deployment's
-# own external loop.
-repeat {
+# Shared setup for every entry point (R/entry-points.R): creates project_dir and
+# reads its settings merged onto the defaults.
+.pt_project <- function(project_dir) {
+  # tools::R_user_dir() only returns the path, it doesn't create it -- on a
+  # genuinely first run (nothing has ever written here before) the wizard's
+  # Save handler's writeLines(SETTINGS_JSON) fails with "No such file or
+  # directory" otherwise.
+  dir.create(project_dir, recursive = TRUE, showWarnings = FALSE)
+  .pt_set_cache_root(file.path(project_dir, "cache"))
+  SETTINGS_JSON <- file.path(project_dir, "project_settings.json")
+  DEFAULT_SETTINGS <- .pt_default_settings()
+  list(settings_json = SETTINGS_JSON, defaults = DEFAULT_SETTINGS,
+       cfg = .pt_read_settings(SETTINGS_JSON, DEFAULT_SETTINGS))
+}
 
-CFG <- read_settings()
+# Builds (does not run) the composer app for one project. Its startup below
+# (genome migration, TxDb load, ...) runs on each call.
+.pt_composer_app <- function(SETTINGS_JSON, CFG) {
 
-# Phase C.1 step 1: no project_settings.json yet -> guided first-run wizard
-# instead of the normal app. Phase C.3 decision 1 extends this branch to also
-# cover re-entering the wizard to EDIT an existing settings file: the main
-# app's "Edit project settings" button sets this env var and restarts --
-# same process-restart requirement as first-run, see utils/wizard.R's header
-# comment for why. wizard_server() itself decides prefill-vs-blank-landing
-# purely from file.exists(SETTINGS_JSON), not this flag -- this flag only
-# controls which of the two cases routes here at all.
-WIZARD_EDIT_MODE <- identical(Sys.getenv("PLOTTRELLIS_EDIT_SETTINGS", "0"), "1")
-app_obj <- if (!file.exists(SETTINGS_JSON) || WIZARD_EDIT_MODE) {
-
-.set_wizard_globals(SETTINGS_JSON, CFG, DEFAULT_SETTINGS)
-shinyApp(ui = wizard_ui(), server = wizard_server)
-
-} else {
-
-
-# DEFAULT_SETTINGS/read_settings()/CFG now defined unconditionally, above the
-# wizard-vs-main-app branch (Phase C.3 step D) -- see that block's own
-# comment for why.
+# CFG/SETTINGS_JSON come from .pt_project(), see R/entry-points.R.
 
 # ── Startup: load heavy objects once ──────────────────────────────────────────
 # Active genome config (standalone genome-config task, 2026-08-18): flat
@@ -209,7 +193,7 @@ if (is.null(CFG$orgdb) && !is.null(CFG$genome_id)) {
 # same-named globals from scripts/01_imports.R instead, defined once per assembled
 # script exactly like ORGDB_PKG below.
 GENOME <- ensure_genome_ready(gtf_path = CFG$gtf_path, orgdb = CFG$orgdb, genome_label = CFG$genome_label)
-if (GENOME$rebuilt) message("Built and cached this genome's TxDb/lookup files (next to its GTF).")
+if (GENOME$rebuilt) message("Built and cached this genome's TxDb/lookup files (in the project's cache folder).")
 ORGDB_PKG           <- GENOME$orgdb
 TX_NAME_LOOKUP_PATH <- GENOME$tx_name_lookup_path
 TX_META_LOOKUP_PATH <- GENOME$tx_meta_lookup_path
@@ -268,71 +252,29 @@ ALL_GENES <- sort(AnnotationDbi::keys(get(ORGDB_PKG, envir = asNamespace(ORGDB_P
 message("Ready.")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-PALETTE <- c("#1f78b4","#33a02c","#e31a1c","#ff7f00","#6a3d9a",
-             "#a6761d","#e6ab02","#66a61e","#e7298a","#7570b3")
-
 # %||% is defined once, in boilerplate.R (NA-aware) -- see phase-G.1.md's
 # log for why the two other duplicate definitions that used to live here and
 # in samples_txt_io.R were removed rather than left to collide on load order.
 
-# Treat NULL/NA/non-finite/list alike as "unset" (list: jsonlite::toJSON() used to round-trip a NULL setting as {}, fixed at the write site in wizard.R's wiz_save, but a settings.json written before that fix still reads {} back as an empty list via fromJSON()); shared by RENDER_CFG's zrange_cap and hic_height, both falling back to auto.
-clean_optional_numeric <- function(v) {
-  if (is.null(v) || is.list(v) || is.na(v) || !is.finite(v)) NULL else v
-}
-
 # Every render/lookup call site's single "cfg" object (Phase C.3 decision 7,
 # replaces the old cur_settings() reactive + settings_modal()'s session-only
-# input$s_... overrides). CFG is the sole source of truth again -- all
-# editing now goes through the wizard's restart round trip (utils/wizard.R),
-# so this only needs computing once, not per-render. Bundles a few
+# input$s_... overrides). Computed once from CFG: the wizard edits the core
+# settings (restart round trip), and the composer's Figure settings panel
+# layers live values for the other keys on top of it (saved_cfg()/live_cfg()
+# in server(), Phase I.3 step 28). Bundles a few
 # genome-derived globals (orgdb_pkg/genome_label/tx_*_lookup_path) alongside
 # the flat CFG keys purely so callers keep getting one object with both.
-RENDER_CFG <- list(
-  txdb_path   = GENOME$txdb_path,
-  gtf_path    = CFG$gtf_path,
-  samples     = CFG$samples,
-  orgdb_pkg           = ORGDB_PKG,
-  genome_label        = GENOME$genome_label,
-  tx_name_lookup_path = TX_NAME_LOOKUP_PATH,
-  tx_meta_lookup_path = TX_META_LOOKUP_PATH,
-  data_dir    = CFG$data_dir,
-  font        = trimws(CFG$font %||% "DejaVu Sans"),
-  fontsize    = CFG$fontsize %||% 8L,
-  page_w      = CFG$page_w %||% 9,
-  chr_fmt     = CFG$chr_fmt %||% "dot",
-  show_track_axes = CFG$show_track_axes %||% TRUE,
-  hic_norm    = trimws(CFG$hic_norm %||% "KR"),
-  hic_style   = CFG$hic_style %||% "rectangle",
-  zrange_cap  = clean_optional_numeric(CFG$zrange_cap),
-  atac_height  = CFG$atac_height %||% 0.85,
-  hic_height   = clean_optional_numeric(CFG$hic_height),
-  hic_res_mode = CFG$hic_res_mode %||% "auto",
-  hic_max_bins_per_view = CFG$hic_max_bins_per_view %||% 500,
-  diff_colour_lo  = trimws(CFG$diff_colour_lo %||% "#0033CC"),
-  diff_colour_hi  = trimws(CFG$diff_colour_hi %||% "#CC0000"),
-  junction_opacity_cap = CFG$junction_opacity_cap %||% 2,
-  min_junction_support = CFG$min_junction_support %||% 0,
-  min_display_tpm = CFG$min_display_tpm %||% 1,
-  reference_colour  = trimws(CFG$reference_colour %||% "#4D4D4D"),
-  comparison_colour = trimws(CFG$comparison_colour %||% "#56B4E9"),
-  gene_flank_pct  = CFG$gene_flank_pct %||% 15,
-  uniprot_reviewed_only = CFG$uniprot_reviewed_only %||% FALSE,
-  arc_clip_partial = CFG$arc_clip_partial %||% FALSE
-)
+RENDER_CFG <- .pt_render_cfg(CFG, GENOME)
 
 # Bolds whatever precedes the first " · " in a label (or the whole label if it has none); format-driven, not an enumerated word list (Phase C.0 decision 14), since bw.R's tracks can start with an arbitrary user-given instance name an enumerated list couldn't anticipate.
 format_track_label <- function(label) {
   sub("^([^\u00B7]+?)( \u00B7 |$)", "<strong>\\1</strong>\\2", label)
 }
 
-# Gene symbol -> coords + user-facing error, shared by Compose's and Gene Report's gene-name lookup observers so the two can never disagree on error wording.
-resolve_gene_region <- function(sym, txdb, flank_pct) {
-  result <- gene_to_coords(sym, txdb = txdb, flank_pct = flank_pct, orgdb_pkg = ORGDB_PKG)
-  if (is.null(result))
-    list(region = NULL, error = paste0("'", sym, "' not found in ", GENOME$genome_label, " (e.g. Pax5, not PAX5)"))
-  else
-    list(region = result, error = NULL)
-}
+# Gene query (symbol in any case, or Ensembl gene ID; see resolve_gene_query()) -> coords,
+# the canonical symbol every track/panel keys on, and a user-facing error.
+resolve_gene_region <- function(query, txdb, flank_pct)
+  .pt_resolve_gene_region(query, txdb, flank_pct, ORGDB_PKG, ALL_GENES, GENOME$genome_label)
 
 # Shared by Compose's and Gene Report's Generate buttons; both carry "generate-btn" so the spinner/double-click JS gate (which matches on that class, not a hardcoded id) covers both.
 generate_button_ui <- function(id, enabled) {
@@ -361,15 +303,18 @@ collapsible_panel <- function(section_id, title, ..., wrapper_id = NULL, wrapper
 
 UNIQUE_SAMPLES <- unique(vapply(SAMPLES_DF, function(r) r$display, character(1)))
 # Use colour column from Samples_super.txt when present; fall back to PALETTE
-DEFAULT_SAMPLE_COLS <- setNames(
-  vapply(seq_along(UNIQUE_SAMPLES), function(i) {
-    s   <- UNIQUE_SAMPLES[i]
-    row <- Find(function(r) r$display == s, SAMPLES_DF)
-    if (!is.null(row) && !is.na(row$colour %||% NA_character_)) return(row$colour)
-    PALETTE[((i - 1L) %% length(PALETTE)) + 1L]
-  }, character(1)),
-  UNIQUE_SAMPLES
-)
+DEFAULT_SAMPLE_COLS <- .pt_sample_colours(SAMPLES_DF)
+
+# Optional preloaded starting view (pt_preload()): the UI starts with this mode,
+# condition(s), gene and figure tracks already picked, so Generate is the only
+# click. NULL (no start_view in the settings) keeps the usual blank start.
+START_VIEW <- if (is.list(CFG$start_view)) lapply(CFG$start_view, unlist) else NULL
+# Keys that no longer exist (a sample renamed since) are dropped, not shown.
+if (!is.null(START_VIEW)) START_VIEW$tracks <- intersect(START_VIEW$tracks, names(TRACK_ITEMS))
+start_condition <- function(i) {
+  v <- START_VIEW$conditions
+  if (length(v) >= i) v[[i]] else ""
+}
 
 # Main chromosomes first (chr1..chrN, chrX, chrY, chrM), then every
 # alt/random/fix/chrUn contig alphabetically below them -- kept, not filtered
@@ -409,44 +354,8 @@ parse_bp <- function(s) {
 }
 
 # Converts TRACK_ITEMS entries (picker selections, utils/track_detection.R's shape) into pipeline/render_all()'s entry shape; height/data are always NULL here since render_all()'s settings_<viz>() functions compute height themselves.
-build_entries <- function(figure_labels, col_map, settings) {
-  Filter(Negate(is.null), lapply(figure_labels, function(lbl) {
-    sp <- TRACK_ITEMS[[lbl]]
-    if (is.null(sp)) return(NULL)
-
-    # Comparison items carry `samples` = c(reference_display, comparison_display)
-    # instead of a single colour_key. control_colour/treatment_colour are
-    # resolved HERE, from two fixed per-project ROLE colours (settings$
-    # reference_colour/comparison_colour), never from either condition's own
-    # identity/PALETTE colour -- "which one is the baseline" reads the same
-    # way in every comparison track regardless of the samples involved.
-    if (!is.null(sp$samples) && length(sp$samples) == 2) {
-      known <- c("key", "label", "type", "sample", "file", "colour_key", "samples",
-                 "control_label", "treatment_label", "control_path", "treatment_path")
-      extra <- sp[setdiff(names(sp), known)]  # e.g. junctions_mirrored_diff_tpm_scaled's control_quant/treatment_quant
-      return(c(list(
-        viz = sp$type, name = sp$name,
-        control_label = sp$control_label, treatment_label = sp$treatment_label,
-        control_path  = sp$control_path,  treatment_path  = sp$treatment_path,
-        control_colour   = settings$reference_colour  %||% "#4D4D4D",
-        treatment_colour = settings$comparison_colour %||% "#56B4E9",
-        height = NULL, data = NULL
-      ), extra))
-    }
-
-    col <- if (!is.na(sp$colour_key %||% NA)) col_map[[sp$colour_key]] else NA_character_
-    entry <- list(viz = sp$type, height = NULL, data = NULL)
-    if (sp$type == "tpm_usage") {
-      entry <- c(entry, list(sample = sp$sample, colour = col, quant_path = sp$quant_path, junction_path = sp$junction_path))
-    } else if (sp$type == "sashimi") {
-      entry <- c(entry, list(sample = sp$sample, colour = col, name = sp$name, path = sp$junction_path))
-    } else if (sp$type %in% c("bw", "hic", "bed")) {
-      entry <- c(entry, list(sample = sp$sample, colour = col, name = sp$name, path = sp$file))
-      if (sp$type == "hic") entry$hic_style <- settings$hic_style
-    }
-    entry
-  }))
-}
+build_entries <- function(figure_labels, col_map, settings)
+  .pt_build_entries(figure_labels, TRACK_ITEMS, col_map, settings)
 
 # ── Gene Report: condition list + per-condition track pool ────────────────────
 # AVAILABLE_CONDITIONS now computed at startup, above (build_comparison_
@@ -470,7 +379,8 @@ sort_keys_by_label <- function(keys) {
 }
 
 # Just the gene-annotation track for every sample-count mode (bug fix, 2026-09-15: this used to also default in tpm_usage/bw/sashimi/transcripts_annotated/protein_domains/diff tracks, swapping in a whole different stack on every mode/condition change instead of a plain, predictable starting point); anything else goes in from Available tracks explicitly.
-default_figure_keys <- function(conditions) "genes"
+default_figure_keys <- function(conditions)
+  if (!is.null(START_VIEW) && identical(conditions, START_VIEW$conditions)) START_VIEW$tracks else "genes"
 
 # Item pool + default figure/available split for 1-2 conditions, filtered by each item's own `sample` field; fixed_item()s are found by scanning TRACK_ITEMS itself, never a hardcoded type list. Full rationale: solutions/concepts/19-relocated-code-rationale.md, "app.R:545".
 track_split <- function(conditions) {
@@ -959,7 +869,7 @@ ui <- navbarPage(
                    choices  = c("One" = "single",
                                 "Two" = "two",
                                 "Multi" = "compose"),
-                   selected = character(0), inline = TRUE),
+                   selected = START_VIEW$view_mode %||% character(0), inline = TRUE),
       hr(),
 
       # Condition selection -- single/two-sample modes only; track-compose has
@@ -972,19 +882,21 @@ ui <- navbarPage(
       conditionalPanel("input.view_mode === 'single'",
         fluidRow(column(4,
           selectizeInput("sel_condition", "Condition:",
-                      choices = condition_choices(), selected = "")
+                      choices = condition_choices(),
+                      selected = if (identical(START_VIEW$view_mode, "single")) start_condition(1) else "")
         ))
       ),
       conditionalPanel("input.view_mode === 'two'",
         fluidRow(
           column(4,
             selectizeInput("sel_reference", "Reference:",
-                        choices = condition_choices(), selected = "")
+                        choices = condition_choices(),
+                        selected = if (identical(START_VIEW$view_mode, "two")) start_condition(1) else "")
           ),
           column(4,
             selectizeInput("sel_comparison", "Comparison:",
                         choices = condition_choices(),
-                        selected = "")
+                        selected = if (identical(START_VIEW$view_mode, "two")) start_condition(2) else "")
           )
         )
       ),
@@ -995,20 +907,22 @@ ui <- navbarPage(
           h4("Genomic region"),
           radioButtons("region_mode", NULL,
                        choices  = c("Gene name" = "gene", "Coordinates" = "coords"),
-                       selected = character(0), inline = TRUE),
+                       selected = if (is.null(START_VIEW$gene)) character(0) else "gene", inline = TRUE),
           hr(style = "margin:8px 0;"),
 
           conditionalPanel("input.region_mode === 'gene'",
             fluidRow(
               column(4,
-                selectizeInput("gene_name", "Gene symbol:",
+                selectizeInput("gene_name", "Gene symbol or Ensembl ID:",
                                choices = NULL,
                                # maxOptions caps how many server-side search
                                # matches selectize will ever render, not a
                                # "load more on scroll" limit -- 10 meant most
                                # typed queries silently truncated well before
                                # the user could scroll to a match.
-                               options = list(placeholder = "e.g. Pax5", maxOptions = 1000))
+                               # create = TRUE lets an Ensembl ID (not in the symbol list) be
+                               # entered; resolve_gene_region() maps it to its symbol.
+                               options = list(placeholder = "e.g. Pax5", maxOptions = 1000, create = TRUE))
               ),
               column(6, br(), uiOutput("gene_result_ui"))
             )
@@ -1061,7 +975,7 @@ ui <- navbarPage(
               # (12-data-intake-spec.md's known gap).
               tags$button("Coverage",    class = "btn btn-lg btn-default filter-btn", `data-filter` = "bw"),
               tags$button("HiC",         class = "btn btn-lg btn-default filter-btn", `data-filter` = "hic"),
-              tags$button("Sashimi",     class = "btn btn-lg btn-default filter-btn", `data-filter` = "sashimi"),
+              tags$button("Junctions",   class = "btn btn-lg btn-default filter-btn", `data-filter` = "sashimi"),
               tags$button("TPMs",        class = "btn btn-lg btn-default filter-btn", `data-filter` = "tpm_usage")
             ),
 
@@ -1084,26 +998,25 @@ ui <- navbarPage(
         )
       ),
 
-      fluidRow(column(4,
-        textInput("plot_title", "Title (optional):",
-                  placeholder = "Leave blank to auto-generate", width = "100%")
-      )),
+      # Phase I.3 step 28: every non-core setting, live for this session. Changes apply
+      # on Generate, zoom or Apply to figure (no automatic re-render).
+      collapsible_panel("figure_settings", "Figure settings", collapsed = TRUE,
+        .pt_plot_title_input(),
+        p(class = "text-muted", "Changes apply on the next Generate, zoom or Apply to figure, for this session only. Save as project default keeps them for next time."),
+        uiOutput("display_settings_ui"),
+        tags$div(style = "margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+          uiOutput("apply_settings_ui", inline = TRUE),
+          actionButton("save_settings", "Save as project default", class = "btn-default"),
+          actionButton("revert_settings", "Revert to saved", class = "btn-default"),
+          uiOutput("settings_dirty_ui", inline = TRUE)
+        )
+      ),
       tags$div(style = "height:8px;"),
       fluidRow(
         column(4, uiOutput("generate_ui")),
         column(8, uiOutput("generate_warning_ui"))
       ),
-      tags$div(style = "height:16px;"),
-
-      # rationale: see solutions/concepts/19-relocated-code-rationale.md, "app.R:1262"
-      conditionalPanel("(input.view_mode === 'single' || input.view_mode === 'two') && input.region_mode === 'gene'",
-        collapsible_panel("gene_protein_info", "Gene / protein info", collapsed = TRUE,
-          tabsetPanel(type = "pills",
-            tabPanel("Gene info", uiOutput("gr_extras_ui")),
-            tabPanel("Canonical protein annotation", uiOutput("gr_protein_ui"))
-          )
-        )
-      )
+      tags$div(style = "height:16px;")
     ), # /collapsible_panel: compose
 
     # ── Output section (hidden until first render) ───────────────────────────────
@@ -1122,6 +1035,7 @@ ui <- navbarPage(
           downloadButton("dl_rcode", "Download R script", class = "btn-lg")
         )
       ),
+      .pt_gene_info_ui(collapsible_panel),
       tags$div(style = "margin-top:12px;",
         collapsible_panel("rcode", "R script", collapsed = TRUE,
           div(style = "max-height: 60vh; overflow-y: auto; font-size: var(--bio-font-code);",
@@ -1142,7 +1056,7 @@ server <- function(input, output, session) {
   # given a zero-length selected, so "" (a value absent from ALL_GENES) is
   # the only way to start with nothing shown. No gene preselected as of the
   # E.2 follow-up (2026-09-08) -- previously defaulted to "Pax5".
-  updateSelectizeInput(session, "gene_name", choices = ALL_GENES, server = TRUE, selected = "")
+  updateSelectizeInput(session, "gene_name", choices = ALL_GENES, server = TRUE, selected = START_VIEW$gene %||% "")
 
   # ── Mode switch: single/two/compose is now one radio (input$view_mode),
   # read directly -- no derived reactiveVal/output needed, same pattern
@@ -1185,6 +1099,7 @@ server <- function(input, output, session) {
   state <- reactiveValues(
     gene_region          = NULL,
     gene_error           = NULL,
+    gene_note            = NULL,
     region               = NULL,
     svg_path             = NULL,
     rcode                = NULL,
@@ -1192,10 +1107,77 @@ server <- function(input, output, session) {
     start_parse_err      = NULL,
     end_parse_err        = NULL,
     last_region          = NULL,
-    last_entries         = NULL,
-    last_settings_base   = NULL,
+    last_labels          = NULL,  # track labels and title of the last figure, so zoom
+    last_title           = "",    # and Apply rebuild it with the live settings
     rendering            = FALSE
   )
+
+  # ── Figure settings (Phase I.3 step 28) ─────────────────────────────────────
+  # saved_cfg: the project's saved settings (RENDER_CFG, then whatever Save as
+  # project default writes). live_cfg: saved_cfg with the composer panel's
+  # s_<key> inputs on top. Every render reads live_cfg(); core keys (genome,
+  # data root, samples) and the derived paths always come from saved_cfg.
+  # Assigned with x[names(v)] <- v, not modifyList(), which would drop the
+  # NULL ("auto") values of zrange_cap/hic_height.
+  saved_cfg <- reactiveVal(RENDER_CFG)
+  settings_ui_gen <- reactiveVal(0)  # bumped to re-render the panel from saved_cfg()
+  display_keys <- setdiff(names(.pt_default_settings()), .PT_CORE_SETTINGS)
+  live_cfg <- reactive({
+    x <- saved_cfg()
+    v <- .pt_collect_display_settings(input, "s_", x)
+    x[names(v)] <- v
+    x
+  })
+  settings_dirty <- reactive({
+    l <- live_cfg(); sv <- saved_cfg()
+    any(vapply(display_keys, function(k) settings_value_differs(l[[k]], sv[[k]]), logical(1)))
+  })
+
+  output$display_settings_ui <- renderUI({
+    settings_ui_gen()
+    ui <- .pt_display_settings_ui(isolate(saved_cfg()), "s_")
+    tagList(ui$display, .pt_settings_group("Comparison (diff) tracks", ui$diff))
+  })
+  # Rendered while the panel is still collapsed, so every s_ input reports
+  # its value from the start.
+  outputOptions(output, "display_settings_ui", suspendWhenHidden = FALSE)
+
+  output$settings_dirty_ui <- renderUI({
+    if (settings_dirty()) tags$span(class = "text-warning", "Unsaved changes (this session only).")
+  })
+
+  # Save as project default: writes only the non-core keys into the saved
+  # project_settings.json (re-read, so core keys and samples stay exactly as
+  # saved), and refreshes project_samples.txt the way the wizard's Save does.
+  observeEvent(input$save_settings, {
+    live <- live_cfg()
+    ok <- tryCatch({
+      # Never write a project from defaults (e.g. reset from another tab meanwhile).
+      if (!file.exists(SETTINGS_JSON)) stop(SETTINGS_JSON, " no longer exists; restart the app.")
+      x <- .pt_read_settings(SETTINGS_JSON, .pt_default_settings())
+      x[display_keys] <- live[display_keys]
+      .pt_write_project_files(x, SETTINGS_JSON)
+      TRUE
+    }, error = function(e) {
+      showNotification(paste("Couldn't save the settings:", conditionMessage(e)), type = "error", duration = NULL)
+      FALSE
+    })
+    if (ok) {
+      saved_cfg(live)
+      showNotification("Saved as the project default.", type = "message")
+    }
+  })
+
+  # Revert to saved: re-render the panel from saved_cfg(); the browser then
+  # reports the re-rendered inputs' values.
+  observeEvent(input$revert_settings, settings_ui_gen(settings_ui_gen() + 1))
+
+  # Shown in the Edit project settings / Clear caches / Close app confirms.
+  unsaved_settings_note <- function() {
+    if (isTRUE(settings_dirty()))
+      p(class = "text-warning", strong("Your Figure settings changes are not saved and will be lost."),
+        " Use Save as project default first to keep them.")
+  }
 
   session$onSessionEnded(function() {
     isolate({
@@ -1213,6 +1195,7 @@ server <- function(input, output, session) {
     showModal(modalDialog(
       title = "Edit project settings?", easyClose = FALSE,
       p("This restarts the app into the setup wizard, pre-filled with your current settings. Any in-progress figure/selection in this session will be lost."),
+      unsaved_settings_note(),
       footer = tagList(modalButton("Cancel"), actionButton("confirm_edit_settings", "Continue", class = "btn-primary"))
     ))
   })
@@ -1225,7 +1208,8 @@ server <- function(input, output, session) {
     # reaches the browser.
     showModal(modalDialog(
       title = "Restarting into the setup wizard", easyClose = FALSE, footer = NULL,
-      p("A new browser tab will open in a few seconds.")
+      p(strong("You can close this tab now."), " The setup wizard opens in a new tab from RStudio in a few seconds. ",
+        "If nothing opens, go back to RStudio: the app's address is in the Console.")
     ))
     later::later(function() stopApp(returnValue = "edit_settings"), 0.2)
   }, ignoreInit = TRUE)
@@ -1233,7 +1217,7 @@ server <- function(input, output, session) {
   observeEvent(input$reset_project_btn, {
     showModal(modalDialog(
       title = "Reset project configuration?", easyClose = FALSE,
-      p("This deletes project_settings.json and restarts the app into first-time setup. samples.txt itself is not touched."),
+      p("This deletes project_settings.json and restarts the app into first-time setup, which offers to restore it from project_samples.txt (kept). Your own samples.txt is not touched."),
       footer = tagList(modalButton("Cancel"), actionButton("confirm_reset_project", "Delete and restart", class = "btn-danger"))
     ))
   })
@@ -1243,7 +1227,9 @@ server <- function(input, output, session) {
     showModal(modalDialog(
       title = "Project configuration reset", easyClose = FALSE, footer = NULL,
       p("project_settings.json has been deleted."),
-      p("Restarting into first-time setup, a new browser tab will open in a few seconds.")
+      p("Restarting into first-time setup."),
+      p(strong("You can close this tab now."), " The app reopens in a new tab from RStudio in a few seconds. ",
+        "If nothing opens, go back to RStudio: the app's address is in the Console.")
     ))
     later::later(function() stopApp(returnValue = "restart"), 0.2)
   }, ignoreInit = TRUE)
@@ -1259,6 +1245,7 @@ server <- function(input, output, session) {
     showModal(modalDialog(
       title = "Close app?", easyClose = FALSE,
       p("This stops the R process running this app. You'll need to relaunch it to use PlotTrellis again."),
+      unsaved_settings_note(),
       footer = tagList(modalButton("Cancel"), actionButton("confirm_close_app", "Close app", class = "btn-primary"))
     ))
   })
@@ -1284,6 +1271,7 @@ server <- function(input, output, session) {
         tags$li("Protein-domain annotation cache (all genes)")
       ),
       p("project_settings.json and samples.txt are not touched. Everything above rebuilds automatically (one-time cost) the next time it's needed."),
+      unsaved_settings_note(),
       footer = tagList(modalButton("Cancel"), actionButton("confirm_clear_caches", "Delete and restart", class = "btn-warning"))
     ))
   })
@@ -1297,13 +1285,15 @@ server <- function(input, output, session) {
     showModal(modalDialog(
       title = "Caches cleared", easyClose = FALSE, footer = NULL,
       p("All caches have been deleted."),
-      p("Restarting with your current project settings, a new browser tab will open in a few seconds.")
+      p("Restarting with your current project settings."),
+      p(strong("You can close this tab now."), " The app reopens in a new tab from RStudio in a few seconds. ",
+        "If nothing opens, go back to RStudio: the app's address is in the Console.")
     ))
     later::later(function() stopApp(returnValue = "restart"), 0.2)
   }, ignoreInit = TRUE)
 
-  # cur_settings() removed (Phase C.3 decision 7) -- every call site below
-  # now reads the top-level RENDER_CFG list directly instead.
+  # cur_settings() removed (Phase C.3 decision 7). Renders read live_cfg()
+  # (Figure settings, above); core lookups read RENDER_CFG directly.
 
   # ── Region: chromosome selector ─────────────────────────────────────────────
   output$chr_select_ui <- renderUI({
@@ -1393,13 +1383,33 @@ server <- function(input, output, session) {
   })
 
   # ── Region: gene lookup (shared by all 3 modes) ─────────────────────────────
+  # The symbol this observer itself just put in the box, so the re-run that
+  # update triggers keeps a typed Ensembl ID's own region rather than
+  # re-resolving the symbol to whichever of its IDs comes first.
+  gene_echo <- NULL
+  # The text the current gene was resolved from, so a flank-only re-run
+  # (Figure settings) re-resolves a typed Ensembl ID, not its echoed symbol.
+  gene_query <- NULL
   observe({
     sym <- trimws(input$gene_name %||% "")
-    if (nchar(sym) == 0) return()
-    pct <- RENDER_CFG$gene_flank_pct / 100
-    res <- resolve_gene_region(sym, txdb, pct)
+    # Read first, so the echo run below still depends on it.
+    pct <- (input$s_gene_flank_pct %||% saved_cfg()$gene_flank_pct) / 100
+    if (identical(sym, gene_echo)) { gene_echo <<- NULL; return() }
+    gene_echo <<- NULL
+    if (nchar(sym) == 0) { state$gene_symbol <- NULL; gene_query <<- NULL; return() }
+    q <- if (!is.null(gene_query) && identical(sym, isolate(state$gene_symbol))) gene_query else sym
+    gene_query <<- q
+    res <- resolve_gene_region(q, txdb, pct)
     state$gene_region <- res$region
     state$gene_error  <- res$error
+    state$gene_symbol <- res$symbol
+    state$gene_note   <- res$note
+    # An Ensembl ID or wrong-case symbol resolved: show the canonical symbol,
+    # which is what every track and panel below looks genes up by.
+    if (!is.null(res$region) && !identical(res$symbol, sym)) {
+      gene_echo <<- res$symbol
+      updateSelectizeInput(session, "gene_name", choices = ALL_GENES, server = TRUE, selected = res$symbol)
+    }
   })
 
   observeEvent(input$region_mode, { state$gene_error <- NULL })
@@ -1412,205 +1422,15 @@ server <- function(input, output, session) {
       div(class = "alert alert-success",
           strong("Found: "),
           paste0(r$chrom, ":", format_coord(r$start), " \u2013 ", format_coord(r$end),
-                 " (", format_bp(r$end - r$start), ")"))
+                 " (", format_bp(r$end - r$start), ")"),
+          if (!is.null(state$gene_note)) tagList(br(), state$gene_note))
     }
   })
 
-  # rationale: see solutions/concepts/19-relocated-code-rationale.md, "app.R:1434"
-  output$gr_extras_ui <- renderUI({
-    if (is.null(state$gene_region)) return(NULL)
-    if (!is.null(input$region_mode) && input$region_mode != "gene") return(NULL)
-    gene <- trimws(input$gene_name %||% "")
-    if (nchar(gene) == 0) return(NULL)
-
-    ann <- tryCatch(transcript_annotations(gene, txdb), error = function(e) NULL)
-
-    if (!is.null(ann) && nrow(ann) > 0) {
-      # UniProt check is a live network call (see utils/uniprot_canonical.R) --
-      # failure degrades to NA/"unavailable" per row, never blanks out the
-      # GTF-derived columns above, which don't depend on it.
-      uc <- tryCatch(uniprot_canonical_match(gene, ann$tx_id, CDS_BY_TX, ann$ccds_id, orgdb = RENDER_CFG$orgdb_pkg), error = function(e) NULL)
-      if (is.null(uc) || nrow(uc) != nrow(ann)) {
-        uc <- data.frame(uniprot_accession = rep(NA_character_, nrow(ann)),
-                          uniprot_match = rep(NA, nrow(ann)),
-                          uniprot_unique = rep(NA, nrow(ann)),
-                          uniprot_match_count = rep(NA_integer_, nrow(ann)),
-                          uniprot_source = rep(NA_character_, nrow(ann)),
-                          uniprot_canonical_isoform_id = rep(NA_character_, nrow(ann)),
-                          uniprot_canonical_isoform_name = rep(NA_character_, nrow(ann)),
-                          uniprot_row_isoform_id = rep(NA_character_, nrow(ann)),
-                          uniprot_row_isoform_name = rep(NA_character_, nrow(ann)))
-      }
-      ann[names(uc)] <- uc
-    }
-
-    tag_pill <- function(text) tags$span(
-      style = paste("display:inline-block; background:#eef2f7; color:#345; border-radius:3px;",
-                     "padding:1px 6px; margin-right:4px; font-size:0.9em;"),
-      text
-    )
-
-    uniprot_source_label <- c(
-      ensembl_xref = "direct UniProt-Ensembl cross-reference",
-      ccds_xref    = "UniProt-CCDS cross-reference",
-      length_match = "protein length match only, not a direct cross-reference"
-    )
-
-    tagList(
-      tags$a(href = uniprot_search_url(gene, RENDER_CFG$orgdb_pkg, RENDER_CFG$uniprot_reviewed_only), target = "_blank",
-             class = "btn btn-default btn-sm",
-             paste0("UniProt: ", gene, " (opens in new tab)")),
-      if (!is.null(ann) && nrow(ann) > 0) {
-        tags$div(style = "margin-top:8px; font-size: var(--bio-font-code, 12px);",
-          tags$div(style = "display:flex; gap:10px; font-weight:600; color:#666; border-bottom:1px solid #ccc; padding-bottom:3px; margin-bottom:2px;",
-            tags$span(style = "flex:0 0 90px;", "Transcript"),
-            tags$span(style = "flex:0 0 60px;", "Type"),
-            tags$span(style = "flex:1;", "Tags")
-          ),
-          lapply(seq_len(nrow(ann)), function(i) {
-            src <- ann$uniprot_source[i]
-
-            # The specific UniProt sequence this whole check compares
-            # against -- an entry-level fact (isoform id + name, or just the
-            # bare accession for a single-isoform entry), true regardless of
-            # whether THIS transcript carries a direct tag for it.
-            canon_id   <- ann$uniprot_canonical_isoform_id[i]
-            canon_name <- ann$uniprot_canonical_isoform_name[i]
-            canon_desc <- if (is.na(canon_id)) NA_character_ else
-              if (is.na(canon_name)) canon_id else sprintf("isoform %s (%s)", canon_name, canon_id)
-
-            uni_text <- if (is.na(ann$uniprot_match[i])) {
-              "unknown (UniProt lookup unavailable)"
-            } else if (ann$uniprot_match[i] && ann$uniprot_unique[i]) {
-              sprintf("yes, this is UniProt's canonical %s (via %s)", canon_desc, uniprot_source_label[[src]])
-            } else if (ann$uniprot_match[i]) {
-              sprintf("matches UniProt's canonical %s (via %s), but %d transcripts of this gene share that exact sequence, so it doesn't uniquely identify this one",
-                      canon_desc, uniprot_source_label[[src]], ann$uniprot_match_count[i])
-            } else if (!is.na(src) && src != "length_match") {
-              row_id   <- ann$uniprot_row_isoform_id[i]
-              row_name <- ann$uniprot_row_isoform_name[i]
-              row_desc <- if (is.na(row_id)) ann$uniprot_accession[i] else
-                if (is.na(row_name)) row_id else sprintf("isoform %s (%s)", row_name, row_id)
-              sprintf("no, this is %s, confirmed by %s; UniProt's canonical is %s",
-                      row_desc, uniprot_source_label[[src]], canon_desc)
-            } else if (!is.na(ann$uniprot_accession[i])) {
-              sprintf("no; UniProt's canonical is %s", canon_desc)
-            } else {
-              "no reviewed UniProt entry found"
-            }
-
-            row_tags <- character(0)
-            if (isTRUE(ann$ensembl_canonical[i])) row_tags <- c(row_tags, "Ensembl canonical")
-            if (!is.na(ann$appris_tier[i])) row_tags <- c(row_tags, paste("APPRIS", ann$appris_tier[i]))
-            if (isTRUE(ann$uniprot_match[i])) {
-              row_tags <- c(row_tags, if (isTRUE(ann$uniprot_unique[i])) "UniProt canonical" else "UniProt (shared match)")
-            }
-
-            tags$details(
-              style = "border-bottom: 1px solid #eee; padding: 3px 0;",
-              tags$summary(
-                style = "display:flex; gap:10px;",
-                tags$span(style = "flex:0 0 90px; font-weight:600;", ann$transcript_name[i]),
-                tags$span(style = "flex:0 0 60px;", ann$coding_status[i]),
-                tags$span(style = "flex:1;", lapply(row_tags, tag_pill))
-              ),
-              tags$div(style = "margin: 4px 0 4px 14px; color:#444;",
-                tags$div(tags$strong("Ensembl canonical: "), if (ann$ensembl_canonical[i]) "yes" else "no"),
-                tags$div(tags$strong("APPRIS: "), if (is.na(ann$appris_tier[i])) "none" else ann$appris_tier[i]),
-                tags$div(tags$strong("CCDS: "), if (is.na(ann$ccds_id[i])) "none" else ann$ccds_id[i]),
-                tags$div(tags$strong("UniProt canonical: "), uni_text),
-                tags$div(style = "margin-top:3px; font-style:italic; color:#888;",
-                  "Source: GENCODE annotation tags, UniProt cross-reference (see UniProt canonical line above for which kind).")
-              )
-            )
-          })
-        )
-      }
-    )
-  })
-
-  # ── Canonical protein annotation: UniProt domain/region/motif deep dive ─────
-  # Same progressive-disclosure style as gr_extras_ui above (one <details> per
-  # feature), sits to its right. Uses gene_protein_domains()
-  # (utils/protein_domains.R) directly -- the same resolver the
-  # "Canonical protein annotation" TRACK calls, but here read straight from
-  # its per-gene RDS cache rather than re-inlined into a generated script, so
-  # this is a single cheap read after the first view of a gene. One row per
-  # domain_id (a multi-exon feature collapsed to one row, not one row per
-  # exon segment) -- matches how the track itself groups them.
-  output$gr_protein_ui <- renderUI({
-    if (is.null(state$gene_region)) return(NULL)
-    if (!is.null(input$region_mode) && input$region_mode != "gene") return(NULL)
-    gene <- trimws(input$gene_name %||% "")
-    if (nchar(gene) == 0) return(NULL)
-
-    pd <- tryCatch(
-      gene_protein_domains(gene, txdb, RENDER_CFG$gtf_path, RENDER_CFG$orgdb_pkg, RENDER_CFG$genome_label),
-      error = function(e) list(status = "error", message = conditionMessage(e))
-    )
-
-    pd_msg <- switch(pd$status,
-      no_uniprot_entry     = "No reviewed UniProt entry found for this gene",
-      no_domains           = "No annotated domain/region/motif features for this gene's canonical isoform",
-      no_canonical_transcript = "UniProt's canonical isoform could not be matched to any annotated transcript for this gene",
-      ok = NULL,
-      "Protein domain lookup failed (network issue?) -- will retry on next render"
-    )
-
-    method_label <- if (identical(pd$status, "ok")) switch(pd$method,
-      ccds_id_join                    = "via CCDS ID",
-      length_match_fallback           = "via protein-length match (CCDS not tagged in GTF yet)",
-      length_match_fallback_ambiguous = "via protein-length match (ambiguous, CDS shared by multiple transcripts)",
-      pd$method
-    ) else NULL
-
-    tagList(
-      if (!is.null(pd_msg))
-        div(style = "color:#888; font-style:italic;", pd_msg)
-      else {
-        domains <- pd$domains
-        dids <- unique(domains$domain_id)
-        dids <- dids[order(vapply(dids, function(d) min(domains$start[domains$domain_id == d]), numeric(1)))]
-
-        tagList(
-          div(style = "font-size:0.9em; color:#666; margin-bottom:6px;",
-              sprintf("canonical: %s (%s)", pd$canonical_tx, method_label)),
-          tags$div(style = "font-size: var(--bio-font-code, 12px);",
-            tags$div(style = "display:flex; gap:10px; font-weight:600; color:#666; border-bottom:1px solid #ccc; padding-bottom:3px; margin-bottom:2px;",
-              tags$span(style = "flex:0 0 14px;", ""),
-              tags$span(style = "flex:1;", "Feature"),
-              tags$span(style = "flex:0 0 60px;", "Exons")
-            ),
-            lapply(dids, function(did) {
-              seg  <- domains[domains$domain_id == did, ]
-              seg  <- seg[order(seg$start), ]
-              ty   <- seg$type[1]
-              col  <- PD_TYPE_COLOURS[[ty]]
-              nseg <- nrow(seg)
-
-              tags$details(
-                style = "border-bottom: 1px solid #eee; padding: 3px 0;",
-                tags$summary(
-                  style = "display:flex; gap:10px; align-items:center;",
-                  tags$span(style = sprintf(
-                    "flex:0 0 12px; width:12px; height:12px; border-radius:2px; background:%s; display:inline-block;",
-                    col
-                  )),
-                  tags$span(style = "flex:1;", seg$note[1]),
-                  tags$span(style = "flex:0 0 60px; color:#888;", if (nseg > 1) sprintf("%d exons", nseg) else "")
-                ),
-                tags$div(style = "margin: 4px 0 4px 22px; color:#444;",
-                  tags$div(tags$strong("Type: "), ty),
-                  tags$div(tags$strong("Position: "), sprintf("aa %d-%d", seg$aa_start[1], seg$aa_end[1])),
-                  tags$div(tags$strong("Exon segments: "), nseg)
-                )
-              )
-            })
-          )
-        )
-      }
-    )
-  })
+  # Gene / protein info: Output page, about the rendered figure's gene (R/gene_info_panel.R).
+  .pt_gene_info_server(input, output, session, state, txdb, CDS_BY_TX,
+    genome = RENDER_CFG[c("orgdb_pkg", "tx_name_lookup_path", "tx_meta_lookup_path", "gtf_path", "genome_label")],
+    reviewed_only = reactive(input$s_uniprot_reviewed_only %||% saved_cfg()$uniprot_reviewed_only))
 
   # ── Two-sample reference/comparison mutual exclusion ──
   # Both boxes always offer every condition; the only guard is against picking the same one in
@@ -1672,6 +1492,9 @@ server <- function(input, output, session) {
         available = track_labels(COMPOSE_AVAILABLE_KEYS),
         figure    = list(genes = HTML(format_track_label(TRACK_ITEMS[["genes"]]$label)))
       )
+      if (identical(START_VIEW$view_mode, "compose"))
+        split <- list(available = track_labels(setdiff(COMPOSE_AVAILABLE_KEYS, START_VIEW$tracks)),
+                      figure    = track_labels(START_VIEW$tracks))
     } else {
       conds <- selected_conditions()
       if (length(conds) == 0 || anyNA(conds) || any(nchar(conds) == 0)) {
@@ -1702,7 +1525,7 @@ server <- function(input, output, session) {
         list(rgn = list(chrom = v$chrom, start = v$start, end = v$end), gene_name = NA_character_)
       else NULL
     } else if (!is.null(state$gene_region)) {
-      list(rgn = state$gene_region, gene_name = input$gene_name)
+      list(rgn = state$gene_region, gene_name = state$gene_symbol %||% input$gene_name)
     } else NULL
   })
 
@@ -1776,7 +1599,7 @@ server <- function(input, output, session) {
   })
 
   # Render helper: render_all() straight to an svglite device (called by generate and zoom), in-process, no assemble+source subprocess; the downloadable/displayed R script is a separate, literal concatenation of pipeline/ (assemble_download_script()) built from the same entries/region_params/settings.
-  do_render <- function(region_params, entries, settings_base, title_str = "") {
+  do_render <- function(region_params, entries, settings_base, title_str = "", labels = NULL) {
     state$rendering <- TRUE
     on.exit({
       state$rendering <- FALSE
@@ -1797,8 +1620,9 @@ server <- function(input, output, session) {
       state$svg_path         <- settings$output_path
       state$rcode             <- assemble_download_script(entries, region_params, settings)
       state$last_region      <- region_params
-      state$last_entries     <- entries
-      state$last_settings_base <- settings_base
+      state$last_labels      <- labels
+      state$last_title       <- title_str
+      state$rendered_gene    <- region_params$gene  # Gene / protein info follows the figure
       session$sendCustomMessage("show_output", list())
     }, error = function(e) {
       if (dev.cur() != dev_before) try(dev.off(), silent = TRUE)
@@ -1809,7 +1633,7 @@ server <- function(input, output, session) {
 
   # Shared by Compose's and Gene Report's Generate handlers: build_entries() + settings_base + do_render(), from a region/labels/gene-name/title already resolved by the caller (the two modes only differ in how they resolve those).
   render_from_selection <- function(rgn, labels, gene_name, title_str) {
-    cfg     <- RENDER_CFG
+    cfg     <- live_cfg()
     col_map <- colour_map_r(labels)
     entries <- build_entries(labels, col_map, cfg)
 
@@ -1819,39 +1643,9 @@ server <- function(input, output, session) {
       end   = as.integer(rgn$end),
       gene  = gene_name
     )
-    settings_base <- list(
-      page_w    = cfg$page_w,
-      font      = cfg$font,
-      fontsize  = as.integer(cfg$fontsize),
-      hic_norm  = cfg$hic_norm,
-      zrange    = if (is.null(cfg$zrange_cap) || is.na(cfg$zrange_cap))
-                    NULL else c(0, cfg$zrange_cap),
-      hic_style = cfg$hic_style,
-      hic_res_mode = cfg$hic_res_mode,
-      hic_height   = cfg$hic_height,
-      hic_max_bins_per_view = cfg$hic_max_bins_per_view,
-      atac_height = cfg$atac_height,
-      chr_fmt   = cfg$chr_fmt,
-      show_track_axes = cfg$show_track_axes,
-      txdb_path = cfg$txdb_path,
-      gtf_path  = cfg$gtf_path,
-      orgdb_pkg           = cfg$orgdb_pkg,
-      genome_label        = cfg$genome_label,
-      tx_name_lookup_path = cfg$tx_name_lookup_path,
-      tx_meta_lookup_path = cfg$tx_meta_lookup_path,
-      data_dir = cfg$data_dir,
-      samples  = cfg$samples,
-      diff_colour_lo  = cfg$diff_colour_lo,
-      diff_colour_hi  = cfg$diff_colour_hi,
-      junction_opacity_cap = cfg$junction_opacity_cap,
-      min_junction_support = cfg$min_junction_support,
-      min_display_tpm = cfg$min_display_tpm,
-      reference_colour  = cfg$reference_colour,
-      comparison_colour = cfg$comparison_colour,
-      arc_clip_partial  = cfg$arc_clip_partial
-    )
+    settings_base <- .pt_settings_base(cfg)
 
-    do_render(region_params, entries, settings_base, title_str)
+    do_render(region_params, entries, settings_base, title_str, labels)
   }
 
   # ── Generate: build specs from UI then render ────────────────────────────────
@@ -1874,9 +1668,11 @@ server <- function(input, output, session) {
   })
 
   # ── Zoom: recentre and rescale the last rendered region ─────────────────────
+  # Rebuilds entries and settings from live_cfg() (Phase I.3 step 28), keeping the
+  # last figure's tracks, gene and title.
   zoom_to <- function(factor) {
     req(!isTRUE(state$rendering))
-    req(!is.null(state$last_region), !is.null(state$last_entries))
+    req(!is.null(state$last_region), !is.null(state$last_labels))
     r         <- state$last_region
     mid       <- (r$start + r$end) / 2
     hw        <- max((r$end - r$start) / 2 / factor, 500L)
@@ -1887,7 +1683,7 @@ server <- function(input, output, session) {
     updateSliderInput(session, "region_range",      value = c(new_start, new_end))
     updateTextInput(session,   "region_start_text", value = format_coord(new_start))
     updateTextInput(session,   "region_end_text",   value = format_coord(new_end))
-    do_render(new_rgn, state$last_entries, state$last_settings_base)
+    render_from_selection(new_rgn, state$last_labels, r$gene, state$last_title)
   }
   observeEvent(input$zoom_in_15x,  zoom_to(1.5))
   observeEvent(input$zoom_in_3x,   zoom_to(3))
@@ -1895,6 +1691,15 @@ server <- function(input, output, session) {
   observeEvent(input$zoom_out_15x, zoom_to(1 / 1.5))
   observeEvent(input$zoom_out_3x,  zoom_to(1 / 3))
   observeEvent(input$zoom_out_10x, zoom_to(0.1))
+
+  # Apply to figure: re-render the last figure, same region, with the live settings.
+  # A generate-btn, so the spinner/double-click gate covers it; shown only once a
+  # figure exists.
+  output$apply_settings_ui <- renderUI({
+    req(!is.null(state$last_region))
+    actionButton("apply_settings", "Apply to figure", class = "btn-primary generate-btn")
+  })
+  observeEvent(input$apply_settings, zoom_to(1))
 
   # ── Output page ──────────────────────────────────────────────────────────────
   output$zoom_ui <- renderUI({
@@ -1960,10 +1765,4 @@ server <- function(input, output, session) {
 
 shinyApp(ui = ui, server = server)
 
-}
-
-result <- shiny::runApp(app_obj, ...)
-if (!identical(result, "restart") && !identical(result, "edit_settings")) return(invisible(result))
-
-}
 }

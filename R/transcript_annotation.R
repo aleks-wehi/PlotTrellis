@@ -1,11 +1,9 @@
 # rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_annotation.R:1"
 # rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_annotation.R:14"
 
-# TX_NAME_LOOKUP_PATH/TX_META_LOOKUP_PATH are app.R globals (Phase C.0
-# decision 6, GENOME$tx_name_lookup_path/tx_meta_lookup_path) -- not defined
-# here any more, since this file is sourced directly into app.R's
-# environment (see header comment) and would otherwise shadow the active
-# genome's paths with a hardcoded mouse literal.
+# The OrgDb and the two lookup paths are explicit arguments (bug 44): they
+# used to be read as app.R globals, which in the package exist only inside
+# the composer, so every call errored and the Gene info table never showed.
 
 # appris_principal_N/appris_alternative_N tags are the one GTF tag not subsumed by a plain flag -- pull out the tier so "principal_2"/"alternative_2" stay distinguishable, not collapsed into one boolean.
 .appris_tier_from_tag <- function(tag) {
@@ -18,9 +16,9 @@
   tier
 }
 
-# One row per annotated transcript of GENE_SYMBOL (NULL if it doesn't resolve to an Ensembl gene ID / has no transcripts); reads ORGDB_PKG (app.R global, Phase C.0 decision 6) since this file is sourced directly into app.R's environment, never inlined into an assembled script.
-transcript_annotations <- function(gene_symbol, txdb) {
-  ens_res <- AnnotationDbi::select(get(ORGDB_PKG, envir = asNamespace(ORGDB_PKG)),
+# One row per annotated transcript of GENE_SYMBOL (NULL if it doesn't resolve to an Ensembl gene ID / has no transcripts).
+transcript_annotations <- function(gene_symbol, txdb, orgdb_pkg, tx_name_lookup_path, tx_meta_lookup_path) {
+  ens_res <- AnnotationDbi::select(get(orgdb_pkg, envir = asNamespace(orgdb_pkg)),
     keys = gene_symbol, keytype = "SYMBOL", columns = "ENSEMBL")
   ens_id <- ens_res$ENSEMBL[!is.na(ens_res$ENSEMBL)][1]
   if (length(ens_id) == 0 || is.na(ens_id)) return(NULL)
@@ -30,8 +28,8 @@ transcript_annotations <- function(gene_symbol, txdb) {
   if (length(tx_ids) == 0) return(NULL)
   tx_stripped <- sub("\\.[0-9]+$", "", tx_ids)
 
-  name_lookup <- readRDS(TX_NAME_LOOKUP_PATH)
-  meta_lookup <- readRDS(TX_META_LOOKUP_PATH)
+  name_lookup <- readRDS(tx_name_lookup_path)
+  meta_lookup <- readRDS(tx_meta_lookup_path)
 
   tx_name <- unname(name_lookup[tx_stripped])
   tx_name[is.na(tx_name)] <- tx_ids[is.na(tx_name)]

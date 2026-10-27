@@ -22,6 +22,6 @@ build_tx_name_lookup <- function(gtf_path, out_path) {
 
   lookup <- setNames(tx_name, sub("\\.[0-9]+$", "", tx_id))
   saveRDS(lookup, out_path)
-  cat(sprintf("Wrote %d transcript_id -> transcript_name entries to %s\n", length(lookup), out_path))
+  message(sprintf("Wrote %d transcript_id -> transcript_name entries to %s", length(lookup), out_path))
   invisible(lookup)
 }

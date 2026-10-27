@@ -36,6 +36,7 @@ render_protein_domains <- function(entry, dict, ctx) {
     msg <- switch(res$status,
       no_gene = "No gene selected for this region",
       no_uniprot_entry = "No reviewed UniProt entry found for this gene",
+      uniprot_unreachable = "UniProt could not be reached or returned an error (no internet on this machine?) -- retries automatically after 2 minutes",
       no_domains = "No annotated domain/region/motif features for this gene's canonical isoform",
       no_canonical_transcript = "UniProt has domain/region/motif features for this gene, but neither the CCDS ID nor a protein-length match could resolve them to a transcript",
       "Protein domain lookup failed (network issue?) -- will retry on next render")

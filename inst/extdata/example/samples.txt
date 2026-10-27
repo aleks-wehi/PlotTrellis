@@ -1,0 +1,21 @@
+# PlotTrellis example project. Mouse mammary basal cells (Basal) and luminal progenitors (LP)
+# from Milevskiy et al. 2023, Cell Genomics (GEO GSE227750), cut down to the Ehf, Elf5 and Cat
+# genes on chr2 (mm10). Search for Elf5: almost silent in Basal, highly expressed in LP.
+#
+# To set up your own project, copy this file and change:
+#   data_root      the folder your data files are in (relative to this file, or a full path)
+#   gtf_path       your genome's GTF, GENCODE or Ensembl (relative to this file, or a full path)
+#   orgdb          your species' OrgDb package, e.g. org.Hs.eg.db for human
+#   genome_label   the UCSC name of your genome build, e.g. hg38
+#   start_gene, start_tracks   optional: the gene and tracks the app opens on
+# then list one row per sample. Each column after colour is type:name, and each cell is a
+# path relative to data_root (bw = bigWig, quantdir = a Salmon output folder holding quant.sf).
+# data_root: .
+# gtf_path: gencode.vM25.example.gtf.gz
+# orgdb: org.Mm.eg.db
+# genome_label: mm10
+# start_gene: Elf5
+# start_tracks: atac@Basal, atac@LP, transcript_counts@Basal, transcript_counts@LP, transcripts_annotated, genes
+condition	colour	bw:atac	quantdir:Quant
+Basal	#b31e1e	atac/Basal_ATAC.bw	quant/Basal_rep1
+LP	#4b7538	atac/LP_ATAC.bw	quant/LP_rep1

@@ -1,0 +1,9 @@
+# data_root: .
+# gtf_path: annotation.gtf.gz
+# orgdb: org.Hs.eg.db
+# genome_label: hg38
+# start_gene: PSME2
+# start_tracks: atac@GM12878, atac@K562, junctions@GM12878, junctions@K562, junctions_diff@K562 vs GM12878, transcript_counts@GM12878, transcript_counts@K562, transcripts_annotated, genes
+condition	colour	bw:atac	paired-end:junctions	quantdir:quant
+GM12878	#E41A1C	atac/GM12878_ATAC_foldchange.bigWig	junctions/GM12878_rep1.bed	quant/GM12878_rep1
+K562	#377EB8	atac/K562_ATAC_foldchange.bigWig	junctions/K562_rep1.bed	quant/K562_rep1

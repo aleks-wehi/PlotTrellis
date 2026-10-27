@@ -2,7 +2,7 @@ settings_sashimi <- function(dict, entry, settings, track_w, region_params) {
   pooled <- tryCatch(load_junctions(entry$path, region_params), error = function(e) NULL)
   entry$data <- list(raw = if (is.null(pooled)) data.frame() else pooled)
 
-  if (is.null(entry$height)) entry$height <- 0.85
+  if (is.null(entry$height)) entry$height <- settings$junction_height %||% 0.85
 
   # Project-wide setting, threaded through the entry since ctx has no field for it.
   entry$clip <- settings$arc_clip_partial %||% FALSE
@@ -53,7 +53,8 @@ render_sashimi <- function(entry, dict, ctx) {
     x = ctx$track_x, y = ctx$y, width = ctx$track_w, height = ctx$height
   )
 
-  label <- sprintf(" \u00B7 %s (max_h=%d reads)", entry$sample, max(arches$nSupport))
+  # %s, not %d: a BEDPE source's score column can be non-integer (e.g. FitHiChIP), BUGS.md #20.
+  label <- sprintf(" \u00B7 %s (max_h=%s reads)", entry$sample, format(max(arches$nSupport), digits = 3, scientific = FALSE))
   mixed_text(
     list(list(text = entry$name, colour = ctx$fontcol, fontface = "bold"), list(text = label, colour = entry$colour)),
     x = ctx$track_x + 0.05, y = ctx$y + 0.08, fontsize = ctx$fontsize - 1, fontfamily = ctx$font

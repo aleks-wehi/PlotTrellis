@@ -58,20 +58,21 @@ render_tpm_usage <- function(entry, dict, ctx) {
 
   combined$tpm_label <- ifelse(combined$proportion >= 0.05, sprintf("%.0f%%", combined$proportion * 100), "")
 
+  # Text sizes scale with the fontsize setting; equal to the old fixed sizes at the default 8.
   gg <- ggplot2::ggplot(combined, ggplot2::aes(x = sample_name, y = tpm, fill = transcript_name)) +
     ggplot2::geom_col(width = 0.7, colour = "white", linewidth = 0.6, position = ggplot2::position_stack(reverse = TRUE)) +
     ggplot2::geom_text(ggplot2::aes(label = tpm_label),
-      position = ggplot2::position_stack(vjust = 0.5, reverse = TRUE), colour = "white", size = 2.6, fontface = "bold", show.legend = FALSE) +
+      position = ggplot2::position_stack(vjust = 0.5, reverse = TRUE), colour = "white", size = 2.6 * ctx$fontsize / 8, fontface = "bold", show.legend = FALSE) +
     ggplot2::scale_fill_manual(values = colours, name = NULL) +
     ggplot2::scale_y_continuous(limits = c(0, tpm_range), expand = c(0, 0)) +
     ggplot2::scale_x_discrete(expand = c(0, 0)) +
     ggplot2::labs(x = NULL, y = NULL) +
     ggplot2::coord_flip(clip = "off") +
-    ggplot2::theme_minimal(base_size = 8) +
+    ggplot2::theme_minimal(base_size = ctx$fontsize) +
     ggplot2::theme(plot.margin = ggplot2::margin(0, 2, 0, 0),
       axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank(),
       axis.title.x = ggplot2::element_blank(), axis.text.x = ggplot2::element_blank(), axis.ticks.x = ggplot2::element_blank(),
-      legend.position = "right", legend.key.size = grid::unit(0.25, "cm"), legend.text = ggplot2::element_text(size = 7))
+      legend.position = "right", legend.key.size = grid::unit(0.25, "cm"), legend.text = ggplot2::element_text(size = ctx$fontsize - 1))
 
   label_w <- 1.4
   plotGG(plot = gg, x = ctx$track_x + label_w, y = ctx$y, width = ctx$track_w - label_w, height = bar_h, just = c("left", "top"))

@@ -24,7 +24,7 @@ TX_NONCODING_TYPES <- c(
 )
 
 # coding_status is never NA/blank -- a missing or unbucketed transcript becomes "unknown" (a gap to flag, not a silent guess), one row per `tx_id_stripped` element in order.
-transcript_coding_meta <- function(tx_id_stripped, lookup_path = TX_META_LOOKUP_PATH) {
+transcript_coding_meta <- function(tx_id_stripped, lookup_path) {
   meta <- readRDS(lookup_path)
   m <- meta[tx_id_stripped, , drop = FALSE]
 

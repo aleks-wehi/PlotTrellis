@@ -36,6 +36,6 @@ build_tx_meta_lookup <- function(gtf_path, out_path) {
   meta <- data.frame(transcript_type = transcript_type, tag = tag, ccds_id = ccds_id,
                       stringsAsFactors = FALSE, row.names = tx_id_stripped)
   saveRDS(meta, out_path)
-  cat(sprintf("Wrote %d transcript_id -> transcript_type/tag entries to %s\n", nrow(meta), out_path))
+  message(sprintf("Wrote %d transcript_id -> transcript_type/tag entries to %s", nrow(meta), out_path))
   invisible(meta)
 }

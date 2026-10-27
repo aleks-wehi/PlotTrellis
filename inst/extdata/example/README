@@ -1,0 +1,55 @@
+PlotTrellis example data
+========================
+
+A small project that renders a first figure with no setup: see ?plottrellis_example.
+It covers chr2:103,250,000-103,500,000 (mm10), holding the Ehf, Elf5 and Cat genes, for two
+mouse mammary epithelial populations, basal cells (Basal) and luminal progenitors (LP).
+Elf5, a luminal progenitor transcription factor, is almost silent in Basal (about 2 TPM)
+and highly expressed in LP (about 530 TPM), with the same two main transcripts in both.
+
+Source
+------
+Milevskiy MJG, Coughlan HD, Kane SR, et al. Three-dimensional genome architecture
+coordinates key regulators of lineage specification in mammary epithelial cells. Cell Genomics 2023;
+3(11):100424. doi:10.1016/j.xgen.2023.100424. GEO SuperSeries GSE227750.
+
+Files
+-----
+samples.txt
+    The project description PlotTrellis reads (hand-written). Paths in it are relative to
+    this folder.
+
+atac/Basal_ATAC.bw, atac/LP_ATAC.bw
+    ATAC-seq coverage (RPKM, 50 bp bins), cropped to the region above from the authors' GEO
+    files: GSM7142618 (GSM7142618_Ba_S1_ATAC.bw, basal biological replicate 1) and
+    GSM7142621 (GSM7142621_LP_S1_ATAC.bw, LP biological replicate 1).
+
+quant/Basal_rep1/quant.sf, quant/LP_rep1/quant.sf
+    Salmon transcript quantification (Salmon 2.1.1, GENCODE vM25 index) of RNA-seq runs
+    SRR23919859 (basal replicate 1) and SRR23919856 (LP replicate 1) from GSE227748, the
+    RNA-seq part of GSE227750, quantified by the PlotTrellis authors from the public reads.
+    Only the rows for the transcripts in the GTF below are kept; values are unchanged, so
+    TPM does not sum to one million here.
+
+gencode.vM25.example.gtf.gz
+    Every GTF line for the 6 genes inside the region, plus the file header, from GENCODE
+    mouse release M25 (GRCm38/mm10), gencode.vM25.annotation.gtf.gz.
+
+gencode.vM25.example_chrom_sizes.rds
+    mm10 chromosome lengths from UCSC (GenomeInfoDb::Seqinfo(genome = "mm10")), shipped so
+    the first launch doesn't need to download them.
+
+Licence and terms
+-----------------
+- GEO data (the ATAC tracks, and the RNA-seq reads behind the quant.sf files): NCBI places
+  no restrictions on the use or distribution of GEO data, though submitters may claim
+  patent, copyright or other rights in the data they submitted
+  (https://www.ncbi.nlm.nih.gov/geo/info/disclaimer.html). Please cite the paper above.
+- GENCODE annotation and UCSC chromosome sizes: freely available without restriction.
+- The cropping and Salmon quantification are distributed with PlotTrellis under its
+  licence (Artistic-2.0).
+
+How it was made
+---------------
+data-raw/build-example-data.R in the PlotTrellis source repository rebuilds every file here
+except samples.txt and this README.

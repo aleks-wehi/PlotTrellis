@@ -62,11 +62,35 @@ NULL
   intersect(settings_keys, render_keys)
 }
 
+# Per-track error isolation: an error in one track's settings_/render_ call
+# becomes an in-figure message naming the track and the reason, so the rest
+# of the figure still renders. Also echoed to the console via message().
+.pt_track_error_label <- function(entry, e) {
+  who <- if (length(entry$sample) == 1 && nzchar(entry$sample)) sprintf("%s (%s)", entry$viz, entry$sample) else entry$viz
+  # iconv first: a message with invalid bytes would otherwise make gsub() fail inside this handler.
+  msg <- trimws(gsub("\\s+", " ", iconv(conditionMessage(e), to = "UTF-8", sub = "?")))
+  if (nchar(msg) > 140) msg <- paste0(substr(msg, 1, 137), "...")
+  label <- sprintf("%s track failed: %s", who, msg)
+  message("PlotTrellis: ", label)
+  label
+}
+.pt_draw_track_error <- function(label, ctx) {
+  # Blank the slot first: a render_ call can fail after drawing part of its track.
+  plotRect(x = ctx$track_x, y = ctx$y, width = ctx$track_w, height = ctx$height,
+           just = c("left", "top"), default.units = "inches", fill = "white", linecolor = NA)
+  no_data_text(ctx$track_x, ctx$y, ctx$track_w, ctx$height, ctx$fontsize - 1, ctx$font, "#CC0000", label = label)
+}
+
 render_all <- function(items, region_params, settings, device_fn = NULL) {
   page_w  <- settings$page_w %||% 9
   track_x <- 0.8
   track_w <- page_w - track_x - 1.0
-  first_y <- 0.5
+  # Feature 40: the title and the scale bar can be switched off (both on by default). There
+  # is no auto-title either: no title text means no title. Without one the tracks start near
+  # the top of the page instead of below it.
+  title      <- trimws(settings$title %||% "")
+  show_title <- isTRUE(settings$show_title %||% TRUE) && nzchar(title)
+  first_y <- if (show_title) 0.5 else 0.1
   gap     <- 0.10
   font     <- settings$font %||% "DejaVu Sans"
   fontsize <- settings$fontsize %||% 8L
@@ -78,14 +102,17 @@ render_all <- function(items, region_params, settings, device_fn = NULL) {
   region <- pgParams(chrom = region_params$chrom, chromstart = region_params$start,
                      chromend = region_params$end, assembly = asm)
 
-  # Built from only the caller-supplied items -- genome_axis (appended below) isn't a data track.
-  title_items <- items
   items <- c(items, list(list(viz = "genome_axis", height = NULL)))
 
   dict <- list()
   for (i in seq_along(items)) {
     settings_fn <- .pt_dispatch_fn("settings", items[[i]]$viz)
-    res <- settings_fn(dict, items[[i]], settings, track_w, region_params)
+    res <- tryCatch(settings_fn(dict, items[[i]], settings, track_w, region_params), error = function(e) {
+      entry <- items[[i]]
+      entry$track_error <- .pt_track_error_label(entry, e)
+      entry$height <- entry$height %||% 0.4
+      list(dict = dict, entry = entry)
+    })
     dict <- res$dict
     items[[i]] <- res$entry
   }
@@ -103,42 +130,34 @@ render_all <- function(items, region_params, settings, device_fn = NULL) {
   scale <- list(bx0 = round(scale_bx0, 3), bx1 = round(scale_bx1, 3),
                 x_mid = round((scale_bx0 + scale_bx1) / 2, 3), label = format_bp_generic(scale_len))
 
-  title <- if (nchar(trimws(settings$title %||% "")) > 0) {
-    settings$title
-  } else {
-    types    <- vapply(title_items, `[[`, character(1), "viz")
-    types    <- types[types != "genes"]  # annotation overlay, not a data type
-    gene     <- region_params$gene
-    gene_lbl <- if (is.null(gene) || is.na(gene) || nchar(trimws(gene)) == 0) "" else paste0(gene, " \u00B7 ")
-    paste0(
-      gene_lbl, paste(toupper(unique(types)), collapse = " + "), " \u00B7 ",
-      region_params$chrom, ":", format_bp_generic(region_params$start, 3), "\u2013", format_bp_generic(region_params$end, 3)
-    )
-  }
-
   if (!is.null(device_fn)) device_fn(page_w, page_h)  # caller opens its own SVG device sized to the actual content, e.g. svglite()
 
   pageCreate(width = page_w, height = page_h, default.units = "inches", showGuides = FALSE)
-  plotText(title, x = track_x + track_w / 2, y = 0.2, just = "center",
-           fontfamily = font, fontsize = fontsize + 2, fontface = "bold", fontcolor = fontcol)
+  if (show_title) plotText(title, x = track_x + track_w / 2, y = 0.2, just = "center",
+                           fontfamily = font, fontsize = fontsize + 2, fontface = "bold", fontcolor = fontcol)
 
   for (i in seq_along(items)) {
     entry <- items[[i]]
     ctx <- list(
-      index = i, is_first = (i == 1L) && (entry$viz %in% SCALE_BAR_TYPES),
+      index = i, is_first = (i == 1L) && (entry$viz %in% SCALE_BAR_TYPES) && isTRUE(settings$show_scale_bar %||% TRUE),
       y = y[[i]], height = heights[[i]],
       track_x = track_x, track_w = track_w, region = region,
       font = font, fontsize = fontsize, fontcol = fontcol,
       hic_norm = settings$hic_norm %||% "KR", show_track_axes = settings$show_track_axes %||% TRUE,
       scale = scale, region_params = region_params, chr_fmt = settings$chr_fmt %||% "dot",
-      diff_colour_hi = settings$diff_colour_hi %||% "#E41A1C", diff_colour_lo = settings$diff_colour_lo %||% "#377EB8",
+      diff_colour_hi = settings$diff_colour_hi %||% "#CC0000", diff_colour_lo = settings$diff_colour_lo %||% "#0033CC",
       min_junction_support = settings$min_junction_support %||% 0,
       junction_opacity_cap = settings$junction_opacity_cap %||% 2,
       txdb = txdb, gtf_path = settings$gtf_path, orgdb_pkg = settings$orgdb_pkg,
       genome_label = settings$genome_label
     )
+    if (!is.null(entry$track_error)) {
+      .pt_draw_track_error(entry$track_error, ctx)
+      next
+    }
     render_fn <- .pt_dispatch_fn("render", entry$viz)
-    render_fn(entry, dict, ctx)
+    tryCatch(render_fn(entry, dict, ctx),
+             error = function(e) .pt_draw_track_error(.pt_track_error_label(entry, e), ctx))
   }
 
   invisible(NULL)

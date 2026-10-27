@@ -11,13 +11,14 @@
 # A deliberate re-baseline is a manual `rm` + re-run, not something a normal
 # test run does automatically.
 #
-# The write guard below is "file absent" plus a completeness check against
-# the vdiffr _snaps/ SVG count (an independent, already-committed source of
-# truth for how many golden-image fixtures exist) -- NOT a check that every
+# The write guard below is "file absent" plus a completeness check: every
+# perf_id whose render started (PERF_TIMES$started, registered by test_fig()
+# before rendering) must also have recorded a time -- NOT a check that every
 # OTHER test in this run passed. A render that errors skips its own
-# record_perf() call (system.time() never completes), so a partial/
-# crashed run undercounts against _snaps/ and fails loudly here instead of
-# silently committing an incomplete baseline. Found by Step 8's adversarial
+# record_perf() call (system.time() never completes), so a partial/crashed
+# run fails loudly here instead of silently committing an incomplete
+# baseline. (Until 2026-10-27 this compared against the _snaps/ SVG count,
+# which broke once untimed soft-fail snapshots were added.) Found by Step 8's adversarial
 # review (finding 1, phase-D.4.md); a vdiffr *mismatch* (not a crash) still
 # records its timing before the doppelganger comparison fails, so this is a
 # completeness check, not a full pass/fail gate -- treat a fresh
@@ -31,15 +32,14 @@ test_that("performance baseline is captured / up to date", {
   )))
 
   if (is.null(PERF_BASELINE)) {
-    snaps_dir <- testthat::test_path("_snaps")
-    n_snaps <- length(list.files(snaps_dir, pattern = "\\.svg$", recursive = TRUE))
-    if (nrow(df) == n_snaps) {
+    unfinished <- setdiff(PERF_TIMES$started, df$fixture)
+    if (length(unfinished) == 0) {
       write.csv(df, PERF_BASELINE_PATH, row.names = FALSE)
       succeed(sprintf("Wrote new _perf_baseline.csv with %d fixtures (first clean run).", nrow(df)))
     } else {
       fail(sprintf(
-        "recorded %d fixture(s) this run but _snaps/ has %d golden-image SVGs -- a render likely crashed or was skipped; refusing to write an incomplete _perf_baseline.csv",
-        nrow(df), n_snaps
+        "%d timed render(s) started but never recorded (crashed?): %s -- refusing to write an incomplete _perf_baseline.csv",
+        length(unfinished), paste(unfinished, collapse = ", ")
       ))
     }
   } else {

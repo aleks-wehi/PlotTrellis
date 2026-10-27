@@ -87,6 +87,18 @@ import_samples_txt <- function(path, data_root_override = NULL, defaults = list(
     }
   }
 
+  # A relative `# data_root:`/`# gtf_path:` is relative to this file's own folder, not R's
+  # working directory, so a samples.txt can travel with its data (phase-I.3 step 25).
+  # Absolute paths (or ~) and blanks are left exactly as written. Inline base R only: this
+  # function's text is pasted into every downloaded script (see .pt_download_deps()).
+  base_dir <- normalizePath(dirname(path), winslash = "/")
+  resolve <- function(p) {
+    if (is.null(p) || !nzchar(p) || grepl("^(/|~|[A-Za-z]:[/\\\\]|\\\\\\\\)", p)) return(p)
+    normalizePath(file.path(base_dir, p), winslash = "/", mustWork = FALSE)
+  }
+  data_root <- resolve(data_root)
+  if (!is.null(overrides$gtf_path)) overrides$gtf_path <- resolve(overrides$gtf_path)
+
   if (length(body_lines) == 0) {
     return(list(errors = c(errors, "No header/data rows found"), warnings = warnings,
                 data_root = data_root, overrides = overrides, samples = list()))

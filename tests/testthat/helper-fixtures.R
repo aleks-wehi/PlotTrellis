@@ -274,6 +274,9 @@ test_fig <- function(track_specs, region_params, settings, perf_id = NULL, modul
   raw_fig <- function() render_all(track_specs, region_params, settings)
   if (is.null(perf_id)) return(raw_fig)
   function() {
+    # Registered before rendering, so test-zzz-perf-baseline.R can tell a
+    # render that crashed (started, never recorded) from one that finished.
+    PERF_TIMES$started <- union(PERF_TIMES$started, perf_id)
     elapsed <- system.time(val <- raw_fig())[["elapsed"]]
     record_perf(perf_id, module, elapsed)
     invisible(val)
@@ -298,10 +301,13 @@ PERF_BASELINE <- if (file.exists(PERF_BASELINE_PATH)) {
 }
 PERF_TIMES <- new.env()
 PERF_TIMES$records <- list()
+PERF_TIMES$started <- character(0)
 
-# Per Phase D Q3 (solutions/concepts/11-phase-dry-run-decisions.md): the
-# regression ceiling is 2x the recorded baseline seconds, not an absolute
-# ceiling or any other multiplier. Asserted here (inside the helper) rather
+# Per Phase D Q3 (solutions/concepts/11-phase-dry-run-decisions.md) the
+# regression ceiling is a multiple of the recorded baseline seconds, not an
+# absolute ceiling: 2x. (Briefly 3x on 2026-10-27 for login-node load noise;
+# back to 2x once full runs moved to a compute node via
+# scripts/run-tests-on-node.sh, where 2x passes.) Asserted here (inside the helper) rather
 # than at each call site -- testthat attributes an expectation raised from
 # inside a helper function to whichever test_that() block is currently
 # executing, the same convention every other assertion helper in this file

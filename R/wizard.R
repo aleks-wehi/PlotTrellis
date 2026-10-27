@@ -39,12 +39,216 @@ wiz_clean_optional_text <- function(v) {
   if (nchar(v) == 0) NULL else v
 }
 
+# The checks the wizard's Save runs before writing project_settings.json, shared with
+# parse_samples_txt() so the two can't drift (phase-I.3 step 25). Returns the problems, as
+# the wizard's own messages; character(0) means OK. A genome_label that GenomeInfoDb can't
+# look chromosome sizes up by (bug 62, e.g. "m10") otherwise only fails at the first cold
+# start, after Save; a blank one is allowed.
+wiz_save_problems <- function(data_root, samples, gtf_path, orgdb, genome_label = NULL) {
+  errs <- character(0)
+  if (is.null(wiz_clean_optional_text(data_root))) errs <- c(errs, "Data root is required.")
+  else if (!dir.exists(data_root)) errs <- c(errs, "Data root directory does not exist.")
+  if (length(samples) == 0) errs <- c(errs, "Add at least one sample before saving.")
+  if (is.null(wiz_clean_optional_text(gtf_path))) errs <- c(errs, "GTF path is required.")
+  if (is.null(wiz_clean_optional_text(orgdb))) errs <- c(errs, "OrgDb package is required.")
+  label <- wiz_clean_optional_text(genome_label)
+  if (!is.null(label) && !label %in% c(GenomeInfoDb::registered_UCSC_genomes()$genome,
+                                       GenomeInfoDb::registered_NCBI_assemblies()$assembly))
+    errs <- c(errs, sprintf("Genome label '%s' isn't a known genome build id (e.g. mm10, mm39, hg38).", label))
+  errs
+}
+
 # A native browser tooltip (title attribute), not a JS/CSS framework widget -- used wherever a field's purpose isn't obvious from its name alone.
 wiz_help <- function(label_text, help_text) {
   tagList(label_text, tags$span(
     "\u24D8", title = help_text, class = "wiz-help-icon",
     style = "cursor:help; color:#888; margin-left:4px; font-size:12px;"
   ))
+}
+
+# A colour swatch with no shiny.js binding (type="color"): oninput reports changes, and the
+# inline script reports the shown value on render (bug 60), so a re-rendered swatch (the
+# composer's Revert) never leaves input[[id]] at a stale colour.
+.pt_colour_input <- function(id, label, title, value) {
+  tagList(tags$label(label, title = title), br(),
+          tags$input(type = "color", id = id, value = value,
+                     style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
+                     oninput = sprintf("Shiny.setInputValue('%s', this.value, {priority: 'event'});", id)),
+          tags$script(sprintf("Shiny.setInputValue('%s', %s);", id, jsonlite::toJSON(value, auto_unbox = TRUE))))
+}
+
+# Core settings: what identifies and locates the project's data. Set only in the wizard;
+# every other .pt_default_settings() key is a display setting, adjustable live in the
+# composer (phase-I.3 step 28).
+.PT_CORE_SETTINGS <- c("gtf_path", "orgdb", "genome_label", "data_dir", "samples")
+
+# Inputs for every display setting, ids paste0(prefix, key), initial values from cfg: the
+# composer's Figure settings panel (the wizard showed them too before Phase I.3 step 28).
+# Returns list(display =, diff =): the general settings and the 2-sample comparison ones.
+.pt_display_settings_ui <- function(cfg, prefix) {
+  list(
+    display = tagList(
+      .pt_settings_group("Layout & display",
+      fluidRow(
+        column(3, selectizeInput(paste0(prefix, "font"), "Font:", choices = c("DejaVu Sans", "Helvetica", "Arial"), selected = cfg$font %||% "DejaVu Sans")),
+        column(3, numericInput(paste0(prefix, "fontsize"), "Font size:", value = cfg$fontsize %||% 8, min = 4, max = 24)),
+        column(3, numericInput(paste0(prefix, "page_w"),
+                                wiz_help("Page width (in):", "Width of the exported figure, in inches. Track heights below adapt to whatever's left after labels and margins."),
+                                value = cfg$page_w %||% 9, min = 3, max = 30)),
+        column(3, selectizeInput(paste0(prefix, "chr_fmt"),
+                               wiz_help("Chromosome format:", "How chromosome names are displayed on the figure's axis."),
+                               choices = c("Dot (chr.19)" = "dot", "Space (chr 19)" = "space", "None (chr19)" = "plain"),
+                               selected = cfg$chr_fmt %||% "dot")),
+        column(3, checkboxInput(paste0(prefix, "show_track_axes"),
+                                 wiz_help("Show track value axes", "Draws a numeric value axis on coverage (bigWig) and junction/sashimi tracks. On by default."),
+                                 value = cfg$show_track_axes %||% TRUE))
+      ),
+      fluidRow(
+        column(3, checkboxInput(paste0(prefix, "show_title"),
+                                 wiz_help("Show title", "Draws the title (the Title field above) over the figure; with no title text, nothing is drawn. On by default."),
+                                 value = cfg$show_title %||% TRUE)),
+        column(3, checkboxInput(paste0(prefix, "show_scale_bar"),
+                                 wiz_help("Show scale bar", "Draws the genomic distance scale bar on the first coverage-type track. On by default."),
+                                 value = cfg$show_scale_bar %||% TRUE))
+      )),
+
+      .pt_settings_group("Coverage tracks (BigWig: ATAC / ChIP-seq / CUT&RUN / RNA-seq)",
+      fluidRow(
+        column(3, numericInput(paste0(prefix, "atac_height"),
+                                wiz_help("Track height (in):", "Height in inches of each BigWig coverage track (ATAC, ChIP-seq, CUT&RUN, RNA-seq)."),
+                                value = cfg$atac_height %||% 0.85, min = 0.3, max = 8, step = 0.1))
+      )),
+
+      .pt_settings_group("Hi-C",
+      fluidRow(
+        column(3, selectizeInput(paste0(prefix, "hic_style"),
+                               wiz_help("Display style:", "How the Hi-C contact matrix is drawn: a full rectangle, or a triangle (upper-left half)."),
+                               choices = c("Rectangle" = "rectangle", "Triangle" = "triangle"), selected = cfg$hic_style %||% "rectangle")),
+        column(3, textInput(paste0(prefix, "hic_norm"),
+                             wiz_help("Normalisation:", "Hi-C matrix normalisation method understood by the .hic/.cool/.mcool file, e.g. KR, VC, SCALE. Leave as KR unless your data needs a different one."),
+                             value = cfg$hic_norm %||% "KR")),
+        column(3, numericInput(paste0(prefix, "zrange_cap"),
+                                wiz_help("Colour scale cap:", "Caps the Hi-C colour scale at this contact-count value. Leave blank to scale automatically per plot."),
+                                value = wiz_clean_optional_numeric(cfg$zrange_cap) %||% NA, min = 1, step = 10)),
+        column(3, numericInput(paste0(prefix, "hic_height"),
+                                wiz_help("Track height (in):", "Height in inches of each Hi-C track. Leave blank to size automatically based on the display style."),
+                                value = wiz_clean_optional_numeric(cfg$hic_height) %||% NA, min = 0.5, max = 15, step = 0.5))
+      ),
+      fluidRow(
+        column(3, selectizeInput(paste0(prefix, "hic_res_mode"),
+                               wiz_help("Resolution mode:", "Auto picks the coarsest resolution that keeps the view under the bin cap; Finest always uses the highest-resolution matrix available (slower for wide views)."),
+                               choices = c("Auto" = "auto", "Finest" = "finest"), selected = cfg$hic_res_mode %||% "auto")),
+        column(3, numericInput(paste0(prefix, "hic_max_bins_per_view"),
+                                wiz_help("Max bins per view:", "Upper limit on how many Hi-C bins are drawn at once -- used by Auto resolution mode to avoid overly dense plots."),
+                                value = cfg$hic_max_bins_per_view %||% 500, min = 50, max = 5000, step = 50))
+      )),
+
+      .pt_settings_group("Junction / arc tracks",
+      fluidRow(
+        column(4, checkboxInput(paste0(prefix, "arc_clip_partial"),
+                                 wiz_help("Clip partial arcs", "When an arc's anchors straddle the edge of the plotted region (one anchor visible, the other outside it), truncate the arc at the boundary instead of drawing it extending past the edge. Off by default. Long-range BEDPE-sourced pairs (e.g. Hi-C loop calls) are more likely to need this than short RNA-seq splice junctions -- see the BED12/BEDPE intake notes for why."),
+                                 value = cfg$arc_clip_partial %||% FALSE)),
+        column(3, numericInput(paste0(prefix, "min_junction_support"),
+                                wiz_help("Min arc support:", "Minimum pooled nSupport for a paired-end arc (BED12 splice junction or BEDPE loop call) to be drawn. Default 0 (show everything) -- a BEDPE score column's scale is caller-specific (e.g. a HiChIP loop caller's continuous significance score, not a read count), so raise this only once you know your own data's scale."),
+                                value = cfg$min_junction_support %||% 0, min = 0, step = 1)),
+        column(3, numericInput(paste0(prefix, "junction_height"),
+                                wiz_help("Junction track height (in):", "Height in inches of each junction (sashimi arc) track."),
+                                value = cfg$junction_height %||% 0.85, min = 0.3, max = 8, step = 0.1))
+      )),
+
+      .pt_settings_group("Gene view",
+      fluidRow(
+        column(3, numericInput(paste0(prefix, "gene_flank_pct"),
+                                wiz_help("Flanking (%):", "Percent of the gene's length added to each side when jumping to a gene, so nearby regulatory regions stay in view."),
+                                value = cfg$gene_flank_pct %||% 15, min = 0, max = 200, step = 5)),
+        column(3, numericInput(paste0(prefix, "min_display_tpm"),
+                                wiz_help("Min display TPM:", "Per-condition mean-TPM floor a transcript must clear to be individually named/displayed; below it, a transcript folds into 'Other'. Default 1."),
+                                value = cfg$min_display_tpm %||% 1, min = 0, step = 0.5)),
+        column(4, checkboxInput(paste0(prefix, "uniprot_reviewed_only"),
+                                 wiz_help("UniProt: reviewed only", "Restrict the Gene info panel's UniProt link-out to manually reviewed (Swiss-Prot) entries only."),
+                                 value = cfg$uniprot_reviewed_only %||% FALSE))
+      ))
+    ),
+    diff = tagList(
+      fluidRow(
+        column(3, .pt_colour_input(paste0(prefix, "diff_colour_lo"), "Loss colour (coverage diff):", "Colour for coverage lost in the comparison condition, in the coverage difference track.", cfg$diff_colour_lo %||% "#0033CC")),
+        column(3, .pt_colour_input(paste0(prefix, "diff_colour_hi"), "Gain colour (coverage diff):", "Colour for coverage gained in the comparison condition, in the coverage difference track.", cfg$diff_colour_hi %||% "#CC0000")),
+        column(3, numericInput(paste0(prefix, "junction_opacity_cap"),
+                                wiz_help("Junctions opacity cap (log2FC):", "log2 fold-change value at which a junction arc reaches full opacity in a comparison track. Smaller values make modest changes more visible."),
+                                value = cfg$junction_opacity_cap %||% 2, min = 0.1, step = 0.5)),
+        column(3, numericInput(paste0(prefix, "diff_shared_alpha"),
+                                wiz_help("Shared coverage tint:", "How strongly the coverage both conditions share is tinted in the coverage difference track: 0 = white, 1 = the full reference colour."),
+                                value = cfg$diff_shared_alpha %||% 0.15, min = 0, max = 1, step = 0.05))
+      ),
+      fluidRow(
+        column(3, .pt_colour_input(paste0(prefix, "reference_colour"), "Reference colour:", "Fixed colour always used for the reference condition in a 2-sample comparison track, regardless of that condition's own colour.", cfg$reference_colour %||% "#4D4D4D")),
+        column(3, .pt_colour_input(paste0(prefix, "comparison_colour"), "Comparison colour:", "Fixed colour always used for the comparison condition in a 2-sample comparison track, regardless of that condition's own colour.", cfg$comparison_colour %||% "#56B4E9"))
+      )
+    )
+  )
+}
+
+# Reads the display settings back from .pt_display_settings_ui()'s inputs. An input that
+# isn't there (NULL, e.g. not rendered yet) or is blank falls back to cfg, then to the
+# default, so it never silently resets a value. The optional numbers (blank = auto) only
+# fall back when the input is missing. names() of the result are the display-setting keys.
+.pt_collect_display_settings <- function(input, prefix, cfg) {
+  dflt <- .pt_default_settings()
+  get <- function(k) input[[paste0(prefix, k)]] %||% cfg[[k]] %||% dflt[[k]]
+  opt <- function(k) {
+    v <- input[[paste0(prefix, k)]]
+    wiz_clean_optional_numeric(if (is.null(v)) cfg[[k]] else v)
+  }
+  list(
+    font        = trimws(get("font")),
+    fontsize    = get("fontsize"),
+    page_w      = get("page_w"),
+    chr_fmt     = get("chr_fmt"),
+    show_track_axes = get("show_track_axes"),
+    show_title      = get("show_title"),
+    show_scale_bar  = get("show_scale_bar"),
+    hic_norm    = trimws(get("hic_norm")),
+    hic_style   = get("hic_style"),
+    zrange_cap  = opt("zrange_cap"),
+    atac_height = get("atac_height"),
+    hic_height  = opt("hic_height"),
+    hic_res_mode = get("hic_res_mode"),
+    hic_max_bins_per_view = get("hic_max_bins_per_view"),
+    diff_colour_lo    = trimws(get("diff_colour_lo")),
+    diff_colour_hi    = trimws(get("diff_colour_hi")),
+    junction_opacity_cap = get("junction_opacity_cap"),
+    min_junction_support = get("min_junction_support"),
+    reference_colour  = trimws(get("reference_colour")),
+    comparison_colour = trimws(get("comparison_colour")),
+    gene_flank_pct    = get("gene_flank_pct"),
+    min_display_tpm   = get("min_display_tpm"),
+    uniprot_reviewed_only = get("uniprot_reviewed_only"),
+    arc_clip_partial  = get("arc_clip_partial"),
+    junction_height   = get("junction_height"),
+    diff_shared_alpha = get("diff_shared_alpha")
+  )
+}
+
+# Writes project_settings.json and, beside it, the project_samples.txt copy the project can
+# be rebuilt from (feature 43), with absolute paths since the importer resolves relative ones
+# against the file's own folder. Shared by the wizard's Save and the composer's Save as
+# project default. Returns whether the samples.txt copy was written; a failure there
+# doesn't block.
+.pt_write_project_files <- function(settings, settings_json) {
+  # null = "null": jsonlite's toJSON() default serializes a NULL list element
+  # (e.g. zrange_cap/hic_height left blank for "auto") as {} rather than the
+  # JSON literal null. On reload, fromJSON() then reads that back as an empty
+  # list, not NULL, and clean_optional_numeric()'s is.finite() crashes on it.
+  writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE, null = "null"), settings_json)
+  tryCatch({
+    flat <- settings[setdiff(names(settings), c("data_dir", "samples"))]
+    if (length(flat$gtf_path) == 1 && nzchar(flat$gtf_path)) flat$gtf_path <- normalizePath(flat$gtf_path, mustWork = FALSE)
+    writeLines(export_samples_txt(c(list(data_root = normalizePath(settings$data_dir, mustWork = FALSE),
+                                         samples = settings$samples), flat),
+                                  defaults = .pt_default_settings()),
+               file.path(dirname(settings_json), "project_samples.txt"))
+    TRUE
+  }, error = function(e) FALSE)
 }
 
 # Shared Genome/Data-root/Samples/Other-settings/Save form for every entry path (import, manual, edit-mode re-entry); `cfg` supplies initial values (CFG when editing, DEFAULT_SETTINGS when fresh), `is_edit` governs what else differs (data-root's blank default, Save's label, the extra Close button). See solutions/concepts/19-relocated-code-rationale.md, "utils/wizard.R:66".
@@ -93,112 +297,10 @@ wiz_shared_form <- function(cfg, is_edit) {
       hr(),
       uiOutput("wiz_samples_ui")
     ),
-    wellPanel(
-      tags$details(
-        tags$summary(tags$b("Advanced settings")),
-        p(class = "text-muted", style = "margin-top:8px;", "Every value below has a sensible default and can be changed later by re-opening this wizard."),
-
-        h5("Layout & display"),
-        fluidRow(
-          column(3, selectizeInput("wiz_font", "Font:", choices = c("DejaVu Sans", "Helvetica", "Arial"), selected = cfg$font %||% "DejaVu Sans")),
-          column(3, numericInput("wiz_fontsize", "Font size:", value = cfg$fontsize %||% 8, min = 4, max = 24)),
-          column(3, numericInput("wiz_page_w",
-                                  wiz_help("Page width (in):", "Width of the exported figure, in inches. Track heights below adapt to whatever's left after labels and margins."),
-                                  value = cfg$page_w %||% 9, min = 3, max = 30)),
-          column(3, selectizeInput("wiz_chr_fmt",
-                                 wiz_help("Chromosome format:", "How chromosome names are displayed on the figure's axis."),
-                                 choices = c("Dot (chr.19)" = "dot", "Space (chr 19)" = "space", "None (chr19)" = "plain"),
-                                 selected = cfg$chr_fmt %||% "dot")),
-          column(3, checkboxInput("wiz_show_track_axes",
-                                   wiz_help("Show track value axes", "Draws a numeric value axis on coverage (bigWig) and junction/sashimi tracks. On by default."),
-                                   value = cfg$show_track_axes %||% TRUE))
-        ),
-
-        hr(),
-        h5("Coverage tracks (BigWig: ATAC / ChIP-seq / CUT&RUN / RNA-seq)"),
-        fluidRow(
-          column(3, numericInput("wiz_atac_height",
-                                  wiz_help("Track height (in):", "Height in inches of each BigWig coverage track (ATAC, ChIP-seq, CUT&RUN, RNA-seq)."),
-                                  value = cfg$atac_height %||% 0.85, min = 0.3, max = 8, step = 0.1))
-        ),
-
-        hr(),
-        h5("Hi-C"),
-        fluidRow(
-          column(3, selectizeInput("wiz_hic_style",
-                                 wiz_help("Display style:", "How the Hi-C contact matrix is drawn: a full rectangle, or a triangle (upper-left half)."),
-                                 choices = c("Rectangle" = "rectangle", "Triangle" = "triangle"), selected = cfg$hic_style %||% "rectangle")),
-          column(3, textInput("wiz_hic_norm",
-                               wiz_help("Normalisation:", "Hi-C matrix normalisation method understood by the .hic/.cool/.mcool file, e.g. KR, VC, SCALE. Leave as KR unless your data needs a different one."),
-                               value = cfg$hic_norm %||% "KR")),
-          column(3, numericInput("wiz_zrange_cap",
-                                  wiz_help("Colour scale cap:", "Caps the Hi-C colour scale at this contact-count value. Leave blank to scale automatically per plot."),
-                                  value = wiz_clean_optional_numeric(cfg$zrange_cap) %||% NA, min = 1, step = 10)),
-          column(3, numericInput("wiz_hic_height",
-                                  wiz_help("Track height (in):", "Height in inches of each Hi-C track. Leave blank to size automatically based on the display style."),
-                                  value = wiz_clean_optional_numeric(cfg$hic_height) %||% NA, min = 0.5, max = 15, step = 0.5))
-        ),
-        fluidRow(
-          column(3, selectizeInput("wiz_hic_res_mode",
-                                 wiz_help("Resolution mode:", "Auto picks the coarsest resolution that keeps the view under the bin cap; Finest always uses the highest-resolution matrix available (slower for wide views)."),
-                                 choices = c("Auto" = "auto", "Finest" = "finest"), selected = cfg$hic_res_mode %||% "auto")),
-          column(3, numericInput("wiz_hic_max_bins_per_view",
-                                  wiz_help("Max bins per view:", "Upper limit on how many Hi-C bins are drawn at once -- used by Auto resolution mode to avoid overly dense plots."),
-                                  value = cfg$hic_max_bins_per_view %||% 500, min = 50, max = 5000, step = 50))
-        ),
-
-        hr(),
-        h5("Junction / arc tracks"),
-        fluidRow(
-          column(4, checkboxInput("wiz_arc_clip_partial",
-                                   wiz_help("Clip partial arcs", "When an arc's anchors straddle the edge of the plotted region (one anchor visible, the other outside it), truncate the arc at the boundary instead of drawing it extending past the edge. Off by default. Long-range BEDPE-sourced pairs (e.g. Hi-C loop calls) are more likely to need this than short RNA-seq splice junctions -- see the BED12/BEDPE intake notes for why."),
-                                   value = cfg$arc_clip_partial %||% FALSE))
-        ),
-
-        hr(),
-        h5("Comparison (diff) tracks"),
-        fluidRow(
-          column(3, tags$label("Downregulated colour:", title = "Colour for the most downregulated end of a comparison track's scale."), br(),
-                 tags$input(type = "color", id = "wiz_diff_colour_lo", value = cfg$diff_colour_lo %||% "#0033CC",
-                            style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
-                            oninput = "Shiny.setInputValue('wiz_diff_colour_lo', this.value, {priority: 'event'});")),
-          column(3, tags$label("Upregulated colour:", title = "Colour for the most upregulated end of a comparison track's scale."), br(),
-                 tags$input(type = "color", id = "wiz_diff_colour_hi", value = cfg$diff_colour_hi %||% "#CC0000",
-                            style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
-                            oninput = "Shiny.setInputValue('wiz_diff_colour_hi', this.value, {priority: 'event'});")),
-          column(3, numericInput("wiz_junction_opacity_cap",
-                                  wiz_help("Junctions opacity cap (log2FC):", "log2 fold-change value at which a junction arc reaches full opacity in a comparison track. Smaller values make modest changes more visible."),
-                                  value = cfg$junction_opacity_cap %||% 2, min = 0.1, step = 0.5)),
-          column(3, numericInput("wiz_min_junction_support",
-                                  wiz_help("Min arc support:", "Minimum pooled nSupport for a paired-end arc (BED12 splice junction or BEDPE loop call) to be drawn. Default 0 (show everything) -- a BEDPE score column's scale is caller-specific (e.g. a HiChIP loop caller's continuous significance score, not a read count), so raise this only once you know your own data's scale."),
-                                  value = cfg$min_junction_support %||% 0, min = 0, step = 1))
-        ),
-        fluidRow(
-          column(3, tags$label("Reference colour:", title = "Fixed colour always used for the reference condition in a 2-sample comparison track, regardless of that condition's own colour."), br(),
-                 tags$input(type = "color", id = "wiz_reference_colour", value = cfg$reference_colour %||% "#4D4D4D",
-                            style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
-                            oninput = "Shiny.setInputValue('wiz_reference_colour', this.value, {priority: 'event'});")),
-          column(3, tags$label("Comparison colour:", title = "Fixed colour always used for the comparison condition in a 2-sample comparison track, regardless of that condition's own colour."), br(),
-                 tags$input(type = "color", id = "wiz_comparison_colour", value = cfg$comparison_colour %||% "#56B4E9",
-                            style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
-                            oninput = "Shiny.setInputValue('wiz_comparison_colour', this.value, {priority: 'event'});"))
-        ),
-
-        hr(),
-        h5("Gene view"),
-        fluidRow(
-          column(3, numericInput("wiz_gene_flank_pct",
-                                  wiz_help("Flanking (%):", "Percent of the gene's length added to each side when jumping to a gene, so nearby regulatory regions stay in view."),
-                                  value = cfg$gene_flank_pct %||% 15, min = 0, max = 200, step = 5)),
-          column(3, numericInput("wiz_min_display_tpm",
-                                  wiz_help("Min display TPM:", "Per-condition mean-TPM floor a transcript must clear to be individually named/displayed; below it, a transcript folds into 'Other'. Default 1."),
-                                  value = cfg$min_display_tpm %||% 1, min = 0, step = 0.5)),
-          column(4, checkboxInput("wiz_uniprot_reviewed_only",
-                                   wiz_help("UniProt: reviewed only", "Restrict the Gene info panel's UniProt link-out to manually reviewed (Swiss-Prot) entries only."),
-                                   value = cfg$uniprot_reviewed_only %||% FALSE))
-        )
-      )
-    ),
+    # Phase I.3 step 28: the display settings live in the composer's Figure settings
+    # panel; Save keeps their saved values (plus any imported from a samples.txt).
+    p(class = "text-muted",
+      "Display settings (fonts, track heights, Hi-C, junction and comparison options) are set in the composer's Figure settings panel."),
     uiOutput("wiz_completion_error"),
     if (is_edit) tagList(
       actionButton("wiz_save", "Save", class = "btn-success btn-lg"),
@@ -229,9 +331,11 @@ wizard_ui <- function() {
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      /* The Genome/Advanced-settings collapsible sections (tags$details) --
-         summary is the only clickable toggle, so it needs to look like one. */
-      details > summary { cursor: pointer; font-weight: 600; margin-bottom: 4px; }
+      /* The Display / Comparison (diff) settings collapsible sections (tags$details) --
+         summary is the only clickable toggle, so it needs to look like one.
+         display: list-item brings back the open/closed triangle, which
+         Bootstrap 3's summary { display: block } otherwise hides. */
+      details > summary { display: list-item; cursor: pointer; font-weight: 600; margin-bottom: 4px; }
       details[open] > summary { margin-bottom: 10px; }
       .wiz-help-icon { user-select: none; }
     ")),
@@ -266,13 +370,26 @@ wizard_server <- function(input, output, session) {
   # modal_field_errors. Both reset to list() on a genuinely fresh modal open.
   modal_row_errors   <- reactiveVal(list())
   modal_field_errors <- reactiveVal(list())
+  # Bumped on every failed Save (bug 58): re-showing the modal replaces
+  # uiOutput("wiz_instance_rows"), and shiny.js repaints it from its cached
+  # last render, so without a fresh render the rows snap back to stale values.
+  modal_fail_count   <- reactiveVal(0)
   # NULL = landing screen (choose a path); "import" / "manual" = which entry
   # path was chosen; "edit" = re-entered from the running app to edit an
   # existing project (Phase C.3), which skips the landing screen entirely --
   # there's no "start fresh vs. import" choice to make when a project already
   # exists. Every non-NULL mode renders the same wiz_shared_form() below an
   # optional import box -- see wiz_shared_form()'s comment.
-  wiz_mode <- reactiveVal(if (is_edit) "edit" else NULL)
+  # Feature 43: a first-time wizard that finds the project_samples.txt an
+  # earlier Save left beside project_settings.json (settings since reset or
+  # deleted) opens straight on Import, prefilled, so the project rebuilds in
+  # one click. Its own name, so it never overwrites a user's samples.txt.
+  mirror_txt <- file.path(dirname(SETTINGS_JSON), "project_samples.txt")
+  has_mirror <- !is_edit && file.exists(mirror_txt)
+  wiz_mode <- reactiveVal(if (is_edit) "edit" else if (has_mirror) "import" else NULL)
+  # Display settings imported from a samples.txt (the wizard has no inputs for them since
+  # Phase I.3 step 28): Save writes cfg's values with these on top (bug 56).
+  import_visual <- reactiveVal(list())
 
   observeEvent(input$wiz_mode_import, wiz_mode("import"))
   observeEvent(input$wiz_mode_manual, wiz_mode("manual"))
@@ -292,6 +409,7 @@ wizard_server <- function(input, output, session) {
                          "hic_max_bins_per_view", "diff_colour_lo", "diff_colour_hi",
                          "junction_opacity_cap", "min_junction_support", "reference_colour", "comparison_colour",
                          "gene_flank_pct", "min_display_tpm", "uniprot_reviewed_only", "arc_clip_partial",
+                         "show_title", "show_scale_bar", "junction_height", "diff_shared_alpha",
                          "gtf_path", "orgdb", "genome_label")]
     )
   } else NULL
@@ -313,8 +431,10 @@ wizard_server <- function(input, output, session) {
         actionLink("wiz_mode_back", "\u2190 Back", style = "display:inline-block; margin-bottom:10px;"),
       if (identical(mode, "import")) wellPanel(
         h4("Import samples.txt"),
+        if (has_mirror) p("Found project_samples.txt, saved with your last project. Click Import to restore it."),
         fluidRow(
-          column(8, textInput("wiz_import_path", "Full path to samples.txt (on this server):", value = "", width = "100%")),
+          column(8, textInput("wiz_import_path", "Full path to samples.txt (on this server):",
+                              value = if (has_mirror) mirror_txt else "", width = "100%")),
           column(4, style = "margin-top: 24px;", actionButton("wiz_import_load", "Import", class = "btn-default"))
         ),
         uiOutput("wiz_import_status")
@@ -327,12 +447,11 @@ wizard_server <- function(input, output, session) {
   # entry -- pure convenience, nothing is stored under the preset's id; Save
   # always writes the plain field values. GENOME_PRESETS carries no
   # gtf_path (2026-09-01, portability -- see utils/genomes.R's header), so
-  # the GTF path field is cleared, not filled, on every preset pick: always
-  # the user's own file, regardless of which preset (if any) was chosen.
+  # the GTF path field is left alone: always the user's own file, and a path
+  # already entered survives a preset pick (bug 48).
   observeEvent(input$wiz_genome_preset, {
     preset <- GENOME_PRESETS[[input$wiz_genome_preset]]
     if (is.null(preset)) return()
-    updateTextInput(session, "wiz_gtf_path", value = "")
     updateTextInput(session, "wiz_orgdb", value = preset$orgdb)
     updateTextInput(session, "wiz_genome_label", value = preset$genome_label)
   }, ignoreInit = TRUE)
@@ -396,7 +515,12 @@ wizard_server <- function(input, output, session) {
                # handler below, input$wiz_sample_colour never updates from its initial value.
                tags$input(type = "color", id = "wiz_sample_colour", value = seed("wiz_sample_colour", default_colour),
                           style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
-                          oninput = "Shiny.setInputValue('wiz_sample_colour', this.value, {priority: 'event'});"))
+                          oninput = "Shiny.setInputValue('wiz_sample_colour', this.value, {priority: 'event'});"),
+               # Report the shown colour as soon as the modal renders (bug 60):
+               # oninput alone leaves input$wiz_sample_colour at whatever the
+               # previous modal set, so an untouched swatch saved that colour.
+               tags$script(sprintf("Shiny.setInputValue('wiz_sample_colour', %s);",
+                                   jsonlite::toJSON(seed("wiz_sample_colour", default_colour), auto_unbox = TRUE))))
       ),
       hr(),
       fluidRow(
@@ -411,7 +535,8 @@ wizard_server <- function(input, output, session) {
       fluidRow(class = if (is.null(field_errors$quantdir)) "wiz-row" else "wiz-row wiz-row-error",
         column(2, tags$b("QUANT")),
         column(4, textInput("wiz_quantdir_name", NULL, value = seed("wiz_quantdir_name", default_qname))),
-        column(6, selectizeInput("wiz_quantdir_path", NULL, choices = quantdir_choices,
+        column(6, selectizeInput("wiz_quantdir_path", NULL,
+                                  choices = unique(c(quantdir_choices, seed("wiz_quantdir_path", default_qpath))),
                                   selected = seed("wiz_quantdir_path", default_qpath),
                                   options = list(create = TRUE, placeholder = "path relative to data root"))),
         if (!is.null(field_errors$quantdir)) column(12, tags$div(class = "wiz-error", style = "font-size:11px; margin-top:4px;", field_errors$quantdir))
@@ -482,6 +607,7 @@ wizard_server <- function(input, output, session) {
     rows <- modal_instances()
     dr <- data_root()
     errs <- modal_row_errors()
+    modal_fail_count()  # dependency only: re-render from current inputs after every failed Save
     if (length(rows) == 0) return(p(class = "text-muted", "No BigWig / Hi-C / BED / Paired-end instances added yet."))
     tagList(lapply(rows, function(r) {
       name_id <- paste0("wiz_inst_name_", r$id)
@@ -500,7 +626,12 @@ wizard_server <- function(input, output, session) {
         # "" prepended (return-pass fix, see add_sample_modal()): otherwise
         # selected="" matches no real <option> and the browser silently
         # falls back to the first matching file.
-        column(5, selectizeInput(path_id, NULL, choices = c("", wizard_scoped_choices(dr, r$type)),
+        # The current value is also added to choices (bug 59): a path typed via
+        # create = TRUE that isn't in the scoped file list would otherwise be
+        # dropped on re-render, since selected must be one of the choices.
+        column(5, selectizeInput(path_id, NULL,
+                                  choices = unique(c("", isolate(input[[path_id]]) %||% r$path %||% "",
+                                                     wizard_scoped_choices(dr, r$type))),
                                   selected = isolate(input[[path_id]]) %||% r$path %||% "",
                                   options = list(create = TRUE, placeholder = "path relative to data root"))),
         column(1, actionButton(paste0("wiz_rm_btn_", r$id), "\u2715", class = "btn-xs",
@@ -576,6 +707,7 @@ wizard_server <- function(input, output, session) {
     if (length(errs) > 0) {
       modal_row_errors(row_errs)
       modal_field_errors(field_errs)
+      modal_fail_count(modal_fail_count() + 1)
       showModal(add_sample_modal(error = paste(errs, collapse = " | ")))
       return()
     }
@@ -652,34 +784,18 @@ wizard_server <- function(input, output, session) {
     if (!is.null(res$data_root)) updateTextInput(session, "wiz_data_root", value = res$data_root)
     wiz_samples(res$samples)
 
-    # Apply any `# <key>: value` overrides onto the Other-settings inputs
-    # (Phase C.3 decision 6). The four colour fields are plain
-    # <input type="color"> elements with no shiny.js input binding (see
-    # add_sample_modal()'s comment on wiz_sample_colour) -- there's no
-    # update*Input() for those, so a colour override from an imported file is
-    # a known, minor limitation: it's parsed but not reflected in the swatch.
-    ov <- res$overrides
+    # Apply any `# <key>: value` overrides (Phase C.3 decision 6): the genome
+    # fields onto their inputs, the display settings into import_visual() for
+    # Save (bug 56: the colour overrides used to be dropped). Numbers for the
+    # NULL-default ("auto") keys are converted the way parse_samples_txt() does.
+    coerced <- .pt_coerce_auto_overrides(res$overrides, DEFAULT_SETTINGS)
+    ov <- coerced$overrides
+    res$warnings <- c(res$warnings, coerced$ignored)
+    visual_keys <- setdiff(names(DEFAULT_SETTINGS), .PT_CORE_SETTINGS)
+    import_visual(ov[intersect(names(ov), visual_keys)])
     if (!is.null(ov$gtf_path))            updateTextInput(session, "wiz_gtf_path", value = ov$gtf_path)
     if (!is.null(ov$orgdb))               updateTextInput(session, "wiz_orgdb", value = ov$orgdb)
     if (!is.null(ov$genome_label))        updateTextInput(session, "wiz_genome_label", value = ov$genome_label)
-    if (!is.null(ov$font))         updateSelectizeInput(session, "wiz_font", selected = ov$font)
-    if (!is.null(ov$fontsize))     updateNumericInput(session, "wiz_fontsize", value = ov$fontsize)
-    if (!is.null(ov$page_w))       updateNumericInput(session, "wiz_page_w", value = ov$page_w)
-    if (!is.null(ov$chr_fmt))      updateSelectizeInput(session, "wiz_chr_fmt", selected = ov$chr_fmt)
-    if (!is.null(ov$show_track_axes)) updateCheckboxInput(session, "wiz_show_track_axes", value = ov$show_track_axes)
-    if (!is.null(ov$hic_norm))     updateTextInput(session, "wiz_hic_norm", value = ov$hic_norm)
-    if (!is.null(ov$hic_style))    updateSelectizeInput(session, "wiz_hic_style", selected = ov$hic_style)
-    if (!is.null(ov$zrange_cap))   updateNumericInput(session, "wiz_zrange_cap", value = ov$zrange_cap)
-    if (!is.null(ov$atac_height))  updateNumericInput(session, "wiz_atac_height", value = ov$atac_height)
-    if (!is.null(ov$hic_height))   updateNumericInput(session, "wiz_hic_height", value = ov$hic_height)
-    if (!is.null(ov$hic_res_mode)) updateSelectizeInput(session, "wiz_hic_res_mode", selected = ov$hic_res_mode)
-    if (!is.null(ov$hic_max_bins_per_view)) updateNumericInput(session, "wiz_hic_max_bins_per_view", value = ov$hic_max_bins_per_view)
-    if (!is.null(ov$junction_opacity_cap))  updateNumericInput(session, "wiz_junction_opacity_cap", value = ov$junction_opacity_cap)
-    if (!is.null(ov$min_junction_support))  updateNumericInput(session, "wiz_min_junction_support", value = ov$min_junction_support)
-    if (!is.null(ov$gene_flank_pct))        updateNumericInput(session, "wiz_gene_flank_pct", value = ov$gene_flank_pct)
-    if (!is.null(ov$min_display_tpm))       updateNumericInput(session, "wiz_min_display_tpm", value = ov$min_display_tpm)
-    if (!is.null(ov$uniprot_reviewed_only)) updateCheckboxInput(session, "wiz_uniprot_reviewed_only", value = ov$uniprot_reviewed_only)
-    if (!is.null(ov$arc_clip_partial))      updateCheckboxInput(session, "wiz_arc_clip_partial", value = ov$arc_clip_partial)
 
     status_lines <- list(div(class = "wiz-ok", sprintf("Imported %d sample(s).", length(res$samples))))
     if (length(res$warnings) > 0)
@@ -691,43 +807,18 @@ wizard_server <- function(input, output, session) {
 
   # A separate action from Save, never triggered automatically (Phase C.3 decision 2).
   wiz_collect_flat_settings <- function() {
-    list(
+    c(list(
       gtf_path            = wiz_clean_optional_text(input$wiz_gtf_path),
       orgdb               = wiz_clean_optional_text(input$wiz_orgdb),
-      genome_label        = wiz_clean_optional_text(input$wiz_genome_label),
-      font        = trimws(input$wiz_font %||% "DejaVu Sans"),
-      fontsize    = input$wiz_fontsize %||% 8,
-      page_w      = input$wiz_page_w %||% 9,
-      chr_fmt     = input$wiz_chr_fmt %||% "dot",
-      show_track_axes = input$wiz_show_track_axes %||% TRUE,
-      hic_norm    = trimws(input$wiz_hic_norm %||% "KR"),
-      hic_style   = input$wiz_hic_style %||% "rectangle",
-      zrange_cap  = wiz_clean_optional_numeric(input$wiz_zrange_cap),
-      atac_height = input$wiz_atac_height %||% 0.85,
-      hic_height  = wiz_clean_optional_numeric(input$wiz_hic_height),
-      hic_res_mode = input$wiz_hic_res_mode %||% "auto",
-      hic_max_bins_per_view = input$wiz_hic_max_bins_per_view %||% 500,
-      # The 4 colour fields below are plain <input type="color"> elements
-      # with no shiny.js input binding (see add_sample_modal()'s comment) --
-      # input$wiz_* only updates once the user actually touches that specific
-      # swatch, unlike every numericInput/selectInput above (which DO get
-      # their `value=`/`selected=` reported back on initial render). Without
-      # the cfg$... middle fallback, an untouched swatch would silently
-      # revert to the hardcoded default instead of the field's real current
-      # value -- both on Save (discarding a customized colour) and in
-      # is_dirty()'s comparison (spuriously flagging a change that never
-      # happened).
-      diff_colour_lo    = input$wiz_diff_colour_lo    %||% cfg$diff_colour_lo    %||% "#0033CC",
-      diff_colour_hi    = input$wiz_diff_colour_hi    %||% cfg$diff_colour_hi    %||% "#CC0000",
-      junction_opacity_cap = input$wiz_junction_opacity_cap %||% 2,
-      min_junction_support = input$wiz_min_junction_support %||% 0,
-      reference_colour  = input$wiz_reference_colour  %||% cfg$reference_colour  %||% "#4D4D4D",
-      comparison_colour = input$wiz_comparison_colour %||% cfg$comparison_colour %||% "#56B4E9",
-      gene_flank_pct    = input$wiz_gene_flank_pct %||% 15,
-      min_display_tpm   = input$wiz_min_display_tpm %||% 1,
-      uniprot_reviewed_only = input$wiz_uniprot_reviewed_only %||% FALSE,
-      arc_clip_partial  = input$wiz_arc_clip_partial %||% FALSE
-    )
+      genome_label        = wiz_clean_optional_text(input$wiz_genome_label)
+    ), wiz_display_settings())
+  }
+  # The saved display settings with any imported ones on top (no wizard inputs for them).
+  wiz_display_settings <- function() {
+    x <- cfg
+    iv <- import_visual()
+    x[names(iv)] <- iv
+    .pt_collect_display_settings(list(), "", x)
   }
 
   observeEvent(input$wiz_export_samples, {
@@ -779,7 +870,9 @@ wizard_server <- function(input, output, session) {
     Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS")
     showModal(modalDialog(
       title = "Closing", easyClose = FALSE, footer = NULL,
-      p("Returning to the app without saving, a new browser tab will open in a few seconds.")
+      p("Returning to the app without saving."),
+      p(strong("You can close this tab now."), " The app reopens in a new tab from RStudio in a few seconds. ",
+        "If nothing opens, go back to RStudio: the app's address is in the Console.")
     ))
     message("PlotTrellis: settings unchanged, returning to the app.")
     later::later(function() stopApp(returnValue = "restart"), 0.2)
@@ -807,12 +900,7 @@ wizard_server <- function(input, output, session) {
 
   observeEvent(input$wiz_save, {
     dr <- data_root()
-    errs <- character(0)
-    if (is.null(dr)) errs <- c(errs, "Data root is required.")
-    else if (!dir.exists(dr)) errs <- c(errs, "Data root directory does not exist.")
-    if (length(wiz_samples()) == 0) errs <- c(errs, "Add at least one sample before saving.")
-    if (is.null(wiz_clean_optional_text(input$wiz_gtf_path))) errs <- c(errs, "GTF path is required.")
-    if (is.null(wiz_clean_optional_text(input$wiz_orgdb))) errs <- c(errs, "OrgDb package is required.")
+    errs <- wiz_save_problems(dr, wiz_samples(), input$wiz_gtf_path, input$wiz_orgdb, input$wiz_genome_label)
 
     if (length(errs) > 0) {
       output$wiz_completion_error <- renderUI(div(class = "wiz-error", paste(errs, collapse = " | ")))
@@ -826,11 +914,14 @@ wizard_server <- function(input, output, session) {
       ),
       wiz_collect_flat_settings()
     )
-    # null = "null": jsonlite's toJSON() default serializes a NULL list element
-    # (e.g. zrange_cap/hic_height left blank for "auto") as {} rather than the
-    # JSON literal null. On reload, fromJSON() then reads that back as an empty
-    # list, not NULL, and clean_optional_numeric()'s is.finite() crashes on it.
-    writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE, null = "null"), SETTINGS_JSON)
+    # Kept across edits: pt_project() uses it to tell this project's samples.txt
+    # from a different one pointed at the same folder.
+    if (file.exists(SETTINGS_JSON))
+      settings$samples_txt_source <- tryCatch(jsonlite::read_json(SETTINGS_JSON)$samples_txt_source,
+                                              error = function(e) NULL)
+    # Feature 43: always keep a plain-text project_samples.txt beside it, the
+    # human-readable record the project can be rebuilt from (mirror_txt).
+    txt_ok <- .pt_write_project_files(settings, SETTINGS_JSON)
 
     # See wiz_do_close()'s comment -- same reasoning applies to Save.
     Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS")
@@ -839,7 +930,10 @@ wizard_server <- function(input, output, session) {
     showModal(modalDialog(
       title = "Settings saved", easyClose = FALSE, footer = NULL,
       p("project_settings.json has been written."),
-      p("Restarting with your configured project, a new browser tab will open in a few seconds.")
+      p(if (txt_ok) paste0("A copy of your samples is in ", mirror_txt, "; it can rebuild the project if the settings ever break.")
+        else "Couldn't write project_samples.txt beside it (use Export samples.txt to save a copy yourself)."),
+      p(strong("You can close this tab now."), " The app reopens with your project in a new tab from RStudio in a few seconds. ",
+        "If nothing opens, go back to RStudio: the app's address is in the Console.")
     ))
     message("PlotTrellis: settings saved, launching the app.")
     later::later(function() stopApp(returnValue = "restart"), 0.2)

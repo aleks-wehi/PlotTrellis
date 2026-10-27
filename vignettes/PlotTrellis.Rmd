@@ -1,118 +1,194 @@
 ---
-title: "Introduction to PlotTrellis"
-output: BiocStyle::html_document
+title: "PlotTrellis"
+output:
+  BiocStyle::html_document:
+    toc: false
 vignette: >
-  %\VignetteIndexEntry{Introduction to PlotTrellis}
+  %\VignetteIndexEntry{PlotTrellis}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-# Introduction
+```{r opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
 
-PlotTrellis is a Shiny app for composing multi-track genomic visualisations from
-[plotgardener](https://bioconductor.org/packages/plotgardener/) without writing code: coverage
-(ATAC/RNA-seq bigWig), Hi-C contact maps, splice junctions, transcript structure, and protein
-domain annotation, all in one figure, over a gene or a set of genomic coordinates. Every figure
-you build in the app can also be downloaded as a standalone R script that reproduces it exactly,
-offline, without PlotTrellis or the app itself.
-
-It's aimed at anyone who wants to look at their own sequencing data across these track types
-without writing plotgardener code by hand for each figure -- most usefully biologists who have
-processed data (bigWig, `.hic`/`.cool`, a GTF, salmon `quant.sf` output, and so on) but don't
-want to iterate on plotting code themselves.
+PlotTrellis turns your sequencing data into multi-track genomic figures (transcript counts,
+transcript structures, splice junctions, coverage, comparisons between samples), in a
+point-and-click app or in a few lines of R.
 
 # Installation
 
+PlotTrellis is not on CRAN, so `repos` tells R where to find it and its Bioconductor
+dependencies (from scratch this can take up to 15 minutes):
+
 ```{r install, eval=FALSE}
-if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
-pak::pkg_install("aleks-wehi/PlotTrellis")
+install.packages("PlotTrellis", repos = c("https://aleks-wehi.r-universe.dev",
+                                          "https://bioc.r-universe.dev", "https://cloud.r-project.org"))
 ```
 
-# Launching the app
+# Your first figure in the app
 
-```{r setup, eval=FALSE}
+PlotTrellis ships one example: mouse mammary basal cells (Basal) and luminal progenitors (LP)
+around the *Elf5*, *Ehf* and *Cat* genes.
+
+```{r app-example, eval=FALSE}
+BiocManager::install("org.Mm.eg.db")   # mouse gene annotation (for human data: "org.Hs.eg.db")
 library(PlotTrellis)
-PlotTrellisApp(project_dir = tempdir())
+run_plottrellis(project_dir = "PlotTrellis-example", samples_txt = pt_example())
 ```
 
-`project_dir` is where this project's settings and cache/downloaded-script state live -- pass a
-different directory per project so multiple projects don't share state.
+`project_dir` is the folder that holds everything PlotTrellis makes for this project. Here it
+is created in R's working directory, but it can be any folder. `pt_example()` gives
+the path of the example's `samples.txt`.
 
-# Setting up a project
+The app opens with *Elf5* and its tracks already picked: click **Generate figure**. Then try
+*Ehf* or *Cat*, or a different set of tracks.
 
-The first time you launch the app against a `project_dir` with no existing project settings,
-you get a setup screen instead of the composer:
-
-```{r wizard-screenshot, echo=FALSE, out.width="100%"}
-knitr::include_graphics("figures/wizard_manual.png")
-```
-
-You can either import an existing `samples.txt` to prefill everything, or fill in the form by
-hand: a genome (GTF path and an `OrgDb` package -- a few common genomes are offered as
-presets), a data root directory that every sample's file paths are given relative to, and one
-or more samples. Each sample can carry any mix of:
-
-| Type | File format | Used by |
-|---|---|---|
-| `bw` | bigWig | coverage tracks (ATAC-seq, RNA-seq) |
-| `hic` | `.hic`, `.cool`, `.mcool` | Hi-C contact map |
-| `paired-end` | BEDPE | splice junctions |
-| `bed` | BED12 | generic annotation overlay |
-| `quantdir` | a salmon `quant.sf` directory | transcript usage (TPM) |
-
-TxDb and the two transcript-lookup caches PlotTrellis needs are derived from the GTF
-automatically the first time a genome is used (see the FAQ below) -- they're never entered here.
-
-# Composing a figure
-
-Once a project is set up, the main app has two pages: **Compose** and **Output**. On Compose,
-pick how many samples you're comparing (one, two, or multi-sample), and choose a gene or a set of
-coordinates:
+To build your own figure on the **Compose** page, choose how many samples and which ones, then
+a gene or coordinates:
 
 ```{r compose-screenshot-1, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/sample_and_gene_selection.png")
 ```
 
-Then drag tracks from the available list into the figure:
+Drag tracks into the figure (drag again to reorder) and click **Generate figure**. The title,
+fonts, heights and colours are under **Figure settings**. The **Output** page downloads the
+figure as an SVG or as a standalone R script, and shows the gene's transcripts and protein
+domains.
 
 ```{r compose-screenshot-2, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/track_composer.png")
 ```
 
-Tracks can be reordered by dragging within the figure list, and each track type has its own
-settings (colours, height, value ranges, and so on) reachable from the project settings menu.
+To use PlotTrellis from R code instead, see
+[Your first figure in code](#your-first-figure-in-code) below.
 
-# Output and the downloaded script
+# Your own data
 
-Switching to Output renders the figure you've composed:
+The simplest way is to run the command above with a new `project_dir` and no `samples_txt`:
 
-```{r output-screenshot, echo=FALSE, out.width="100%"}
-knitr::include_graphics("figures/output.png")
+```{r own-data, eval=FALSE}
+run_plottrellis(project_dir = "my-project")
 ```
 
-Alongside the rendered SVG, the **Download R script** button gives you a single, self-contained
-`.R` file: it embeds the exact source of every function PlotTrellis used to build this figure, so
-running it later needs only base R and the packages it lists -- not PlotTrellis or the app.
+A wizard guides you through listing your samples and their files, and saves them in the
+project folder. When you click **Save** (or **Close**), close that browser tab: the app
+reopens in a new tab from RStudio a few seconds later.
 
-# FAQ
-
-- **The first figure for a new genome is slow to render -- is that expected?** Yes. The first
-  time a GTF is used, PlotTrellis builds a `TxDb` and two transcript-lookup caches from it and
-  saves them next to the GTF file; every later render against that same GTF reuses them and is
-  fast. A handful of other per-gene caches (protein domain annotation, canonical-isoform lookups)
-  live under `tools::R_user_dir("PlotTrellis", which = "cache")` instead, since they aren't tied
-  to one genome file.
-- **Where do I clear caches from if something looks stale?** The project settings menu has a
-  "Clear all caches" action; see the two cache locations above if you'd rather do it by hand.
-
-# Session info
-
-```{r session-info}
-sessionInfo()
+```{r wizard-screenshot, echo=FALSE, out.width="100%"}
+knitr::include_graphics("figures/wizard_manual.png")
 ```
 
-# Citation
+Apart from your data, the one file you need is your genome's **GTF**: the annotation file
+that says where each gene and transcript is. Use the one your data was aligned or quantified
+with, if you have it. Otherwise download it from [GENCODE](https://www.gencodegenes.org)
+(human and mouse: the "Comprehensive gene annotation" GTF) or
+[Ensembl](https://www.ensembl.org/info/data/ftp/) (other species), for the same genome
+build as your data. It can stay gzipped (`.gtf.gz`).
 
-```{r citation, eval=FALSE}
-citation("PlotTrellis")
+# Your first figure in code
+
+The rest of this vignette is for working in R. The example figure from the app:
+
+```{r code-example, eval=FALSE}
+library(PlotTrellis)
+proj <- pt_project(project_dir = "PlotTrellis-example", samples_txt = pt_example())
+fig  <- pt_figure(proj, "Elf5", tracks = c("atac@Basal", "atac@LP",
+                                           "transcript_counts@Basal", "transcript_counts@LP",
+                                           "transcripts_annotated", "genes"))
+pt_save(fig, "Elf5.pdf")   # or .svg, .png
+```
+
+```{r code-example-run, echo=FALSE, fig.alt="Elf5 in mouse mammary basal cells and luminal progenitors: ATAC coverage and transcript counts for each, then the annotated transcripts and the gene."}
+library(PlotTrellis)
+proj <- pt_project(project_dir = file.path(tempdir(), "PlotTrellis-example"), samples_txt = pt_example())
+pt_figure(proj, "Elf5", tracks = c("atac@Basal", "atac@LP",
+                                   "transcript_counts@Basal", "transcript_counts@LP",
+                                   "transcripts_annotated", "genes"))
+```
+
+# Your own data in code (writing a samples.txt)
+
+A project can also come from a `samples.txt`, a tab-separated table with one row per
+sample under a few header lines. For example:
+
+```
+# data_root: /data/smithlab/tcell_2026
+# gtf_path: /data/reference/gencode.v44.annotation.gtf.gz
+# orgdb: org.Hs.eg.db
+# genome_label: hg38
+condition  colour   bw:atac                 paired-end:junctions        quantdir:salmon
+Control    #1b9e77  atac/Control_merged.bw  junctions/Control_SJ.bed    salmon/Control
+KO         #d95f02  atac/KO_merged.bw       junctions/KO_SJ.bed         salmon/KO
+```
+
+The header lines:
+
+- `data_root`: the folder your data files are in. The paths in the table are relative to it.
+- `gtf_path`: your genome's GTF file (see above).
+- `orgdb`: your species' annotation package, e.g. `org.Mm.eg.db` (mouse), `org.Hs.eg.db` (human).
+- `genome_label`: the genome build's UCSC name, e.g. `mm10`, `hg38`.
+
+The columns (separated by tabs):
+
+- `condition`: the sample's name.
+- `colour` (optional): the sample's colour.
+- One column per kind of data file, headed `type:name`. The type says what the file is, and the
+  name is what you call the track: `bw:atac` holds bigWig files and gives tracks called `atac`.
+
+| Type | File | Track |
+|---|---|---|
+| `bw` | bigWig | coverage (ATAC-seq, RNA-seq) |
+| `quantdir` | a Salmon output folder (with `quant.sf`) | `transcript_counts` |
+| `paired-end` | BEDPE or BED12 | splice junctions |
+| `hic` | `.hic`, `.cool`, `.mcool` | Hi-C contact map |
+| `bed` | BED12 | annotation |
+
+If you would rather not write it by hand, or already have a sample sheet with the same
+information, paste this section and your file list (or sheet) into an AI assistant and ask it
+for a `samples.txt`.
+
+Then open it like the example: `run_plottrellis(project_dir = "my-project", samples_txt =
+"path/to/samples.txt")`. Editing the `samples.txt` later updates the project the next time
+it is opened.
+
+# More in code
+
+- **Tracks** are listed top to bottom. `pt_tracks(proj)` lists every one the project has.
+  `genes`, `transcripts_annotated` and the other annotation tracks need no sample; the rest
+  name theirs after `@`.
+- **Comparisons** name two samples, the second being the reference:
+  `"junctions_diff@KO vs Control"`.
+- **`parallel = TRUE`** repeats every track written without `@` for each sample, so
+  `pt_figure(proj, "Elf5", c("atac", "transcript_counts", "transcripts_annotated", "genes"),
+  parallel = TRUE)` is the
+  figure above. `parallel = c("LP", "Basal")` picks the samples and their order.
+- **`region = "chr2:103,400,000-103,460,000"`** instead of a gene shows any coordinates.
+- **`pt_script(fig, "Elf5.R")`** writes a standalone script that redraws the figure, for
+  edits the API doesn't offer.
+- **`run_plottrellis(proj)`** opens the same project in the app, and
+  `pt_preload(proj, fig)` makes it open on `fig`, ready for someone who doesn't code.
+
+Everything a project keeps (settings, a copy of its samples table, caches) is in its
+`project_dir`; your data files stay where they are.
+
+# Sharing
+
+To pass your data to someone else, send them the path to your `samples.txt` (for a wizard
+project, the `project_samples.txt` in its folder). They run the same command with a
+`project_dir` of their own:
+
+```{r sharing, eval=FALSE}
+run_plottrellis(project_dir = "tcell-project",
+                samples_txt = "/data/smithlab/tcell_2026/samples.txt")
+```
+
+They need to be able to read your data files, so keep them on a shared drive and give
+`data_root` and `gtf_path` as full paths. To have the app open on a gene with its tracks
+already picked, as the example does, add two header lines:
+
+```
+# start_gene: Elf5
+# start_tracks: atac@Basal, atac@LP, transcripts_annotated, genes
 ```

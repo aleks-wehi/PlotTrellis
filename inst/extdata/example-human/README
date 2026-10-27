@@ -1,0 +1,31 @@
+PlotTrellis example dataset
+===========================
+
+A small slice of human (hg38) ENCODE data around chr14:24128000-24170000 (PSME1, EMC9, PSME2,
+RNF31, IRF9 and neighbours), for two cell lines: GM12878 (lymphoblastoid) and K562
+(myeloid leukaemia). Open it with plottrellis_example(); the tracks are called 'atac'
+and 'junctions' (plus transcript-usage tracks from the quant folders).
+
+Files
+  samples.txt           the PlotTrellis samples file (relative paths)
+  annotation.gtf.gz     GENCODE v46 lines for the genes overlapping the locus (complete transcripts)
+  annotation_chrom_sizes.rds  hg38 chromosome lengths (so no download is needed on first use)
+  atac/*.bigWig         ATAC-seq fold change over control, cropped to the locus +/- 10 kb
+  junctions/*.bed       splice junctions (BED12) overlapping the locus +/- 10 kb
+  quant/*/quant.sf      Salmon transcript quantification, rows for the kept genes' transcripts only
+                        (TPM values are as in the full run, not renormalised)
+
+Sources
+  ATAC-seq   ENCODE ENCFF316PVI (experiment ENCSR095QNB, GM12878) and ENCFF496GRF (ENCSR483RKN, K562),
+             fold change over control bigWigs
+  RNA-seq    ENCODE experiments ENCSR889TRN (GM12878, files ENCFF436TWZ + ENCFF286QHA) and ENCSR637VLS
+             (K562, file ENCFF000DWH), replicate 1 of each, quantified with Salmon 2.1.1 against GENCODE v46
+  Junctions  derived from the GRCh38 genome-alignment BAMs of the same replicates (ENCFF284YOU for GM12878,
+             ENCFF028IUE for K562) with GenomicAlignments::summarizeJunctions()
+  Annotation GENCODE release 46 (Ensembl 112), GRCh38
+
+Licence
+  ENCODE data are released without restriction on use (ENCODE data use policy, public data).
+  GENCODE annotation is open (EMBL-EBI terms of use). Please cite ENCODE and GENCODE if you reuse them.
+
+Rebuild: data-raw/make-example.R in the package source.

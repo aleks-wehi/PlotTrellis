@@ -1,5 +1,8 @@
 settings_bw_diff_stacked <- function(dict, entry, settings, track_w, region_params) {
   if (is.null(entry$height)) entry$height <- settings$bw_diff_stacked_height %||% settings$atac_height %||% 0.85
+  # Project-wide setting, threaded through the entry since ctx has no field for it: how strongly
+  # the shared (overlap) layer is tinted with the reference colour, 0 = white, 1 = full colour.
+  entry$shared_alpha <- settings$diff_shared_alpha %||% 0.15
   list(dict = dict, entry = entry)
 }
 
@@ -70,7 +73,8 @@ render_bw_diff_stacked <- function(entry, dict, ctx) {
              chrom = ch, chromstart = ctx$region_params$start, chromend = ctx$region_params$end,
              x = ctx$track_x, y = ctx$y,
              width = ctx$track_w, height = ctx$height,
-             fill = faint_solid(entry$control_colour, 0.15), linecolor = faint_solid(entry$control_colour, 0.15),
+             fill = faint_solid(entry$control_colour, entry$shared_alpha %||% 0.15),
+             linecolor = faint_solid(entry$control_colour, entry$shared_alpha %||% 0.15),
              range = entry$range)
 
   mixed_text(

@@ -19,8 +19,8 @@ test_that("protein_domains never persists an error-status cache entry", {
   # A live UniProt lookup happens before the forced readRDS() failure this
   # test is actually targeting -- if rest.uniprot.org is unreachable from
   # this machine right now, that earlier step fails first with
-  # "no_uniprot_entry" instead, which isn't the scenario under test.
-  skip_if(res1$status == "no_uniprot_entry", "UniProt unreachable from this machine right now")
+  # "uniprot_unreachable" instead, which isn't the scenario under test.
+  skip_if(res1$status == "uniprot_unreachable", "UniProt unreachable from this machine right now")
   expect_identical(res1$status, "error")
   expect_false(file.exists(file.path(tmp_cache, "mm10_error_status_test", paste0(gene, ".rds"))))
 
@@ -49,4 +49,21 @@ test_that("gene_display_transcripts cache key includes the samples list", {
   # cached result instead of recomputing against the LP condition's own
   # quant.sf.
   expect_false(identical(res_ba$named, res_lp$named))
+})
+
+test_that("gene_display_transcripts cache key includes MIN_DISPLAY_TPM (bug 61)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
+
+  fx <- FIXTURES$mouse
+  gm <- GENOMES$mouse
+  s <- test_settings("mouse")
+  on.exit(.set_transcript_filter_globals(s), add = TRUE)
+  .set_transcript_filter_globals(utils::modifyList(s, list(min_display_tpm = 1)))
+  low <- gene_display_transcripts(fx$gene, gm$gtf_path, fx$samples, fx$data_dir)
+  # The first call populated the disk cache; with MIN_DISPLAY_TPM missing from
+  # the key, this call returned the same (cached) named set.
+  .set_transcript_filter_globals(utils::modifyList(s, list(min_display_tpm = 1e9)))
+  high <- gene_display_transcripts(fx$gene, gm$gtf_path, fx$samples, fx$data_dir)
+  expect_gt(length(low$named), 0)
+  expect_length(high$named, 0)
 })

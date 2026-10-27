@@ -12,20 +12,21 @@ ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
 
 .pd_strip_version <- function(x) sub("\\.[0-9]+$", "", x)
 
+# All three fetches below go through .uniprot_read_lines() (uniprot_canonical.R):
+# 10s timeout, and a network failure raises "uniprot_unreachable" instead of
+# looking like an empty "no reviewed entry" answer.
 .pd_uniprot_search_by_gene <- function(gene_symbol, organism_id = 10090) {
   url <- sprintf(
     "https://rest.uniprot.org/uniprotkb/search?query=gene:%s+AND+organism_id:%d+AND+reviewed:true&fields=accession&format=list",
     gene_symbol, organism_id)
-  hits <- tryCatch(readLines(url, warn = FALSE), error = function(e) character(0))
+  hits <- .uniprot_read_lines(url)
   if (length(hits) == 0) NA_character_ else hits[1]
 }
 .pd_fetch_uniprot_record <- function(acc) {
-  tryCatch(readLines(sprintf("https://rest.uniprot.org/uniprotkb/%s.txt", acc), warn = FALSE),
-           error = function(e) character(0))
+  .uniprot_read_lines(sprintf("https://rest.uniprot.org/uniprotkb/%s.txt", acc))
 }
 .pd_fetch_uniprot_fasta_len <- function(acc) {
-  lines <- tryCatch(readLines(sprintf("https://rest.uniprot.org/uniprotkb/%s.fasta", acc), warn = FALSE),
-                     error = function(e) character(0))
+  lines <- .uniprot_read_lines(sprintf("https://rest.uniprot.org/uniprotkb/%s.fasta", acc))
   if (length(lines) < 2) return(NA_integer_)
   nchar(paste(lines[-1], collapse = ""))
 }
@@ -182,7 +183,8 @@ gene_protein_domains <- function(gene_symbol, txdb, gtf_path, orgdb, genome_labe
     list(status = "ok", gene = gene_symbol, acc = acc, canonical_tx = resolved$transcript_id,
          method = resolved$method, canonical_isoform_name = resolved$canonical_isoform$name,
          domains = domain_df)
-  }, error = function(e) list(status = "error", gene = gene_symbol, message = conditionMessage(e)))
+  }, uniprot_unreachable = function(e) list(status = "uniprot_unreachable", gene = gene_symbol, message = conditionMessage(e)),
+     error = function(e) list(status = "error", gene = gene_symbol, message = conditionMessage(e)))
 
   if (result$status %in% c("ok", "no_uniprot_entry", "no_domains", "no_canonical_transcript")) {
     dir.create(dirname(cache_file), recursive = TRUE, showWarnings = FALSE)

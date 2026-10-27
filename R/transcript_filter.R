@@ -78,7 +78,7 @@ read_junction_file <- function(path, chrom, start, end) {
 }
 
 # Sums nSupport across replicate junction files for the SAME condition BEFORE thresholding (not filter-then-union), matching ggsashimi's multi-BAM combining convention; used by viz/sashimi.R's displayed arcs, independent of the transcript-display filtering below.
-pool_junctions <- function(samples, chrom, start, end, min_junction_support = MIN_JUNCTION_SUPPORT) {
+pool_junctions <- function(samples, chrom, start, end, min_junction_support) {
   if (is.data.frame(samples)) samples <- split(samples, seq_len(nrow(samples)))
 
   raw_list <- lapply(samples, function(s) read_junction_file(s$junction_path, chrom, start, end))
@@ -202,7 +202,7 @@ GENE_DISPLAY_TRANSCRIPTS_CACHE_PATH <- file.path(
   saveRDS(cache, GENE_DISPLAY_TRANSCRIPTS_CACHE_PATH)
 }
 
-# Gene-level (not per-run) transcript filtering, pooled over EVERY RNA-seq condition so the same gene always resolves to the same named set (falls back to tx_ordinal_suffix() ordering with no quant.sf at all); disk-cached per gene, keyed on other_budget/max_segments/samples/data_dir so different projects never share an entry. See solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_filter.R:362".
+# Gene-level (not per-run) transcript filtering, pooled over EVERY RNA-seq condition so the same gene always resolves to the same named set (falls back to tx_ordinal_suffix() ordering with no quant.sf at all); disk-cached per gene, keyed on other_budget/max_segments/samples/data_dir/MIN_DISPLAY_TPM so different projects never share an entry. See solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_filter.R:362".
 gene_display_transcripts <- function(gene, gtf_path, samples, data_dir,
                                       other_budget = 0.05, max_segments = length(TX_PALETTE)) {
   # Cache key derived from the samples LIST content (Phase C.3 decision 8),
@@ -214,8 +214,10 @@ gene_display_transcripts <- function(gene, gtf_path, samples, data_dir,
   # included too (2026-09-08 GTF-consistency audit) -- it wasn't before, so
   # switching a project's GTF while keeping the same samples[] silently
   # served the old GTF's transcript structure for an already-cached gene.
-  cache_key <- sprintf("%s|%s|%.6f|%d|%s|%s", gene, gtf_path, other_budget, max_segments,
-                        paste(deparse(samples), collapse = ""), data_dir)
+  # MIN_DISPLAY_TPM is included too (bug 61): without it a changed min TPM
+  # setting was ignored for every gene already in the cache.
+  cache_key <- sprintf("%s|%s|%.6f|%d|%s|%s|%.10g", gene, gtf_path, other_budget, max_segments,
+                        paste(deparse(samples), collapse = ""), data_dir, MIN_DISPLAY_TPM)
   cache <- .gene_display_transcripts_cache_load()
   if (!is.null(cache[[cache_key]])) return(cache[[cache_key]])
 

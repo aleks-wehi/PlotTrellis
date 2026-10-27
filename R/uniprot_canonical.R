@@ -5,7 +5,9 @@ UNIPROT_CANONICAL_CACHE_PATH <- file.path(
 )
 
 # rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/uniprot_canonical.R:42"
-UNIPROT_CACHE_SCHEMA_VERSION <- 3L
+# 4 (2026-10-27, Phase I.1 step 5): drops entries that offline sessions
+# cached as "no accession" before network failures stopped being cached.
+UNIPROT_CACHE_SCHEMA_VERSION <- 4L
 
 .uniprot_canonical_cache_load <- function() {
   if (!file.exists(UNIPROT_CANONICAL_CACHE_PATH)) return(list())
@@ -31,13 +33,40 @@ UNIPROT_CACHE_SCHEMA_VERSION <- 3L
 ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
 ORGDB_ENSEMBL_TX_PREFIX <- c(org.Mm.eg.db = "ENSMUST", org.Hs.eg.db = "ENST")
 
+# Every UniProt REST read goes through here (protein_domains.R's too). 10s
+# timeout instead of R's 60s default (confirmed to bound both connect and
+# read with R's libcurl url() method). A network/HTTP failure raises a
+# "uniprot_unreachable" error rather than returning character(0), which is
+# what a successful "no reviewed entry" search returns -- conflating the two
+# is how one offline session cached "no entry" for every gene it touched.
+# After a failure, every UniProt call fails fast for UNIPROT_BACKOFF_SECS:
+# failures aren't cached, so without this a network that silently drops
+# packets would cost a 10s timeout on every render of every panel/track.
+# State lives in an R option, not a package-level environment, because the
+# downloadable R script deparses non-function top-level values.
+UNIPROT_BACKOFF_SECS <- 120
+
+.uniprot_read_lines <- function(url) {
+  down_until <- getOption("PlotTrellis.uniprot_down_until")
+  if (!is.null(down_until) && Sys.time() < down_until)
+    stop(errorCondition("UniProt could not be reached recently; skipping until the retry window passes",
+                        class = "uniprot_unreachable", call = NULL))
+  op <- options(timeout = 10)
+  on.exit(options(op), add = TRUE)
+  tryCatch(suppressWarnings(readLines(url, warn = FALSE)), error = function(e) {
+    options(PlotTrellis.uniprot_down_until = Sys.time() + UNIPROT_BACKOFF_SECS)
+    stop(errorCondition(paste0("UniProt could not be reached: ", conditionMessage(e)),
+                        class = "uniprot_unreachable", call = NULL))
+  })
+}
+
 # gene_symbol -> reviewed (Swiss-Prot) UniProt accession, or NA if no reviewed hit; spike 0.5 validated this query for Nfatc1/Klrk1.
 uniprot_search_by_gene <- function(gene_symbol, organism_id = 10090) {
   url <- sprintf(
     "https://rest.uniprot.org/uniprotkb/search?query=gene:%s+AND+organism_id:%d+AND+reviewed:true&fields=accession&format=list",
     gene_symbol, organism_id
   )
-  hits <- tryCatch(readLines(url, warn = FALSE), error = function(e) character(0))
+  hits <- .uniprot_read_lines(url)
   if (length(hits) == 0) NA_character_ else hits[1]
 }
 
@@ -81,9 +110,7 @@ uniprot_search_by_gene <- function(gene_symbol, organism_id = 10090) {
   acc <- uniprot_search_by_gene(gene_symbol, organism_id = ORGDB_TAXON_ID[[orgdb]])
   if (is.na(acc)) return(empty_result)
 
-  txt <- tryCatch(readLines(sprintf("https://rest.uniprot.org/uniprotkb/%s.txt", acc), warn = FALSE),
-                   error = function(e) NULL)
-  if (is.null(txt)) { empty_result$accession <- acc; return(empty_result) }
+  txt <- .uniprot_read_lines(sprintf("https://rest.uniprot.org/uniprotkb/%s.txt", acc))
 
   len_line <- grep("^SQ   SEQUENCE", txt, value = TRUE)
   protein_len <- if (length(len_line) == 0) NA_integer_ else
@@ -147,7 +174,11 @@ uniprot_canonical_match <- function(gene_symbol, tx_ids, cds_by_tx, tx_ccds_id =
   cache <- .uniprot_canonical_cache_load()
   entry <- cache[[cache_key]]
   if (is.null(entry)) {
-    entry <- .uniprot_fetch_entry(gene_symbol, orgdb)
+    # UniProt unreachable: return the all-NA result uncached, so the next
+    # call retries instead of serving a stale "no entry" forever.
+    entry <- tryCatch(.uniprot_fetch_entry(gene_symbol, orgdb),
+                      uniprot_unreachable = function(e) NULL)
+    if (is.null(entry)) return(na_result)
     cache[[cache_key]] <- entry
     tryCatch(.uniprot_canonical_cache_save(cache), error = function(e) NULL)
   }

@@ -2,3 +2,4 @@
 ^\.Rproj\.user$
 ^launch\.R$
 ^data$
+^PlotTrellis\.BiocCheck$

@@ -19,10 +19,19 @@ GENOME_PRESETS <- list(
   )
 )
 
-# Derived cache path next to the GTF, used when a caller has no path yet; strips ".gtf"/".gtf.gz" (not just the last extension) so "foo.gtf.gz" -> "foo", not "foo.gtf".
+# Where genome caches are built: the open project's cache/genome folder (set by
+# .pt_set_cache_root(), bug 53), or next to the GTF when no project is open.
+GENOME_CACHE_DIR <- NULL
+
+# Derived cache path for a GTF, used when a caller has no path yet; strips ".gtf"/".gtf.gz" (not just the last extension) so "foo.gtf.gz" -> "foo", not "foo.gtf".
+# A cache already next to the GTF (built by an older version, or shipped, like
+# the example's chrom sizes) is reused read-only; new ones go to GENOME_CACHE_DIR.
 .genome_cache_path <- function(gtf_path, suffix) {
   base <- sub("\\.gtf(\\.gz)?$", "", basename(gtf_path))
-  file.path(dirname(gtf_path), paste0(base, suffix))
+  beside_gtf <- file.path(dirname(gtf_path), paste0(base, suffix))
+  if (is.null(GENOME_CACHE_DIR) || file.exists(beside_gtf)) return(beside_gtf)
+  dir.create(GENOME_CACHE_DIR, recursive = TRUE, showWarnings = FALSE)
+  file.path(GENOME_CACHE_DIR, paste0(base, suffix))
 }
 
 # Any of txdb_path/tx_name_lookup_path/tx_meta_lookup_path/chrom_sizes_path that's missing or doesn't resolve to a real file gets built from gtf_path and written to a derived default path; returns the fully-resolved field list (same shape as a GENOME_PRESETS entry, plus gtf_path/orgdb/rebuilt). Full rationale: solutions/concepts/19-relocated-code-rationale.md, "utils/genomes.R:76".
