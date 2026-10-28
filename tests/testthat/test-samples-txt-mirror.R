@@ -55,7 +55,7 @@ test_that("wizard Save writes a project_samples.txt that re-imports to the same 
   expect_same_path(res$data_root, json$data_dir)
   expect_equal(res$samples[[1]]$condition, json$samples[[1]]$condition)
   expect_equal(res$samples[[1]]$data[[1]]$path, json$samples[[1]]$data[[1]]$path)
-  expect_equal(res$overrides$gtf_path, json$gtf_path)
+  expect_same_path(res$overrides$gtf_path, json$gtf_path)
   expect_equal(as.numeric(res$overrides$fontsize), json$fontsize)  # a non-default setting survives
 })
 
