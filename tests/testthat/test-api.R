@@ -110,11 +110,11 @@ test_that("a project keeps every cache in its own folder, none next to the data 
   proj <- suppressWarnings(pt_project(proj_dir, file.path(data, "samples.txt")))
   # The data folder is untouched; the shipped chrom-sizes cache there is reused, not copied.
   expect_setequal(list.files(data, recursive = TRUE), before)
-  expect_equal(proj$genome$txdb_path, file.path(proj_dir, "cache", "genome", "annotation_txdb.sqlite"))
+  expect_same_path(proj$genome$txdb_path, file.path(proj_dir, "cache", "genome", "annotation_txdb.sqlite"))
   expect_true(file.exists(proj$genome$txdb_path))
   ns <- asNamespace("PlotTrellis")
   for (p in c(ns$PROTEIN_DOMAINS_CACHE_DIR, ns$UNIPROT_CANONICAL_CACHE_PATH, ns$GENE_DISPLAY_TRANSCRIPTS_CACHE_PATH))
-    expect_true(startsWith(p, file.path(proj_dir, "cache")))
+    expect_true(startsWith(norm_path(p), norm_path(file.path(proj_dir, "cache"))))
   # A gene render's transcript-filter cache lands there too.
   pt_save(pt_figure(proj, "PSME2", c("genes", "transcripts")), tempfile(fileext = ".png"), dpi = 30)
   expect_true(file.exists(ns$GENE_DISPLAY_TRANSCRIPTS_CACHE_PATH))

@@ -52,7 +52,7 @@ test_that("wizard Save writes a project_samples.txt that re-imports to the same 
   expect_false(file.exists(file.path(proj, "samples.txt")))  # never a user-named file
   res <- import_samples_txt(txt, defaults = .pt_default_settings())
   expect_length(res$errors, 0)
-  expect_equal(res$data_root, normalizePath(json$data_dir))
+  expect_same_path(res$data_root, json$data_dir)
   expect_equal(res$samples[[1]]$condition, json$samples[[1]]$condition)
   expect_equal(res$samples[[1]]$data[[1]]$path, json$samples[[1]]$data[[1]]$path)
   expect_equal(res$overrides$gtf_path, json$gtf_path)
@@ -67,7 +67,7 @@ test_that("a relative data root is written as absolute, so the copy rebuilds fro
   wizard_save("data")
   res <- import_samples_txt(file.path(proj, "project_samples.txt"), defaults = .pt_default_settings())
   expect_length(res$errors, 0)
-  expect_equal(res$data_root, normalizePath(file.path(proj, "data")))
+  expect_same_path(res$data_root, file.path(proj, "data"))
 })
 
 test_that("a first-time wizard that finds project_samples.txt opens on Import, prefilled", {
@@ -76,7 +76,7 @@ test_that("a first-time wizard that finds project_samples.txt opens on Import, p
   writeLines("condition\tcolour\tbw:ATAC", file.path(proj, "project_samples.txt"))
   shiny::testServer(wizard_server, {
     expect_equal(wiz_mode(), "import")
-    expect_equal(mirror_txt, file.path(proj, "project_samples.txt"))
+    expect_same_path(mirror_txt, file.path(proj, "project_samples.txt"))
   })
   unlink(file.path(proj, "project_samples.txt"))
   shiny::testServer(wizard_server, expect_null(wiz_mode()))
