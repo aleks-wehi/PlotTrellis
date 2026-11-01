@@ -19,12 +19,14 @@ point-and-click app or in a few lines of R.
 
 # Installation
 
-PlotTrellis is not on CRAN, so `repos` tells R where to find it and its Bioconductor
-dependencies (from scratch this can take up to 15 minutes):
+PlotTrellis is not on CRAN, so `repos` tells R where to find it. `BiocManager::repositories()`
+adds the Bioconductor and CRAN packages that match your R (from scratch this can take up to
+15 minutes):
 
 ```{r install, eval=FALSE}
+install.packages("BiocManager")
 install.packages("PlotTrellis", repos = c("https://aleks-wehi.r-universe.dev",
-                                          "https://bioc.r-universe.dev", "https://cloud.r-project.org"))
+                                          BiocManager::repositories()))
 ```
 
 # Your first figure in the app
@@ -33,14 +35,15 @@ PlotTrellis ships one example: mouse mammary basal cells (Basal) and luminal pro
 around the *Elf5*, *Ehf* and *Cat* genes.
 
 ```{r app-example, eval=FALSE}
-BiocManager::install("org.Mm.eg.db")   # mouse gene annotation (for human data: "org.Hs.eg.db")
+BiocManager::install("org.Mm.eg.db", update = FALSE)   # mouse gene annotation (for human data: "org.Hs.eg.db")
 library(PlotTrellis)
 run_plottrellis(project_dir = "PlotTrellis-example", samples_txt = pt_example())
 ```
 
-`project_dir` is the folder that holds everything PlotTrellis makes for this project. Here it
-is created in R's working directory, but it can be any folder. `pt_example()` gives
-the path of the example's `samples.txt`.
+A `samples.txt` is a text file listing a project's samples and their data files, and
+`pt_example()` gives the path of the example's. `project_dir` is the folder that holds
+everything PlotTrellis makes for this project. Here it is created in R's working directory,
+but it can be any folder. Without it, the project is in `~/PlotTrellis`.
 
 The app opens with *Elf5* and its tracks already picked: click **Generate figure**. Then try
 *Ehf* or *Cat*, or a different set of tracks.
@@ -73,8 +76,9 @@ run_plottrellis(project_dir = "my-project")
 ```
 
 A wizard guides you through listing your samples and their files, and saves them in the
-project folder. When you click **Save** (or **Close**), close that browser tab: the app
-reopens in a new tab from RStudio a few seconds later.
+project folder as `project_samples.txt`. When you click **Save** (or **Close**), close that browser tab: the app
+reopens in a new tab from RStudio a few seconds later. To come back, run the same command.
+If a new `project_dir` already holds a `project_samples.txt`, the wizard offers to import it.
 
 ```{r wizard-screenshot, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/wizard_manual.png")
@@ -123,12 +127,14 @@ Control    #1b9e77  atac/Control_merged.bw  junctions/Control_SJ.bed    salmon/C
 KO         #d95f02  atac/KO_merged.bw       junctions/KO_SJ.bed         salmon/KO
 ```
 
-The header lines:
+The lines starting with `#` are the project's settings:
 
 - `data_root`: the folder your data files are in. The paths in the table are relative to it.
 - `gtf_path`: your genome's GTF file (see above).
 - `orgdb`: your species' annotation package, e.g. `org.Mm.eg.db` (mouse), `org.Hs.eg.db` (human).
 - `genome_label`: the genome build's UCSC name, e.g. `mm10`, `hg38`.
+- Any other app setting, e.g. `# fontsize: 12`. A project's `project_samples.txt` lists the
+  ones changed from their defaults.
 
 The columns (separated by tabs):
 
@@ -150,8 +156,8 @@ information, paste this section and your file list (or sheet) into an AI assista
 for a `samples.txt`.
 
 Then open it like the example: `run_plottrellis(project_dir = "my-project", samples_txt =
-"path/to/samples.txt")`. Editing the `samples.txt` later updates the project the next time
-it is opened.
+"path/to/samples.txt")`. The project keeps its own copy, as `project_samples.txt`. Editing your
+`samples.txt` later updates the project the next time you run this command.
 
 # More in code
 
@@ -185,10 +191,36 @@ run_plottrellis(project_dir = "tcell-project",
 ```
 
 They need to be able to read your data files, so keep them on a shared drive and give
-`data_root` and `gtf_path` as full paths. To have the app open on a gene with its tracks
+`data_root` and `gtf_path` as full paths.
+
+Their project is a copy: what they change stays in their `project_dir`. A later edit to your
+`samples.txt` reaches them when they rerun this command, unless they have changed their
+project since, and it replaces the settings they changed in the app.
+
+To have the app open on a gene with its tracks
 already picked, as the example does, add two header lines:
 
 ```
 # start_gene: Elf5
 # start_tracks: atac@Basal, atac@LP, transcripts_annotated, genes
 ```
+
+<style>
+pre { position: relative; }
+.copy-code { position: absolute; top: 4px; right: 4px; font-size: 12px; }
+</style>
+<script>
+if (navigator.clipboard) document.querySelectorAll("pre").forEach(function (pre) {
+  var button = document.createElement("button");
+  button.className = "copy-code";
+  button.textContent = "Copy";
+  var code = pre.querySelector("code") || pre;
+  button.onclick = function () {
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = "Copy"; }, 1500);
+    });
+  };
+  pre.appendChild(button);
+});
+</script>

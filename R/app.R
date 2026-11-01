@@ -193,28 +193,24 @@ if (is.null(CFG$orgdb) && !is.null(CFG$genome_id)) {
 # same-named globals from scripts/01_imports.R instead, defined once per assembled
 # script exactly like ORGDB_PKG below.
 GENOME <- ensure_genome_ready(gtf_path = CFG$gtf_path, orgdb = CFG$orgdb, genome_label = CFG$genome_label)
-if (GENOME$rebuilt) message("Built and cached this genome's TxDb/lookup files (in the project's cache folder).")
 ORGDB_PKG           <- GENOME$orgdb
 TX_NAME_LOOKUP_PATH <- GENOME$tx_name_lookup_path
 TX_META_LOOKUP_PATH <- GENOME$tx_meta_lookup_path
 library(ORGDB_PKG, character.only = TRUE)
 
-message("Loading TxDb...")
+message("Loading PlotTrellis...")
 txdb     <- AnnotationDbi::loadDb(GENOME$txdb_path)
 ASSEMBLY <- assembly(
   Genome = GENOME$genome_label, TxDb = txdb, OrgDb = ORGDB_PKG,
   gene.id.column = "ENSEMBL", display.column = "SYMBOL"
 )
-message("TxDb loaded.")
 
 # Built once here (not per gene render) since GenomicFeatures::cdsBy() walks
 # the whole TxDb regardless of which genes are actually asked for -- only
 # needed for the Gene info table's UniProt canonical-isoform check
 # (utils/uniprot_canonical.R), which looks up a handful of transcripts'
 # translated CDS lengths per gene out of this.
-message("Building CDS-by-transcript index...")
 CDS_BY_TX <- GenomicFeatures::cdsBy(txdb, by = "tx", use.names = TRUE)
-message("CDS index built.")
 
 # Chr lengths -- a GTF carries no seqlength info of its own (confirmed empty
 # on this app's own GENCODE fixtures; see utils/build_chrom_sizes.R), so this
@@ -247,9 +243,7 @@ TRACK_ITEMS <- c(
   build_comparison_track_items(SAMPLES_DF)
 )
 
-message("Loading gene symbols...")
 ALL_GENES <- sort(AnnotationDbi::keys(get(ORGDB_PKG, envir = asNamespace(ORGDB_PKG)), keytype = "SYMBOL"))
-message("Ready.")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 # %||% is defined once, in boilerplate.R (NA-aware) -- see phase-G.1.md's

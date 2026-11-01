@@ -67,14 +67,13 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label,
   if (is.null(txdb_path) || !nchar(txdb_path)) txdb_path <- .genome_cache_path(gtf_path, "_txdb.sqlite")
   if (!file.exists(txdb_path)) {
     message("Building TxDb from ", gtf_path, " (this only happens once)...")
-    txdb <- txdbmaker::makeTxDbFromGFF(gtf_path, format = "gtf")
+    txdb <- suppressMessages(txdbmaker::makeTxDbFromGFF(gtf_path, format = "gtf"))
     # GENCODE/Ensembl-style GTFs use bare chrom names ("1", "2", "X"); this
     # app's bigWig/Hi-C fixtures use UCSC-style ("chr1", "chr2", "chrX") --
     # must match, or gene lookups resolve to a seqname that isn't in the
     # data (see BUGS.md #12's root cause). Same recipe as r/pg/build_txdb.R.
     GenomeInfoDb::seqlevelsStyle(txdb) <- "UCSC"
     AnnotationDbi::saveDb(txdb, txdb_path)
-    message("TxDb built and saved to ", txdb_path)
     rebuilt <- TRUE
   }
 

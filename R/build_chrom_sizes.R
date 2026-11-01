@@ -16,6 +16,5 @@ build_chrom_sizes <- function(genome_label, out_path) {
     stop("UCSC returned no chr-prefixed chromosome lengths for genome_label '", genome_label, "'.")
 
   saveRDS(lengths, out_path)
-  message(sprintf("Wrote %d chromosome lengths to %s", length(lengths), out_path))
   invisible(lengths)
 }

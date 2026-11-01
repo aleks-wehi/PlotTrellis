@@ -343,7 +343,7 @@ wizard_ui <- function() {
     p(if (is_edit)
         "Editing your existing project configuration. Save to restart back into the app with the new settings, or close without saving to discard any changes."
       else
-        "No project_settings.json found at this deployment's expected path. Let's configure your data before launching the app."),
+        "List your samples and their files to start a project."),
     uiOutput("wiz_body")
   )
 }
