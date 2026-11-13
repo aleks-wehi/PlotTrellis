@@ -163,6 +163,18 @@ expect_clean_render <- function(expr) {
   expect_no_warning(expect_no_message(expr, message = "track failed"))
 }
 
+# macOS's png device (Quartz) warns 'no font could be found for family "<font>"'
+# for each label it draws in a family the system lacks, then draws it in its
+# own fallback face. That is the fallback a missing font should get, and macOS
+# lacks DejaVu Sans too, so that one warning, for the font being rendered, is
+# muffled; any other warning still fails the render.
+muffle_font_fallback <- function(expr, font) {
+  withCallingHandlers(expr, warning = function(w) {
+    if (identical(conditionMessage(w), sprintf('no font could be found for family "%s"', font)))
+      invokeRestart("muffleWarning")
+  })
+}
+
 # Renders through the same devices as pt_save(): .pdf and .png must open,
 # draw and close with no error, warning or failed track, and write a
 # non-empty file.
@@ -173,9 +185,10 @@ expect_renders_on_pdf_and_png <- function(settings) {
       pdf = function(w, h) grDevices::cairo_pdf(f, width = w, height = h),
       png = function(w, h) grDevices::png(f, width = w, height = h, units = "in", res = 72))
     before <- grDevices::dev.cur()
-    expect_clean_render(
-      utils::capture.output(render_all(synth_all_tracks(), SYNTH_REGION, settings, device_fn = dev))
-    )
+    expect_clean_render(muffle_font_fallback(
+      utils::capture.output(render_all(synth_all_tracks(), SYNTH_REGION, settings, device_fn = dev)),
+      settings$font
+    ))
     if (grDevices::dev.cur() != before) grDevices::dev.off()
     expect_gt(file.size(f), 0)
     unlink(f)

@@ -28,10 +28,26 @@ test_that("Ensembl gene IDs resolve to their symbol, with or without a version",
   expect_equal(par$ensembl, "ENSG00000002586")
 })
 
+# Which symbols an Ensembl ID has depends on the org.Mm.eg.db build: one maps
+# ENSMUSG00000093931 to Amy2a1 and Amy2a3, the one R-universe checks against
+# to Amy2a3 alone. So the expected symbols are read from the installed OrgDb's
+# own tables (not through select(), which the resolver uses), and the several-
+# symbol case runs on an ID that has several in that build.
 test_that("an Ensembl ID with several symbols takes the first and names the rest", {
-  r <- resolve_gene_query("ENSMUSG00000093931", "org.Mm.eg.db")
-  expect_equal(r$symbol, "Amy2a1")
-  expect_equal(r$also, "Amy2a3")
+  map <- merge(AnnotationDbi::toTable(org.Mm.eg.db::org.Mm.egENSEMBL),
+               AnnotationDbi::toTable(org.Mm.eg.db::org.Mm.egSYMBOL), by = "gene_id")
+  map <- unique(map[, c("ensembl_id", "symbol")])
+  takes_first_names_rest <- function(id) {
+    want <- sort(map$symbol[map$ensembl_id == id], method = "radix")  # C-locale order
+    r <- resolve_gene_query(id, "org.Mm.eg.db")
+    expect_identical(r$symbol, want[1], label = paste(id, "symbol"))
+    expect_identical(r$also, want[-1], label = paste(id, "also"))
+  }
+  several <- sort(unique(map$ensembl_id[duplicated(map$ensembl_id)]), method = "radix")
+  expect_gt(length(several), 0)
+  takes_first_names_rest(several[1])
+  # The ID this test was written for, while the OrgDb still knows it
+  if ("ENSMUSG00000093931" %in% map$ensembl_id) takes_first_names_rest("ENSMUSG00000093931")
   expect_length(resolve_gene_query("ENSMUSG00000014030", "org.Mm.eg.db")$also, 0)
 })
 
