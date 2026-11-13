@@ -28,6 +28,7 @@ Imports:
     AnnotationDbi,
     txdbmaker,
     svglite,
+    systemfonts,
     S4Vectors,
     tools,
     codetools,

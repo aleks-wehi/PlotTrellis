@@ -217,7 +217,7 @@ test_that("a missing quant file is named in the error (no fixture data)", {
                "^file not found: w59-not-there\\.sf")
 })
 
-test_that("a sample's missing quant.sf fails Transcript counts with the file named (bundled example)", {
+test_that("a sample's missing quant.sf fails Transcript expression with the sample and file named (bundled example)", {
   skip_if_not_installed("org.Mm.eg.db")
   skip_on_cran()  # builds the example's TxDb
   txt <- plottrellis_example()
@@ -226,7 +226,9 @@ test_that("a sample's missing quant.sf fails Transcript counts with the file nam
   svg <- tempfile(fileext = ".svg")
   suppressWarnings(suppressMessages(pt_save(pt_figure(proj, "Elf5", c("transcript_counts@Basal", "genes")), svg)))
   text <- paste(readLines(svg), collapse = "\n")
-  expect_match(text, "track failed: file not found: quant.sf (in ", fixed = TRUE)
+  # Basal's track fails on LP's file (the transcripts shown are picked from every sample), so the
+  # reason names the sample; the folder's end survives a long temp dir.
+  expect_match(text, "tpm_usage (Basal) track failed: sample LP: file not found: quant.sf (in ", fixed = TRUE)
   expect_match(text, "LP_rep1)", fixed = TRUE)
   expect_false(grepl("cannot open the connection", text, fixed = TRUE))
 })

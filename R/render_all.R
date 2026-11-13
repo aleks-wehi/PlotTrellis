@@ -251,7 +251,9 @@ NULL
   who <- if (length(sample) == 1 && nzchar(sample)) sprintf("%s (%s)", entry$viz, sample) else entry$viz
   # iconv first: a message with invalid bytes would otherwise make gsub() fail inside this handler.
   msg <- trimws(gsub("\\s+", " ", iconv(conditionMessage(e), to = "UTF-8", sub = "?")))
-  if (nchar(msg) > 140) msg <- paste0(substr(msg, 1, 137), "...")
+  # A long one is cut in the middle: its start says what went wrong, its end is often the useful
+  # end of a path (the sample's folder in "file not found: quant.sf (in <folder>)").
+  if (nchar(msg) > 140) msg <- paste0(substr(msg, 1, 90), "...", substr(msg, nchar(msg) - 46, nchar(msg)))
   label <- sprintf("%s track failed: %s", who, msg)
   message("PlotTrellis: ", label)
   label
@@ -291,6 +293,19 @@ NULL
   settings
 }
 
+# The family the figure's text is drawn in for the Font setting `font`. On macOS a family the
+# system lacks (the default DejaVu Sans is not shipped there) is drawn as the generic "sans":
+# Quartz (png()) measures and draws a missing family with no font at all (zero-width,
+# undrawn labels), and svglite matches its bold face to an unrelated font. Elsewhere the
+# family is used as it is: fontconfig already substitutes a close face on every device.
+# Installed means the system's own fonts (Quartz can't use systemfonts' registered ones); the
+# generic families are those quartzFonts() defines.
+.pt_device_font <- function(font, sysname = Sys.info()[["sysname"]],
+                            installed = function() systemfonts::system_fonts()$family) {
+  if (!identical(sysname, "Darwin") || font %in% c("", "sans", "serif", "mono")) return(font)
+  if (font %in% installed()) font else "sans"
+}
+
 render_all <- function(items, region_params, settings, device_fn = NULL) {
   settings <- .pt_fill_settings(settings)
   page_w  <- settings$page_w
@@ -303,7 +318,7 @@ render_all <- function(items, region_params, settings, device_fn = NULL) {
   show_title <- isTRUE(settings$show_title) && nzchar(title)
   first_y <- if (show_title) 0.5 else 0.1
   gap     <- 0.10
-  font     <- settings$font
+  font     <- .pt_device_font(settings$font)
   fontsize <- settings$fontsize
   fontcol  <- "black"
 

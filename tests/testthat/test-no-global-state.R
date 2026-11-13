@@ -146,7 +146,11 @@ test_that("a project, a figure and a saved figure attach nothing and leave nothi
 
 test_that("two projects in one session keep their own caches, and a figure's script names its own project's", {
   skip_if_not_installed("org.Hs.eg.db")
+  # Real path: pt_project() stores its folder normalized, and macOS's tempdir is under a
+  # symlink (/var -> /private/var), so the script names the resolved path.
   root <- tempfile("pt-two-")
+  dir.create(root)
+  root <- normalizePath(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   a_dir <- file.path(root, "A")
   b_dir <- file.path(root, "B")

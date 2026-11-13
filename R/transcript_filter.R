@@ -281,7 +281,11 @@ gene_display_transcripts <- function(gene, anno, samples, data_dir, min_display_
   } else {
     per_condition <- lapply(pool, function(row) {
       samples <- list(list(sample_id = row$display, quant_path = sample_data_path(row, "quantdir")))
-      ft   <- filtered_transcripts(gene, samples, anno)
+      # Every sample's quant file is read, whichever sample's track this is: a file that is
+      # missing or can't be read says whose (the gene's annotation was read above, so an error
+      # here is this sample's).
+      ft   <- tryCatch(filtered_transcripts(gene, samples, anno),
+                       error = function(e) stop("sample ", row$display, ": ", conditionMessage(e), call. = FALSE))
       if (length(attr(ft, "tpm_not_numeric"))) corrupt <<- TRUE
       kept <- ft[ft$mean_tpm >= min_display_tpm, ]
       truncate_by_proportion(kept, attr(ft, "total_tpm") - sum(kept$mean_tpm), attr(ft, "total_tpm"),

@@ -163,18 +163,6 @@ expect_clean_render <- function(expr) {
   expect_no_warning(expect_no_message(expr, message = "track failed"))
 }
 
-# macOS's png device (Quartz) warns 'no font could be found for family "<font>"'
-# for each label it draws in a family the system lacks, then draws it in its
-# own fallback face. That is the fallback a missing font should get, and macOS
-# lacks DejaVu Sans too, so that one warning, for the font being rendered, is
-# muffled; any other warning still fails the render.
-muffle_font_fallback <- function(expr, font) {
-  withCallingHandlers(expr, warning = function(w) {
-    if (identical(conditionMessage(w), sprintf('no font could be found for family "%s"', font)))
-      invokeRestart("muffleWarning")
-  })
-}
-
 # Renders through the same devices as pt_save(): .pdf and .png must open,
 # draw and close with no error, warning or failed track, and write a
 # non-empty file.
@@ -185,10 +173,9 @@ expect_renders_on_pdf_and_png <- function(settings) {
       pdf = function(w, h) grDevices::cairo_pdf(f, width = w, height = h),
       png = function(w, h) grDevices::png(f, width = w, height = h, units = "in", res = 72))
     before <- grDevices::dev.cur()
-    expect_clean_render(muffle_font_fallback(
-      utils::capture.output(render_all(synth_all_tracks(), SYNTH_REGION, settings, device_fn = dev)),
-      settings$font
-    ))
+    expect_clean_render(
+      utils::capture.output(render_all(synth_all_tracks(), SYNTH_REGION, settings, device_fn = dev))
+    )
     if (grDevices::dev.cur() != before) grDevices::dev.off()
     expect_gt(file.size(f), 0)
     unlink(f)
@@ -204,25 +191,51 @@ test_that("every font offered in Figure settings renders to SVG, PDF and PNG, al
     svg <- expect_clean_render(synth_svg(synth_all_tracks(), settings))
     fams <- svg_families(svg)
     expect_gt(length(fams), 10)
-    expect_identical(unique(fams), resolved_family(font), label = paste("SVG text families for", font))
+    expect_identical(unique(fams), resolved_family(.pt_device_font(font)), label = paste("SVG text families for", font))
     expect_renders_on_pdf_and_png(settings)
   }
 })
 
 # A font the system doesn't have (a hand-edited project_settings.json or a
 # samples.txt "# font:" line can name any) must not break the figure: every
-# device falls back to the face the system uses for an unknown family.
+# device falls back to the face the system uses for an unknown family (on
+# macOS, its "sans": .pt_device_font()).
 test_that("a font missing from the system falls back to the system's face and still draws every label (no fixture data)", {
   skip_no_synth()
   missing <- "PlotTrellis Missing Font"
   def <- synth_svg(synth_all_tracks(), synth_settings(list(title = "Title")))
   settings <- synth_settings(list(font = missing, title = "Title"))
   svg <- expect_clean_render(synth_svg(synth_all_tracks(), settings))
-  fallback <- resolved_family(missing)
+  fallback <- resolved_family(.pt_device_font(missing))
   expect_false(identical(fallback, paste0('"', missing, '"')))
   expect_identical(unique(svg_families(svg)), fallback)
   expect_identical(svg_labels(svg), svg_labels(def))
   expect_renders_on_pdf_and_png(settings)
+})
+
+# macOS's png device (Quartz) finds no font for a family the system lacks and
+# then measures and draws the label with none (zero width, not drawn), and
+# svglite there matches its bold face to an unrelated font; so on macOS such a
+# family is drawn as "sans". Faked platform and font list: runs on any system.
+test_that("on macOS a font the system lacks is drawn as sans; installed and generic families, and other systems, keep theirs (no fixture data)", {
+  have <- function() c("Helvetica", "Arial")
+  expect_identical(.pt_device_font("DejaVu Sans", "Darwin", have), "sans")
+  expect_identical(.pt_device_font("PlotTrellis Missing Font", "Darwin", have), "sans")
+  expect_identical(.pt_device_font("Helvetica", "Darwin", have), "Helvetica")
+  expect_identical(.pt_device_font("Arial", "Darwin", have), "Arial")
+  for (generic in c("", "sans", "serif", "mono")) expect_identical(.pt_device_font(generic, "Darwin", have), generic)
+  expect_identical(.pt_device_font("DejaVu Sans", "Linux", have), "DejaVu Sans")
+  expect_identical(.pt_device_font("PlotTrellis Missing Font", "Linux", have), "PlotTrellis Missing Font")
+})
+
+# On Linux .pt_device_font() returns its input, so the font tests above can't
+# tell whether render_all() calls it: here it answers a different family,
+# which every label must then be drawn in.
+test_that("render_all() draws every label in the family .pt_device_font() gives for the Font setting (no fixture data)", {
+  skip_no_synth()
+  local_mocked_bindings(.pt_device_font = function(font, ...) if (identical(font, "DejaVu Sans")) "mono" else font)
+  svg <- expect_clean_render(synth_svg(synth_all_tracks(), synth_settings(list(font = "DejaVu Sans", title = "Title"))))
+  expect_identical(unique(svg_families(svg)), resolved_family("mono"))
 })
 
 # Every track type with fixture data, at a face distinct from the default:

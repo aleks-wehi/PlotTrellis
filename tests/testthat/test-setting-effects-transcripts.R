@@ -372,6 +372,21 @@ test_that(".pt_track_error_label() names a row panel by its samples, the first t
   expect_identical(label(list(viz = "genes")), "genes track failed: boom")
 })
 
+test_that(".pt_track_error_label() cuts a long reason in the middle, keeping its start and the path's end", {
+  deep <- file.path(paste(rep("a-deep-project-folder", 12), collapse = "/"), "quant", "LP_rep1")
+  e <- simpleError(paste0("file not found: quant.sf (in ", deep, ")"))
+  lab <- suppressMessages(.pt_track_error_label(list(viz = "tpm_usage", sample = "Basal"), e))
+  reason <- sub("^tpm_usage \\(Basal\\) track failed: ", "", lab)
+  expect_identical(nchar(reason), 140L)
+  expect_match(reason, "^file not found: quant\\.sf \\(in a-deep-project-folder/")
+  expect_match(reason, "/a-deep-project-folder/quant/LP_rep1\\)$")
+  expect_match(reason, "...", fixed = TRUE)
+  # A reason of up to 140 characters is kept whole.
+  short <- strrep("x", 140)
+  expect_identical(suppressMessages(.pt_track_error_label(list(viz = "genes"), simpleError(short))),
+                   paste("genes track failed:", short))
+})
+
 # draw_transcript_counts() on its own page, no fixture data: `tpm` rows are samples.
 counts_svg <- function(tpm, ..., width = 7.2, fontsize = 8, label_samples = rownames(tpm)) {
   f <- tempfile(fileext = ".svg")

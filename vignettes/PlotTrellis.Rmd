@@ -21,8 +21,8 @@ point-and-click app or in a few lines of R.
 # Installation
 
 PlotTrellis is not on CRAN, so `repos` tells R where to find it. `BiocManager::repositories()`
-adds the Bioconductor and CRAN packages that match your R. From scratch this takes roughly
-40 minutes on Linux (adding `Ncpus = 4` speeds it up):
+adds the Bioconductor and CRAN packages that match your R. From scratch this takes 40 to
+50 minutes on Linux (adding `Ncpus = 4` speeds it up):
 
 ```{r install, eval=FALSE}
 install.packages("BiocManager")
