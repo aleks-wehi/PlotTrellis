@@ -1,8 +1,6 @@
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
-SCALE_BAR_TYPES <- c("bw", "hic", "bw_diff_stacked")
-
-# Flat constant, not fontsize-derived -- matches the pre-refactor inline axis math.
+# Fixed height (inches) of the bottom genome axis, not derived from the font size.
 GENOME_AXIS_RESERVE <- 0.35
 
 nice_bp <- function(r) {
@@ -20,24 +18,34 @@ format_bp_generic <- function(n, digits = 2, space_before_bp = FALSE) {
   else paste0(n, if (space_before_bp) " bp" else "bp")
 }
 
-.gene_missing <- function(gene) is.null(gene) || is.na(gene)
+# TRUE when `gene` names no gene: NULL, not exactly one value, NA, or a blank string.
+.pt_no_gene <- function(gene) length(gene) != 1 || is.na(gene) || !nzchar(trimws(gene))
 
-# transcript_filter.R's functions expect ORGDB_PKG/TX_NAME_LOOKUP_PATH/txdb/
-# MIN_DISPLAY_TPM as bare globals, not parameters -- call this before any of them.
-.set_transcript_filter_globals <- function(settings) {
-  assign("ORGDB_PKG",           settings$orgdb_pkg,                  envir = .GlobalEnv)
-  assign("TX_NAME_LOOKUP_PATH", settings$tx_name_lookup_path,        envir = .GlobalEnv)
-  assign("txdb",                AnnotationDbi::loadDb(settings$txdb_path), envir = .GlobalEnv)
-  assign("MIN_DISPLAY_TPM",     settings$min_display_tpm %||% 1,     envir = .GlobalEnv)
-}
+# One entry per TxDb file for the session: the open TxDb and, once asked for, its CDS index.
+# A pure cache keyed by the file's path, so results never depend on call order.
+.pt_txdb_memo <- new.env(parent = emptyenv())
 
-# wizard.R's wizard_ui()/wizard_server() expect SETTINGS_JSON/CFG/
-# DEFAULT_SETTINGS as bare globals, not parameters (bug 47) -- call this
-# before shinyApp(ui = wizard_ui(), server = wizard_server) in app.R.
-.set_wizard_globals <- function(settings_json, cfg, default_settings) {
-  assign("SETTINGS_JSON",    settings_json,    envir = .GlobalEnv)
-  assign("CFG",              cfg,              envir = .GlobalEnv)
-  assign("DEFAULT_SETTINGS", default_settings, envir = .GlobalEnv)
+# The annotation a render needs, from settings: the TxDb (opened once per file, reopened
+# when the file changes, e.g. after Clear caches), the lookup paths, and cds_by_tx(), which
+# builds the whole-transcriptome CDS index on first call and returns the same one after.
+.pt_annotation <- function(settings) {
+  path <- settings$txdb_path
+  m <- .pt_txdb_memo[[path]]
+  if (is.null(m) || !identical(m$mtime, file.mtime(path))) {
+    m <- new.env(parent = emptyenv())
+    m$mtime <- file.mtime(path)
+    # Named as its package would name it: loadDb() called without a package name attaches
+    # GenomicFeatures and what it depends on to the user's search path, noisily.
+    loadNamespace("GenomicFeatures")
+    m$txdb <- AnnotationDbi::loadDb(path, packageName = "GenomicFeatures")
+    assign(path, m, envir = .pt_txdb_memo)
+  }
+  list(txdb = m$txdb, gtf_path = settings$gtf_path, orgdb_pkg = settings$orgdb_pkg,
+       tx_name_lookup_path = settings$tx_name_lookup_path, tx_meta_lookup_path = settings$tx_meta_lookup_path,
+       cds_by_tx = function() {
+         if (is.null(m$cds)) m$cds <- GenomicFeatures::cdsBy(m$txdb, by = "tx", use.names = TRUE)
+         m$cds
+       })
 }
 
 mixed_text <- function(segments, x, y, fontsize, fontfamily) {
@@ -60,6 +68,38 @@ mixed_text <- function(segments, x, y, fontsize, fontfamily) {
   }
 }
 
+# A per-sample track's heading at the slot's top left: `title` in bold, then `detail`
+# (by default " \u00B7 <sample>") in the sample's identity colour.
+.pt_heading <- function(ctx, entry, title = entry$name, detail = paste0(" \u00B7 ", entry$sample)) {
+  mixed_text(
+    list(list(text = title, colour = ctx$fontcol, fontface = "bold"),
+         list(text = detail, colour = entry$colour)),
+    x = ctx$track_x + 0.05, y = ctx$y + 0.08, fontsize = ctx$fontsize - 1, fontfamily = ctx$font
+  )
+}
+
+# A comparison track's heading at the slot's top left:
+# "<title> \u00B7 <Comparison><cmp_note><Reference> (Ref)", the title in bold and each
+# sample in its role colour.
+.pt_heading_pair <- function(ctx, entry, title, cmp_note = " (Cmp) vs ") {
+  mixed_text(
+    list(
+      list(text = title, colour = ctx$fontcol, fontface = "bold"),
+      list(text = " \u00B7 ", colour = ctx$fontcol),
+      list(text = entry$treatment_label, colour = entry$treatment_colour),
+      list(text = cmp_note, colour = ctx$fontcol),
+      list(text = entry$control_label, colour = entry$control_colour),
+      list(text = " (Ref)", colour = ctx$fontcol)
+    ),
+    x = ctx$track_x + 0.05, y = ctx$y + 0.08, fontsize = ctx$fontsize - 1, fontfamily = ctx$font
+  )
+}
+
+# The `dict` key under which the tracks of one type with the same data name share a value
+# range: `prefix`, then the data's name made safe for a list name. A module's settings and
+# render functions both build the key here, so the two always agree.
+.pt_shared_range_key <- function(prefix, entry) paste0(prefix, gsub("[^A-Za-z0-9._]", "_", entry$name))
+
 draw_value_axis <- function(range, x, y_top, h, fontsize, fontfamily, fontcolor, integer_ticks = FALSE) {
   if (diff(range) <= 0) return(invisible(NULL))
   ticks <- pretty(range)
@@ -74,9 +114,53 @@ draw_value_axis <- function(range, x, y_top, h, fontsize, fontfamily, fontcolor,
   }
 }
 
-no_data_text <- function(x, y, w, h, fontsize, fontfamily, fontcolor, label = "No data") {
+no_data_text <- function(x, y, w, h, fontsize, fontfamily, fontcolor, label) {
   plotText(label = label, x = x + w / 2, y = y + h / 2, just = "center",
            fontsize = fontsize, fontfamily = fontfamily, fontcolor = fontcolor)
+}
+
+# A status message ("Chromosome not found", "No gene selected for this region") across a
+# track's whole slot, in the track's text style: what a module draws when the track does not
+# apply to the view. An empty view is not one: the track draws as usual with nothing in it.
+.pt_status_text <- function(ctx, label) {
+  no_data_text(ctx$track_x, ctx$y, ctx$track_w, ctx$height, ctx$fontsize - 1, ctx$font, ctx$fontcol, label = label)
+}
+
+# A data file that is missing or can't be read fails its track (render_all() draws the red
+# "track failed: <reason>"); it is never drawn as an empty track. Stops unless `path` is a file.
+.pt_check_file <- function(path) {
+  if (length(path) != 1 || is.na(path) || !nzchar(path)) stop("no data file given", call. = FALSE)
+  if (dir.exists(path)) stop(basename(path), " is a folder, not a data file (in ", dirname(path), ")", call. = FALSE)
+  if (!file.exists(path)) stop("file not found: ", basename(path), " (in ", dirname(path), ")", call. = FALSE)
+}
+
+# Stops with a reader's error `e` for `path`, the file named by its base name so the reason
+# survives the cut of a long track error message.
+.pt_read_error <- function(path, e) {
+  stop("could not read ", basename(path), ": ", gsub(path, basename(path), conditionMessage(e), fixed = TRUE),
+       call. = FALSE)
+}
+
+# The grey line plotPairsArches() draws along the base of its arcs (its baseline.color and
+# baseline.lwd defaults), from `x` to `x + width` at `y` (inches): an arc track with no arcs in
+# view draws only this, as plotPairsArches() draws nothing at all for zero arcs.
+.pt_arc_baseline <- function(x, y, width) {
+  plotSegments(x, y, x + width, y, default.units = "inches", linecolor = "grey", lwd = 1)
+}
+
+# A vertical colour bar as stacked vector rects (first colour at the top), so a
+# legend stays editable in an SVG instead of being a raster image. Colours with alpha
+# are flattened onto white, as they look on the page; each rect overlaps the next a
+# little so no seams show.
+.pt_gradient_bar <- function(colours, x, y, width, height) {
+  rgba <- grDevices::col2rgb(as.vector(colours), alpha = TRUE) / 255
+  a <- rgba[4, ]
+  flat <- grDevices::rgb(t(rgba[1:3, , drop = FALSE]) * a + (1 - a))
+  n <- length(flat)
+  step <- height / n
+  plotRect(x = x, y = y + (seq_len(n) - 1) * step, width = width, height = c(rep(step * 1.5, n - 1), step),
+           just = c("left", "top"), default.units = "inches", fill = flat, linecolor = NA)
+  invisible(NULL)
 }
 
 # Every entry is a GROUP of equivalent spellings for one chromosome; a spelling

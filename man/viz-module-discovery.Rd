@@ -2,17 +2,29 @@
 % Please edit documentation in R/render_all.R
 \name{viz-module-discovery}
 \alias{viz-module-discovery}
+\alias{.pt_module_fn}
 \alias{.pt_dispatch_fn}
 \alias{.pt_viz_keys}
+\alias{.pt_viz_flag}
+\alias{.pt_viz_info}
+\alias{.pt_viz_infos}
 \title{Viz-module discovery}
 \usage{
+.pt_module_fn(prefix, key)
+
 .pt_dispatch_fn(prefix, key)
 
 .pt_viz_keys()
+
+.pt_viz_flag(key, flag)
+
+.pt_viz_info(key)
+
+.pt_viz_infos()
 }
 \description{
-Internal helpers backing the \link{viz-module-contract}: resolving a
-\verb{settings_<key>()}/\verb{render_<key>()} pair by name, and enumerating every
-key that has both halves defined.
+Internal helpers backing the \link{viz-module-contract}: resolving a module's
+functions by name, enumerating every key that has both halves defined, and
+reading the modules' \verb{info_<key>()} declarations.
 }
 \keyword{internal}

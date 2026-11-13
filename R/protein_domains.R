@@ -1,27 +1,31 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/protein_domains.R:1"
+# Domains, regions and motifs of a gene's canonical protein, for the "Canonical protein
+# annotation" track and the Gene info panel. The canonical isoform is UniProt's own pick,
+# joined to a transcript by its CCDS id where the GTF tags one, else by translated CDS length.
+# Deterministic outcomes are cached per gene; a network failure is not, so the next call retries.
 
-PROTEIN_DOMAINS_CACHE_DIR <- file.path(tools::R_user_dir("PlotTrellis", which = "cache"), "protein_domains")
 PD_TYPE_COLOURS           <- c(DOMAIN = "#4C72B0", REGION = "#DD8452", MOTIF = "#55A868")
 
-# NCBI taxon ID per orgdb this app actually supports -- UniProt's search API
-# requires organism_id, and there's no generic orgdb->taxon accessor worth
-# adding for just two species (mirrors GENOME_PRESETS' own "only what's
-# actually supported" convention in utils/genomes.R). Extend when a new
-# genome's orgdb is added.
-ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
-
-.pd_strip_version <- function(x) sub("\\.[0-9]+$", "", x)
-
-# All three fetches below go through .uniprot_read_lines() (uniprot_canonical.R):
-# 10s timeout, and a network failure raises "uniprot_unreachable" instead of
-# looking like an empty "no reviewed entry" answer.
-.pd_uniprot_search_by_gene <- function(gene_symbol, organism_id = 10090) {
-  url <- sprintf(
-    "https://rest.uniprot.org/uniprotkb/search?query=gene:%s+AND+organism_id:%d+AND+reviewed:true&fields=accession&format=list",
-    gene_symbol, organism_id)
-  hits <- .uniprot_read_lines(url)
-  if (length(hits) == 0) NA_character_ else hits[1]
+# The message for a gene_protein_domains() status (or "no_gene"); NULL for "ok". The
+# "Canonical protein annotation" track and the Gene info panel (`panel = TRUE`) word two of
+# them differently.
+.pd_status_text <- function(status, panel = FALSE) {
+  failed <- "Protein domain lookup failed (network issue?) -- will retry on next render"
+  switch(status,
+    ok = NULL,
+    no_gene = "No gene selected for this region",
+    no_uniprot_entry = "No reviewed UniProt entry found for this gene",
+    uniprot_unreachable = if (panel) failed else
+      "UniProt could not be reached or returned an error (no internet on this machine?) -- retries automatically after 2 minutes",
+    no_domains = "No annotated domain/region/motif features for this gene's canonical isoform",
+    no_canonical_transcript = if (panel)
+      "UniProt's canonical isoform could not be matched to any annotated transcript for this gene" else
+      "UniProt has domain/region/motif features for this gene, but neither the CCDS ID nor a protein-length match could resolve them to a transcript",
+    failed)
 }
+
+# Both fetches below, like the gene search (uniprot_search_by_gene()), go through
+# .uniprot_read_lines() (uniprot_canonical.R): 10s timeout, and a network failure raises
+# "uniprot_unreachable" instead of looking like an empty "no reviewed entry" answer.
 .pd_fetch_uniprot_record <- function(acc) {
   .uniprot_read_lines(sprintf("https://rest.uniprot.org/uniprotkb/%s.txt", acc))
 }
@@ -51,7 +55,7 @@ ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
   ccds_id     <- sub("^DR   CCDS; ([^;]+);.*", "\\1", lines)
   has_bracket <- grepl("\\[", lines)
   isoform_id  <- ifelse(has_bracket, sub(".*\\[([^]]+)\\].*", "\\1", lines), acc)
-  data.frame(ccds_id = .pd_strip_version(ccds_id), isoform_id = isoform_id)
+  data.frame(ccds_id = strip_version(ccds_id), isoform_id = isoform_id)
 }
 .pd_parse_ft_features <- function(txt, types = c("DOMAIN", "REGION", "MOTIF")) {
   pattern <- sprintf("^FT   (%s)\\s+(\\d+)\\.\\.(\\d+)", paste(types, collapse = "|"))
@@ -68,30 +72,31 @@ ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
 # Gene's transcript IDs + ccdsid, via the same txdb-then-precomputed-cache
 # path transcript_annotations() (transcript_annotation.R) uses, instead of a
 # per-call zgrep over the GTF -- reuses the tx_meta_lookup RDS that
-# build_tx_meta_lookup() already built once for the whole genome.
-.pd_gene_transcript_tags <- function(gene_symbol, gtf_path, txdb, orgdb) {
-  ens_res <- AnnotationDbi::select(get(orgdb, envir = asNamespace(orgdb)),
-    keys = gene_symbol, keytype = "SYMBOL", columns = "ENSEMBL")
+# build_tx_meta_lookup() already built once for the whole genome
+# (tx_meta_lookup_path, from the genome's settings).
+.pd_gene_transcript_tags <- function(gene_symbol, tx_meta_lookup_path, txdb, orgdb) {
+  ens_res <- suppressMessages(AnnotationDbi::select(get(orgdb, envir = asNamespace(orgdb)),
+    keys = gene_symbol, keytype = "SYMBOL", columns = "ENSEMBL"))
   ens_id <- ens_res$ENSEMBL[!is.na(ens_res$ENSEMBL)][1]
   if (length(ens_id) == 0 || is.na(ens_id))
     return(data.frame(transcript_id = character(0), ccdsid = character(0)))
 
-  q <- AnnotationDbi::select(txdb, keys = ens_id, keytype = "GENEID", columns = "TXNAME")
+  q <- suppressMessages(AnnotationDbi::select(txdb, keys = ens_id, keytype = "GENEID", columns = "TXNAME"))
   tx_ids <- unique(q$TXNAME)
   if (length(tx_ids) == 0)
     return(data.frame(transcript_id = character(0), ccdsid = character(0)))
 
-  meta_lookup <- readRDS(.genome_cache_path(gtf_path, "_tx_meta.rds"))
+  meta_lookup <- readRDS(tx_meta_lookup_path)
   meta <- meta_lookup[sub("\\.[0-9]+$", "", tx_ids), , drop = FALSE]
   data.frame(transcript_id = tx_ids, ccdsid = meta$ccds_id, stringsAsFactors = FALSE)
 }
-.pd_resolve_canonical_transcript <- function(gene_symbol, acc, txt, cds_by_tx, gtf_path, txdb, orgdb) {
+.pd_resolve_canonical_transcript <- function(gene_symbol, acc, txt, cds_by_tx, tx_meta_lookup_path, txdb, orgdb) {
   canon <- .pd_parse_canonical_isoform(txt, acc)
   ccds  <- .pd_parse_ccds_xrefs(txt, acc)
-  tags  <- .pd_gene_transcript_tags(gene_symbol, gtf_path, txdb, orgdb)
+  tags  <- .pd_gene_transcript_tags(gene_symbol, tx_meta_lookup_path, txdb, orgdb)
 
   canon_ccds <- ccds$ccds_id[ccds$isoform_id == canon$isoform_id]
-  id_join_tx <- tags$transcript_id[!is.na(tags$ccdsid) & .pd_strip_version(tags$ccdsid) %in% canon_ccds]
+  id_join_tx <- tags$transcript_id[!is.na(tags$ccdsid) & strip_version(tags$ccdsid) %in% canon_ccds]
   if (length(id_join_tx) >= 1) {
     return(list(transcript_id = id_join_tx[1], method = "ccds_id_join", canonical_isoform = canon))
   }
@@ -147,34 +152,37 @@ ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
   do.call(c, segs_list)
 }
 
-# `orgdb` (e.g. "org.Hs.eg.db") is required, not defaulted -- a silent mouse default here is exactly the bug that made every human-dataset gene resolve against the wrong species' UniProt record (found signing off Phase D.2, 2026-09-01). Full rationale: solutions/concepts/19-relocated-code-rationale.md, "utils/protein_domains.R:170".
-gene_protein_domains <- function(gene_symbol, txdb, gtf_path, orgdb, genome_label,
-                                  cache_dir = PROTEIN_DOMAINS_CACHE_DIR) {
+# `orgdb` (e.g. "org.Hs.eg.db") is required, not defaulted -- a silent mouse default here would resolve every human gene against the wrong species' UniProt record.
+# `cache_dir` is the protein-domain cache folder (<cache root>/protein_domains, see .pt_cache_root()).
+gene_protein_domains <- function(gene_symbol, txdb, tx_meta_lookup_path, orgdb, genome_label,
+                                  cache_dir, cds_by_tx = NULL) {
   if (!orgdb %in% names(ORGDB_TAXON_ID))
-    stop("No taxon ID mapping for orgdb '", orgdb, "' in ORGDB_TAXON_ID (utils/protein_domains.R) -- add one.")
+    stop("No taxon ID mapping for orgdb '", orgdb, "' in ORGDB_TAXON_ID (needed to look up protein domains in UniProt) -- add one.", call. = FALSE)
   organism_id <- ORGDB_TAXON_ID[[orgdb]]
 
   # Cache is scoped by genome_label, not orgdb -- orgdb only distinguishes
   # species, not build (e.g. mm10 vs mm39 are both org.Mm.eg.db), and the
   # same case-sensitive gene_symbol string is not guaranteed unique across
   # species either (gene-symbol casing conventions differ by species but
-  # aren't enforced) -- mixing species OR builds under one cache key is
-  # exactly how the PAX5 bug above shipped (2026-09-01 fix scoped by orgdb;
-  # 2026-09-08 GTF-consistency audit found that still collides across builds
-  # sharing one orgdb, tightened to genome_label here).
+  # aren't enforced) -- mixing species OR builds under one cache key would
+  # serve one genome's cached domains for another's gene.
   cache_file <- file.path(cache_dir, genome_label, paste0(gene_symbol, ".rds"))
   if (file.exists(cache_file)) return(readRDS(cache_file))
 
   result <- tryCatch({
-    acc <- .pd_uniprot_search_by_gene(gene_symbol, organism_id = organism_id)
+    acc <- uniprot_search_by_gene(gene_symbol, organism_id = organism_id)
     if (is.na(acc)) return(list(status = "no_uniprot_entry", gene = gene_symbol))
     txt <- .pd_fetch_uniprot_record(acc)
     if (length(txt) == 0) return(list(status = "error", gene = gene_symbol, message = "UniProt record fetch returned nothing"))
     domains <- .pd_parse_ft_features(txt)
     if (nrow(domains) == 0) return(list(status = "no_domains", gene = gene_symbol, acc = acc))
 
-    cds_by_tx <- GenomicFeatures::cdsBy(txdb, by = "tx", use.names = TRUE)
-    resolved  <- .pd_resolve_canonical_transcript(gene_symbol, acc, txt, cds_by_tx, gtf_path, txdb, orgdb)
+    # `cds_by_tx`: the whole-transcriptome CDS index, or a function returning it (a render passes
+    # .pt_annotation()'s, which builds it once per TxDb per session); building it per cache-miss gene
+    # took 1.4 s on the vM25 mouse annotation, more on larger ones.
+    if (is.function(cds_by_tx)) cds_by_tx <- cds_by_tx()
+    if (is.null(cds_by_tx)) cds_by_tx <- GenomicFeatures::cdsBy(txdb, by = "tx", use.names = TRUE)
+    resolved  <- .pd_resolve_canonical_transcript(gene_symbol, acc, txt, cds_by_tx, tx_meta_lookup_path, txdb, orgdb)
     if (is.na(resolved$transcript_id)) return(list(status = "no_canonical_transcript", gene = gene_symbol, acc = acc))
     cds_gr    <- cds_by_tx[[resolved$transcript_id]]
     domain_gr <- .pd_map_domains_to_genomic(domains, cds_gr)
@@ -186,11 +194,7 @@ gene_protein_domains <- function(gene_symbol, txdb, gtf_path, orgdb, genome_labe
   }, uniprot_unreachable = function(e) list(status = "uniprot_unreachable", gene = gene_symbol, message = conditionMessage(e)),
      error = function(e) list(status = "error", gene = gene_symbol, message = conditionMessage(e)))
 
-  if (result$status %in% c("ok", "no_uniprot_entry", "no_domains", "no_canonical_transcript")) {
-    dir.create(dirname(cache_file), recursive = TRUE, showWarnings = FALSE)
-    tmp <- tempfile(tmpdir = cache_dir)
-    saveRDS(result, tmp)
-    file.rename(tmp, cache_file)
-  }
+  if (result$status %in% c("ok", "no_uniprot_entry", "no_domains", "no_canonical_transcript"))
+    .pt_cache_save(result, cache_file)
   result
 }

@@ -1,4 +1,4 @@
-# The bundled example project (phase-I.2 step 23). Its data and README are in
+# The bundled example project. Its data and README are in
 # inst/extdata/example/, rebuilt by data-raw/build-example-data.R.
 
 #' Example project: a ready-made samples.txt and its data

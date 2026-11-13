@@ -1,4 +1,8 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/build_tx_meta_lookup.R:1"
+# transcript_id -> transcript_type, tag and ccdsid, from a GENCODE-style GTF's "transcript"
+# lines. `tag` can appear several times per transcript ("Ensembl_canonical",
+# "appris_principal_1", "CCDS"), so every one is kept, comma-joined; `ccdsid` (e.g.
+# "CCDS37873.1") names the CCDS record the "CCDS" tag only says exists. Built by
+# ensure_genome_ready() the first time a genome is used.
 
 build_tx_meta_lookup <- function(gtf_path, out_path) {
   # Portable base-R prefilter (no zgrep dependency) -- see
@@ -15,7 +19,7 @@ build_tx_meta_lookup <- function(gtf_path, out_path) {
   # GENCODE uses "transcript_type", Ensembl GTFs use "transcript_biotype" for
   # the same field; sub() returns its input unchanged (not NA) on a non-match,
   # so matching only one name silently corrupted every row into garbage on a
-  # real Ensembl GRCm39 GTF (confirmed 2026-09-15, 149547/149547 rows). Try
+  # real Ensembl GRCm39 GTF (149547/149547 rows). Try
   # both names; genuinely unmatched rows fall through to NA, which
   # transcript_meta.R/transcript_annotation.R already treat as "unknown".
   transcript_type <- ifelse(grepl('transcript_type "', attrs),

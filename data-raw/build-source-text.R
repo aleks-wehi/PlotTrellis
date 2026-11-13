@@ -16,13 +16,14 @@ r_files <- list.files("R", pattern = "\\.R$", full.names = TRUE)
 # bodies ever actually running here. Evaluating just `name <- function(...)
 # ...` attaches the srcref of the function literal itself (comments,
 # formatting, but NOT the "name <-" part) to the resulting closure -- the
-# same attribute .pt_source_text() used to read straight off the live,
-# installed-with-keep.source object.
+# same srcref a package installed with keep.source would carry, which an
+# ordinary install doesn't.
 env <- new.env()
 
 PT_SOURCE_TEXT <- list()
 for (f in r_files) {
   exprs <- parse(f, keep.source = TRUE)
+  lines <- readLines(f, warn = FALSE)
   for (i in seq_along(exprs)) {
     e <- exprs[[i]]
     if (!is.call(e) || length(e) < 3) next
@@ -33,7 +34,15 @@ for (f in r_files) {
     if (!is.symbol(target) || !is.call(rhs) || !identical(rhs[[1]], as.name("function"))) next
     eval(e, envir = env)
     fn <- get(as.character(target), envir = env)
-    PT_SOURCE_TEXT[[as.character(target)]] <- paste(as.character(attr(fn, "srcref")), collapse = "\n")
+    text <- paste(as.character(attr(fn, "srcref")), collapse = "\n")
+    # The block of plain `#` comment lines directly above the definition (not a
+    # roxygen `#'` block) is the function's own explanation: kept as the text's
+    # "comment" attribute, which assemble_download_script() pastes above it.
+    first <- attr(exprs, "srcref")[[i]][1]
+    top <- first
+    while (top > 1 && grepl("^\\s*#", lines[top - 1]) && !grepl("^\\s*#'", lines[top - 1])) top <- top - 1
+    if (top < first) attr(text, "comment") <- paste(lines[top:(first - 1)], collapse = "\n")
+    PT_SOURCE_TEXT[[as.character(target)]] <- text
   }
 }
 

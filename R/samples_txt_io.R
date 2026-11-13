@@ -1,11 +1,9 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/samples_txt_io.R:1"
+# samples.txt import/export: one wide tab-separated table, one row per condition, with
+# `type:name` column headers, plus a `# data_root:` line and `# <key>: value` lines for
+# other settings. Pure functions, no Shiny: used by the wizard and parse_samples_txt().
 
-# %||% is NA-aware and defined once, package-wide, in boilerplate.R (see
-# phase-G.1.md's log) -- not a second local definition here. NA-specific
-# defaulting for a possibly-NA character value still goes through chr0()
-# below instead, since %||% would treat "" and NA the same way (both
-# defaulted), which isn't always the desired distinction for a field read
-# straight out of samples.txt.
+# A cell read from samples.txt: NA or length 0 -> "". (%||%, from boilerplate.R, would
+# leave character(0) as it is.)
 chr0 <- function(x) if (length(x) == 0 || is.na(x)) "" else x
 
 # Must resolve to an actual FILE, not a directory (file.exists() is TRUE for both) -- a directory here would crash is_paired_end_structural() or silently pass only to fail at render.
@@ -14,28 +12,24 @@ is_real_file <- function(path) file.exists(path) && !dir.exists(path)
 DATA_TYPE_VOCAB <- c("bw", "bed", "hic", "quantdir", "paired-end")
 
 # Settings keys that never round-trip through samples.txt's `# <key>: value`
-# delta-header lines (Phase C.3 decision 6/7, updated by the standalone
-# genome-config task): `data_dir` already has its own dedicated
+# delta-header lines: `data_dir` already has its own dedicated
 # `# data_root:` line; `samples` is structural, not a render-style setting.
-# Genome fields (gtf_path/orgdb/genome_label) are independent per-project
-# settings with no genome_id/GENOME_TABLE indirection, so -- unlike before --
-# they DO round-trip through the generic delta mechanism below (on the
-# IMPORT side unchanged; see SAMPLES_TXT_ALWAYS_EXPORT below for how export
-# treats them differently). Everything else in DEFAULT_SETTINGS is fair game.
+# The genome fields (gtf_path/orgdb/genome_label) DO round-trip through the
+# generic delta mechanism below (see SAMPLES_TXT_ALWAYS_EXPORT below for how
+# export treats them differently). Everything else in DEFAULT_SETTINGS is fair game.
 SAMPLES_TXT_DELTA_EXCLUDE <- c("data_dir", "samples")
 
 # Genome identity fields ALWAYS get a `# key: value` line on export,
-# regardless of whether the live value happens to equal DEFAULT_SETTINGS'
-# (found 2026-08-25: a project using this deployment's own default mm39
-# genome silently exported NO genome info at all, since delta-only export
-# treats "matches the default" as "nothing to say" -- correct for a cosmetic
-# setting like page_w, wrong for identifying, must-travel-with-the-data
-# information a biologist needs to see regardless of which machine produced
-# the file). Still parsed on import via the same generic `# <key>: value`
-# mechanism as every other key -- only the export side special-cases these.
+# regardless of whether the live value happens to equal DEFAULT_SETTINGS':
+# delta-only export treats "matches the default" as "nothing to say", which is
+# right for a cosmetic setting like page_w but wrong for identifying,
+# must-travel-with-the-data information (a project on the default genome
+# would otherwise export no genome at all). Still parsed on import via the
+# same generic `# <key>: value` mechanism as every other key -- only the
+# export side special-cases these.
 SAMPLES_TXT_ALWAYS_EXPORT <- c("gtf_path", "orgdb", "genome_label")
 
-# Coerces `val` to match `default_val`'s type (Phase C.3 step A, e.g. a logical default like uniprot_reviewed_only must come back logical, not "TRUE"/"FALSE"); malformed input coerces to NA, which the caller drops rather than injecting into live settings.
+# Coerces `val` to match `default_val`'s type (e.g. a logical default like uniprot_reviewed_only must come back logical, not "TRUE"/"FALSE"); malformed input coerces to NA, which the caller drops rather than injecting into live settings.
 settings_value_coerce <- function(val, default_val) {
   if (is.logical(default_val)) return(suppressWarnings(as.logical(val)))
   if (is.numeric(default_val)) return(suppressWarnings(as.numeric(val)))
@@ -48,8 +42,9 @@ settings_value_differs <- function(a, b) {
   !identical(a, b)
 }
 
-# Cheap structural check only (column count matches BED12's 12 or BEDPE's 6-10, not full semantic validation, see read_junction_file() in utils/transcript_filter.R and solutions/concepts/18-bed12-bedpe-arc-format.md, per phase-C.1.md step 5); caller must check is_real_file() first, this doesn't guard against `path` being a directory.
+# Cheap structural check only (a HiCCUPS header line, or a column count matching BED12's 12 or BED6/BEDPE's 6-10, not full semantic validation, see read_junction_file() in transcript_filter.R); caller must check is_real_file() first, this doesn't guard against `path` being a directory.
 is_paired_end_structural <- function(path) {
+  if (is_hiccups_header(readLines(path, n = 1, warn = FALSE))) return(TRUE)
   con <- file(path, "r")
   on.exit(close(con))
   repeat {
@@ -61,8 +56,8 @@ is_paired_end_structural <- function(path) {
   }
 }
 
-# Parses samples.txt into list(errors=, warnings=, data_root=, overrides=, samples=) (samples[[i]]'s data shape matches utils/samples.R's sample$data); errors are fatal and callers must check them before trusting samples, warnings are non-fatal broken paths; data_root_override validates against the running CFG$data_dir instead of the file's own `# data_root:` line. See solutions/concepts/19-relocated-code-rationale.md, "utils/samples_txt_io.R:107".
-import_samples_txt <- function(path, data_root_override = NULL, defaults = list()) {
+# Parses samples.txt into list(errors=, warnings=, data_root=, overrides=, samples=) (samples[[i]]$data has the shape of a project's settings$samples[[i]]$data); errors are fatal and callers must check them before trusting samples, warnings are non-fatal broken paths, checked against the file's own `# data_root:` line.
+import_samples_txt <- function(path, defaults = list()) {
   lines <- readLines(path, warn = FALSE)
   errors <- character(0)
   warnings <- character(0)
@@ -88,9 +83,8 @@ import_samples_txt <- function(path, data_root_override = NULL, defaults = list(
   }
 
   # A relative `# data_root:`/`# gtf_path:` is relative to this file's own folder, not R's
-  # working directory, so a samples.txt can travel with its data (phase-I.3 step 25).
-  # Absolute paths (or ~) and blanks are left exactly as written. Inline base R only: this
-  # function's text is pasted into every downloaded script (see .pt_download_deps()).
+  # working directory, so a samples.txt can travel with its data.
+  # Absolute paths (or ~) and blanks are left exactly as written.
   base_dir <- normalizePath(dirname(path), winslash = "/")
   resolve <- function(p) {
     if (is.null(p) || !nzchar(p) || grepl("^(/|~|[A-Za-z]:[/\\\\]|\\\\\\\\)", p)) return(p)
@@ -104,8 +98,6 @@ import_samples_txt <- function(path, data_root_override = NULL, defaults = list(
                 data_root = data_root, overrides = overrides, samples = list()))
   }
 
-  effective_root <- data_root_override %||% data_root
-
   header <- strsplit(body_lines[1], "\t", fixed = TRUE)[[1]]
   fixed_cols <- c("condition", "colour")
   col_spec <- vector("list", length(header))
@@ -117,9 +109,8 @@ import_samples_txt <- function(path, data_root_override = NULL, defaults = list(
       parts <- strsplit(h, ":", fixed = TRUE)[[1]]
       type <- parts[1]
       name <- paste(parts[-1], collapse = ":")
-      # Pre-rename alias: samples.txt files written before the BEDPE-support
-      # generalization used "junction:<name>" -- normalize so they keep
-      # loading without a manual edit (solutions/concepts/18-bed12-bedpe-arc-format.md).
+      # Alias: older samples.txt files use "junction:<name>" for paired-end
+      # data -- normalize so they keep loading without a manual edit.
       if (identical(type, "junction")) type <- "paired-end"
       if (!(type %in% DATA_TYPE_VOCAB)) {
         errors <- c(errors, sprintf(
@@ -160,8 +151,8 @@ import_samples_txt <- function(path, data_root_override = NULL, defaults = list(
         if (is.null(spec) || spec$kind != "instance") next
         val <- trimws(fields[j])
         if (is.na(val) || nchar(val) == 0) next
-        if (!is.null(effective_root)) {
-          resolved <- file.path(effective_root, val)
+        if (!is.null(data_root)) {
+          resolved <- file.path(data_root, val)
           if (spec$type == "quantdir") {
             resolved <- file.path(resolved, "quant.sf")
             ok <- is_real_file(resolved)
@@ -190,16 +181,15 @@ import_samples_txt <- function(path, data_root_override = NULL, defaults = list(
   # Never return partial samples alongside a structural error -- enforced at
   # the function boundary itself, not left to callers to remember to check
   # `errors` first. `warnings` (unresolved
-  # paths, Phase C.3 decision 5b) do NOT trigger this: those rows are still
-  # genuinely usable, just missing one file, so every OTHER sample still
-  # comes in per Extra check 2a.
+  # paths) do NOT trigger this: those rows are still genuinely usable, just
+  # missing one file, so every OTHER sample still comes in.
   if (length(errors) > 0) samples <- list()
 
   list(errors = errors, warnings = warnings, data_root = data_root,
        overrides = overrides, samples = samples)
 }
 
-# Mirrors import_samples_txt(): flattens settings$samples[] into a wide type:name-header samples.txt plus a `# data_root:` line and one `# <key>: value` delta line per non-default setting (Phase C.3 decision 6), except the 3 genome fields which always get a line (SAMPLES_TXT_ALWAYS_EXPORT); pass DEFAULT_SETTINGS as `defaults`. See solutions/concepts/19-relocated-code-rationale.md, "utils/samples_txt_io.R:269".
+# Mirrors import_samples_txt(): flattens settings$samples[] into a wide type:name-header samples.txt plus a `# data_root:` line and one `# <key>: value` delta line per non-default setting (only those, to keep the file short), except the 3 genome fields which always get a line (SAMPLES_TXT_ALWAYS_EXPORT); pass DEFAULT_SETTINGS as `defaults`.
 export_samples_txt <- function(settings, defaults = list()) {
   samples <- settings$samples %||% list()
   delta_keys <- setdiff(intersect(names(settings), names(defaults)), SAMPLES_TXT_DELTA_EXCLUDE)
@@ -211,8 +201,8 @@ export_samples_txt <- function(settings, defaults = list()) {
     # settings_value_differs()'s all.equal path), a character NA/NULL would
     # otherwise print the literal text "NA", which re-imports as the STRING
     # "NA" (settings_value_coerce() returns a character value as-is), not as
-    # "still unset". Same failure shape as BUGS.md #13, guarded against here
-    # for the character case specifically.
+    # "still unset". Guarded against here for the character case
+    # specifically.
     if (is.null(val) || (length(val) == 1 && is.na(val))) next
     if (key %in% SAMPLES_TXT_ALWAYS_EXPORT || settings_value_differs(val, defaults[[key]])) {
       delta_lines <- c(delta_lines, paste0("# ", key, ": ", val))

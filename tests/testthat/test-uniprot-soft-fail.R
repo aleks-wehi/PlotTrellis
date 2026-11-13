@@ -1,5 +1,5 @@
-# Phase I.1 step 5: UniProt failure modes. A network failure must never be
-# cached (one offline session used to cache "no reviewed entry" for every
+# UniProt failure modes. A network failure must never be
+# cached (else one offline session would cache "no reviewed entry" for every
 # gene it touched), must read differently from a real "no reviewed entry"
 # answer, and must not stop a later successful lookup from caching normally.
 #
@@ -84,7 +84,7 @@ test_that("gene_protein_domains(): network failure is not cached, a later succes
 
   # Search itself unreachable
   local_mocked_bindings(.uniprot_read_lines = .refused)
-  res <- gene_protein_domains("Testgene", txdb, "unused.gtf", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
+  res <- gene_protein_domains("Testgene", txdb, "unused_tx_meta.rds", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
   expect_identical(res$status, "uniprot_unreachable")
   expect_false(file.exists(cache_file))
 
@@ -92,21 +92,42 @@ test_that("gene_protein_domains(): network failure is not cached, a later succes
   canned <- .canned()
   local_mocked_bindings(.uniprot_read_lines = function(url)
     if (grepl("/search?", url, fixed = TRUE)) canned(url) else .refused(url))
-  res <- gene_protein_domains("Testgene", txdb, "unused.gtf", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
+  res <- gene_protein_domains("Testgene", txdb, "unused_tx_meta.rds", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
   expect_identical(res$status, "uniprot_unreachable")
   expect_false(file.exists(cache_file))
 
   # Real "no reviewed entry" is a distinct status
   local_mocked_bindings(.uniprot_read_lines = .canned(search = character(0)))
-  res <- gene_protein_domains("Testgene", txdb, "unused.gtf", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
+  res <- gene_protein_domains("Testgene", txdb, "unused_tx_meta.rds", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
   expect_identical(res$status, "no_uniprot_entry")
 
   # UniProt back: full success, cached
   local_mocked_bindings(.uniprot_read_lines = .canned())
-  res <- gene_protein_domains("Testgene", txdb, "unused.gtf", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
+  res <- gene_protein_domains("Testgene", txdb, "unused_tx_meta.rds", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
   expect_identical(res$status, "ok")
   expect_true(file.exists(cache_file))
   expect_identical(readRDS(cache_file)$status, "ok")
+})
+
+test_that("gene_protein_domains(): a passed cds_by_tx is used, not rebuilt, with the same result", {
+  cache_dir <- tempfile()
+  dir.create(cache_dir)
+  on.exit(unlink(cache_dir, recursive = TRUE), add = TRUE)
+  txdb <- .tiny_txdb()
+  local_mocked_bindings(.pd_gene_transcript_tags = function(...)
+    data.frame(transcript_id = "ENSMUST00000000001.1", ccdsid = "CCDS1.1", stringsAsFactors = FALSE),
+    .uniprot_read_lines = .canned())
+  run <- function(label, db = txdb, ...)
+    gene_protein_domains("Testgene", db, "unused_tx_meta.rds", "org.Mm.eg.db", label, cache_dir = cache_dir, ...)
+  built <- GenomicFeatures::cdsBy(txdb, by = "tx", use.names = TRUE)
+
+  rebuilt <- run("rebuilt")
+  # txdb = NULL: with the index passed in, nothing may touch the TxDb (cdsBy() would fail on it).
+  passed  <- run("passed", db = NULL, cds_by_tx = built)
+  expect_identical(rebuilt$status, "ok")
+  expect_identical(passed[c("status", "canonical_tx", "domains")], rebuilt[c("status", "canonical_tx", "domains")])
+  # An index with no transcripts changes the answer, so the argument really is what gets used.
+  expect_false(identical(run("empty", db = NULL, cds_by_tx = built[0])$status, "ok"))
 })
 
 test_that("protein-domains track shows a different message for unreachable vs no entry", {
@@ -129,26 +150,25 @@ test_that("protein-domains track shows a different message for unreachable vs no
 test_that("uniprot_canonical_match(): network failure is not cached, a later success is", {
   cache_path <- tempfile(fileext = ".rds")
   on.exit(unlink(cache_path), add = TRUE)
-  local_mocked_bindings(UNIPROT_CANONICAL_CACHE_PATH = cache_path)
   tx <- c("ENSMUST00000000001.1", "ENSMUST00000000002.1")
 
   local_mocked_bindings(.uniprot_read_lines = .refused)
-  res <- uniprot_canonical_match("Testgene", tx, list(), orgdb = "org.Mm.eg.db")
+  res <- uniprot_canonical_match("Testgene", tx, list(), orgdb = "org.Mm.eg.db", cache_path = cache_path)
   expect_identical(nrow(res), 2L)
   expect_true(all(is.na(res$uniprot_accession)))
   expect_false(file.exists(cache_path))
 
-  # Search succeeds, record fetch unreachable: used to cache an
+  # Search succeeds, record fetch unreachable: must not cache an
   # accession-only entry with no protein length, forever
   canned <- .canned()
   local_mocked_bindings(.uniprot_read_lines = function(url)
     if (grepl("/search?", url, fixed = TRUE)) canned(url) else .refused(url))
-  res <- uniprot_canonical_match("Testgene", tx, list(), orgdb = "org.Mm.eg.db")
+  res <- uniprot_canonical_match("Testgene", tx, list(), orgdb = "org.Mm.eg.db", cache_path = cache_path)
   expect_true(all(is.na(res$uniprot_accession)))
   expect_false(file.exists(cache_path))
 
   local_mocked_bindings(.uniprot_read_lines = .canned())
-  res <- uniprot_canonical_match("Testgene", tx, list(), orgdb = "org.Mm.eg.db")
+  res <- uniprot_canonical_match("Testgene", tx, list(), orgdb = "org.Mm.eg.db", cache_path = cache_path)
   expect_identical(res$uniprot_accession, rep("Q99999", 2))
   expect_identical(res$uniprot_match, c(TRUE, FALSE))
   expect_true(file.exists(cache_path))

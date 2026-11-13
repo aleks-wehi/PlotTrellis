@@ -1,4 +1,4 @@
-# Phase I.3 step 28: the composer's Figure settings panel. Every non-core setting is
+# The composer's Figure settings panel. Every non-core setting is
 # adjustable live (s_<key> inputs), reaches render_all() and the downloaded R script,
 # and is persisted only by Save as project default. Drives the real composer server
 # headlessly (pattern of test-gene-search-app.R).
@@ -8,7 +8,7 @@
 SETTING_TEST_VALUES <- list(
   font = "Helvetica", fontsize = 14, page_w = 12, chr_fmt = "space", show_track_axes = FALSE,
   hic_norm = "VC", hic_style = "triangle", zrange_cap = 50, atac_height = 1.6, hic_height = 3,
-  hic_res_mode = "finest", hic_max_bins_per_view = 800, gene_flank_pct = 50,
+  hic_res_mode = "finest", hic_max_bins_per_view = 800, hic_resolution = 25000, gene_flank_pct = 50,
   min_junction_support = 3, min_display_tpm = 5, uniprot_reviewed_only = TRUE,
   arc_clip_partial = TRUE, diff_colour_lo = "#111111", diff_colour_hi = "#222222",
   junction_opacity_cap = 0.5, reference_colour = "#333333", comparison_colour = "#444444",
@@ -69,8 +69,10 @@ test_that("every composer setting input reaches render_all() and the R script", 
       v <- SETTING_TEST_VALUES[[k]]
       expect_equal(seen[[k]], v, info = k)
       # The downloaded script carries the same value (deparsed into its settings list).
-      expect_true(grepl(paste0(k, " = ", deparse(if (k == "fontsize") as.integer(v) else v)),
-                        state$rcode, fixed = TRUE), info = k)
+      # hic_style is carried by each Hi-C track instead (checked with a Hi-C figure below).
+      if (k != "hic_style")
+        expect_true(grepl(paste0(k, " = ", deparse(if (k == "fontsize") as.integer(v) else v)),
+                          state$rcode, fixed = TRUE), info = k)
     }
     expect_equal(seen$zrange, c(0, 50))
     # Saved values are untouched by live changes.
@@ -134,6 +136,8 @@ test_that("zoom and Apply to figure rebuild the figure with the live settings", 
     session$setInputs(s_hic_style = "triangle", s_fontsize = 14, zoom_in_15x = 1)
     zoomed <- calls[[length(calls)]]
     expect_equal(hic_style(zoomed), "triangle")  # baked into the entry, rebuilt on zoom
+    # The script has it once, on the Hi-C track, not in the settings block.
+    expect_identical(lengths(regmatches(state$rcode, gregexpr("hic_style = \"triangle\"", state$rcode))), 1L)
     expect_equal(zoomed$settings$fontsize, 14L)
     expect_equal(zoomed$settings$title, "My title")
     expect_lt(zoomed$region$end - zoomed$region$start, first$region$end - first$region$start)
@@ -144,6 +148,27 @@ test_that("zoom and Apply to figure rebuild the figure with the live settings", 
     expect_equal(applied$settings$title, "My title")
     expect_equal(applied$region[c("chrom", "start", "end")], zoomed$region[c("chrom", "start", "end")])
   })
+})
+
+test_that("the composer draws with the project's cache folder, and Edit project settings stops it with that word", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  cp <- new_composer()
+  on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
+  expect_identical(get("RENDER_CFG", envir = environment(cp$app$serverFuncSource()))$cache_dir,
+                   file.path(cp$proj, "cache"))
+  # The stop is scheduled a moment later (so the page can show its message first): catch
+  # what is scheduled instead of stopping anything.
+  scheduled <- list()
+  local_mocked_bindings(later = function(func, ...) {
+    scheduled[[length(scheduled) + 1]] <<- func
+    invisible(NULL)
+  }, .package = "later")
+  shiny::testServer(cp$app, {
+    session$flushReact()  # the observers exist; the click below is then a change
+    session$setInputs(confirm_edit_settings = 1)
+  })
+  stops <- unlist(lapply(scheduled, function(f) paste(deparse(body(f)), collapse = " ")))
+  expect_identical(grep("stopApp", stops, value = TRUE), "stopApp(returnValue = \"edit_settings\")")
 })
 
 test_that("zoom keeps a custom title in the rendered figure", {

@@ -41,7 +41,8 @@ drawn until the figure is printed, saved with \code{\link[=pt_save]{pt_save()}},
 Track names are the ones \code{\link[=pt_tracks]{pt_tracks()}} lists: \code{genes}, \code{transcripts},
 \code{transcripts_all}, \code{transcripts_annotated} and \code{protein_domains} need no sample. The
 others are named after your \code{samples.txt}'s columns (\code{bw:atac} gives \code{atac};
-\verb{quantdir:} gives \code{transcript_counts}; comparisons get a \verb{_diff} suffix, such as
+\verb{quantdir:} gives \code{transcript_expression} (\code{transcript_counts}, its old name, still works);
+comparisons get a \verb{_diff} suffix, such as
 \code{junctions_diff}) and need a sample, written \code{"atac@K562"} (or
 \code{"junctions_diff@K562 vs GM12878"}, K562 against reference GM12878).
 

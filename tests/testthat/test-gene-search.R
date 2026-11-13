@@ -1,4 +1,4 @@
-# Phase I.1 step 4a (BUGS.md #36, #49): gene search accepts a symbol in any
+# Gene search accepts a symbol in any
 # case or an Ensembl gene ID (with or without version), and always resolves
 # to the OrgDb's canonical symbol. Transcript IDs, Entrez IDs and aliases are
 # deliberately not accepted. The resolver tests need only the OrgDb packages.

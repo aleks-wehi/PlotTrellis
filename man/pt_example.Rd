@@ -20,10 +20,10 @@ own folder), and the app opens on it with a gene and tracks already picked.
 \details{
 \itemize{
 \item \code{"mammary"} (the default): mouse mammary basal cells (Basal) vs luminal progenitors (LP)
-(Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat, mm10: ATAC and transcript counts.
+(Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat, mm10: ATAC and transcript expression.
 Elf5 is almost silent in Basal and highly expressed in LP. Needs \code{org.Mm.eg.db}.
 \item \code{"human"}: ENCODE GM12878 vs K562 at PSME1/PSME2, hg38: ATAC, splice junctions and
-transcript counts. Needs \code{org.Hs.eg.db}.
+transcript expression. Needs \code{org.Hs.eg.db}.
 }
 }
 \examples{

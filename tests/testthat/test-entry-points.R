@@ -1,4 +1,4 @@
-# Phase I.3 step 25: the Tier 1 entry points (parse_samples_txt(),
+# The entry points (parse_samples_txt(),
 # plottrellis_wizard(), plottrellis_composer(), run_plottrellis()) and the
 # pieces they share with the wizard. No fixture data needed, so nothing here
 # skips: these run on R-universe too. Temp files only.
@@ -47,14 +47,30 @@ test_that("wiz_save_problems() returns the wizard Save's exact messages, in orde
   expect_identical(
     wiz_save_problems(tempdir(), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db"),
     character(0))
-  # Bug 62: a genome label chromosome sizes can't be looked up by; blank is allowed.
+  # A genome label chromosome sizes can't be looked up by is a problem; blank is allowed.
   ok <- function(label) wiz_save_problems(tempdir(), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db", label)
   expect_identical(ok("mm10"), character(0))
   expect_identical(ok(""), character(0))
   expect_identical(ok("m10"), "Genome label 'm10' isn't a known genome build id (e.g. mm10, mm39, hg38).")
 })
 
-test_that("parse_samples_txt() rejects a genome label that isn't a genome build id (bug 62)", {
+test_that("wiz_save_problems() and parse_samples_txt() catch an OrgDb package that isn't installed", {
+  samples <- list(list(condition = "A"))
+  msg <- "OrgDb package 'org.Xx.eg.db' is not installed. Install it first, e.g. BiocManager::install('org.Xx.eg.db')."
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "org.Xx.eg.db"), msg)
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "  org.Xx.eg.db "), msg)
+  # A blank field keeps its own message, with no install hint; an installed one adds nothing.
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", ""), "OrgDb package is required.")
+  expect_true(requireNamespace("org.Mm.eg.db", quietly = TRUE))
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "org.Mm.eg.db"), character(0))
+
+  p <- make_samples_project(c("# data_root: data", "# gtf_path: genes.gtf", "# orgdb: org.Xx.eg.db"))
+  out_dir <- tempfile("pt-out-")
+  expect_error(parse_samples_txt(p$txt, project_dir = out_dir), "BiocManager::install('org.Xx.eg.db')", fixed = TRUE)
+  expect_false(file.exists(file.path(out_dir, "project_settings.json")))
+})
+
+test_that("parse_samples_txt() rejects a genome label that isn't a genome build id", {
   p <- make_samples_project(c("# data_root: data", "# gtf_path: genes.gtf", "# orgdb: org.Mm.eg.db", "# genome_label: m10"))
   out_dir <- tempfile("pt-out-")
   expect_error(parse_samples_txt(p$txt, project_dir = out_dir), "Genome label 'm10'", fixed = TRUE)
@@ -70,10 +86,6 @@ test_that("plottrellis_composer() errors, creating nothing, when the project has
 # Runs run_plottrellis() with the two launchers mocked; each mock is a list of
 # per-call functions (called in turn) and every call is recorded in order.
 run_loop_with_mocks <- function(dir, wizard_steps, composer_steps) {
-  old <- Sys.getenv("PLOTTRELLIS_EDIT_SETTINGS", NA)
-  on.exit(if (is.na(old)) Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS")
-          else Sys.setenv(PLOTTRELLIS_EDIT_SETTINGS = old), add = TRUE)
-  Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS")
   calls <- character(0)
   n <- c(wizard = 0, composer = 0)
   step <- function(who, steps) function(project_dir, ...) {
@@ -107,12 +119,53 @@ test_that("run_plottrellis() reopens the wizard after Edit project settings, the
   writeLines("{}", file.path(dir, "project_settings.json"))
   out <- run_loop_with_mocks(
     dir,
-    wizard_steps = list(function(d) { Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS"); "restart" }),
-    composer_steps = list(
-      function(d) { Sys.setenv(PLOTTRELLIS_EDIT_SETTINGS = "1"); "edit_settings" },
-      function(d) "closed"))
+    wizard_steps = list(function(d) "restart"),
+    composer_steps = list(function(d) "edit_settings", function(d) "closed"))
   expect_identical(out$calls, c("composer", "wizard", "composer"))
   expect_identical(out$result, "closed")
+})
+
+test_that("Edit project settings in a composer opened on its own doesn't send a later run_plottrellis() to the wizard", {
+  dir <- tempfile("pt-loop-")
+  dir.create(dir)
+  writeLines("{}", file.path(dir, "project_settings.json"))
+  # The composer's Edit button must not leave a process-wide flag behind.
+  testthat::local_mocked_bindings(.pt_composer_app = function(...) NULL, .package = "PlotTrellis")
+  testthat::local_mocked_bindings(runApp = function(...) "edit_settings", .package = "shiny")
+  expect_identical(plottrellis_composer(dir), "edit_settings")
+  out <- run_loop_with_mocks(dir, wizard_steps = list(), composer_steps = list(function(d) "closed"))
+  expect_identical(out$calls, "composer")
+})
+
+test_that("plottrellis_wizard() opens the wizard on the project's own settings, with the package's defaults", {
+  dir <- tempfile("pt-wiz-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  json <- file.path(dir, "project_settings.json")
+  jsonlite::write_json(list(genome_label = "hg38", orgdb = "org.Hs.eg.db", fontsize = 11L), json, auto_unbox = TRUE)
+  got <- list()
+  testthat::local_mocked_bindings(
+    wizard_ui = function(SETTINGS_JSON) {
+      got$ui_json <<- SETTINGS_JSON
+      shiny::fluidPage()
+    },
+    wizard_server = function(SETTINGS_JSON, CFG, DEFAULT_SETTINGS) {
+      got$json <<- SETTINGS_JSON
+      got$cfg <<- CFG
+      got$defaults <<- DEFAULT_SETTINGS
+      function(input, output, session) NULL
+    })
+  testthat::local_mocked_bindings(runApp = function(appDir, ...) {
+    force(appDir)  # the app object, built from the two functions above
+    "closed"
+  }, .package = "shiny")
+  expect_identical(plottrellis_wizard(dir), "closed")
+  expect_identical(normalizePath(got$ui_json), normalizePath(json))
+  expect_identical(normalizePath(got$json), normalizePath(json))
+  expect_identical(got$cfg[c("genome_label", "orgdb", "fontsize")],
+                   list(genome_label = "hg38", orgdb = "org.Hs.eg.db", fontsize = 11L))
+  expect_identical(got$defaults, .pt_default_settings())
+  expect_false(identical(got$cfg$genome_label, got$defaults$genome_label))
 })
 
 test_that("run_plottrellis() opens the wizard after Reset deletes the settings", {
@@ -208,8 +261,8 @@ test_that("parse_samples_txt() saves NULL-default numeric settings as numbers, l
 })
 
 test_that("parse_samples_txt() refreshes project_samples.txt, so recovery restores the new samples", {
-  # Reset and the broken-settings error both point at this copy (feature 43);
-  # found by step 25's review: an overwrite left the old samples in it.
+  # Reset and the broken-settings error both point at this copy, so an
+  # overwrite must not leave the old samples in it.
   p <- make_samples_project(good_header)
   out_dir <- tempfile("pt-out-")
   parse_samples_txt(p$txt, project_dir = out_dir)

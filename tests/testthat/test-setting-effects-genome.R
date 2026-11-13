@@ -1,6 +1,7 @@
-# Phase I.3 step 28 (stage B): per-setting effect tests for the genome
-# settings (gtf_path, genome_label, orgdb). Each test runs the same consumer
-# at two values of one setting and asserts a specific difference.
+# Per-setting effect tests for the genome
+# settings (gtf_path, genome_label, orgdb; data_dir and samples at
+# the end). Each test runs the same consumer at two values of one setting and
+# asserts a specific difference.
 #
 # NO FIXTURE DATA NEEDED: tiny GTFs / TxDbs are written to tempdir(), and
 # build_chrom_sizes() (a UCSC download) is mocked, so these also run on
@@ -68,8 +69,8 @@ test_that("genome_label picks the chromosome-size build and scopes the protein-d
   saveRDS(list(status = "ok", gene = "Testgene", marker = "mm10 entry"), file.path(cache_dir, "mm10", "Testgene.rds"))
   local_mocked_bindings(.uniprot_read_lines = function(url) stop(structure(
     class = c("uniprot_unreachable", "error", "condition"), list(message = "offline (test)", call = NULL))))
-  hit  <- gene_protein_domains("Testgene", NULL, "unused.gtf", "org.Mm.eg.db", "mm10", cache_dir = cache_dir)
-  miss <- gene_protein_domains("Testgene", NULL, "unused.gtf", "org.Mm.eg.db", "mm39", cache_dir = cache_dir)
+  hit  <- gene_protein_domains("Testgene", NULL, "unused_tx_meta.rds", "org.Mm.eg.db", "mm10", cache_dir = cache_dir)
+  miss <- gene_protein_domains("Testgene", NULL, "unused_tx_meta.rds", "org.Mm.eg.db", "mm39", cache_dir = cache_dir)
   expect_identical(hit$marker, "mm10 entry")
   expect_null(miss$marker)
   expect_identical(miss$status, "uniprot_unreachable")
@@ -122,4 +123,65 @@ test_that("orgdb sets the UniProt organism, uniprot_reviewed_only the Swiss-Prot
   expect_match(q("org.Hs.eg.db"), "organism_id:9606", fixed = TRUE)
   expect_false(grepl("reviewed", q("org.Mm.eg.db", FALSE), fixed = TRUE))
   expect_match(q("org.Mm.eg.db", TRUE), "AND (reviewed:true)", fixed = TRUE)
+})
+
+# data_dir and samples (the other two core settings): the chain
+# pt_project() and the composer run once they have read both from the saved
+# settings (load_samples_from_settings(), build_track_items(),
+# .pt_build_entries()) through to the drawn track.
+test_that("data_dir and samples decide which file a track reads and its colour (no fixture data)", {
+  skip_on_os("windows")  # as test-setting-effects-display.R: no SVG text there
+  skip_if_not_installed("org.Mm.eg.db")
+  skip_if_not_installed("txdbmaker")
+  genome <- ready(tiny_gtf(0, "Synth-201"))
+  # Two data roots with the same relative file, flat signal 10 vs 100.
+  data_root <- function(score) {
+    dir <- tempfile("synth-root-")
+    dir.create(file.path(dir, "atac"), recursive = TRUE)
+    pos <- seq(1000L, 9990L, 10L)
+    rtracklayer::export.bw(GenomicRanges::GRanges("chr1", IRanges::IRanges(pos, width = 10L), score = score,
+                                                  seqinfo = GenomeInfoDb::Seqinfo("chr1", 100000L)),
+                           file.path(dir, "atac", "a.bw"))
+    dir
+  }
+  root10 <- data_root(10)
+  root100 <- data_root(100)
+  samples <- function(colour) list(list(condition = "S1", colour = colour,
+                                        data = list(list(type = "bw", name = "atac", path = "atac/a.bw"))))
+  svg_for <- function(samples, data_dir) {
+    rows <- load_samples_from_settings(samples, data_dir)
+    items <- build_track_items(rows)
+    settings <- list(txdb_path = genome$txdb_path, orgdb_pkg = "org.Mm.eg.db", genome_label = "synthetic",
+                     page_w = 9, font = "DejaVu Sans", fontsize = 8L, chr_fmt = "dot", show_track_axes = TRUE)
+    entries <- .pt_build_entries(names(Filter(function(i) identical(i$type, "bw"), items)), items,
+                                 .pt_sample_colours(rows), settings)
+    expect_length(entries, 1)
+    expect_identical(entries[[1]]$path, file.path(data_dir, "atac/a.bw"))
+    f <- tempfile(fileext = ".svg")
+    on.exit(unlink(f), add = TRUE)
+    dev <- NULL
+    on.exit(if (!is.null(dev) && dev %in% grDevices::dev.list()) grDevices::dev.off(dev), add = TRUE, after = FALSE)
+    utils::capture.output(render_all(entries, list(chrom = "chr1", start = 1000L, end = 10000L, gene = NA_character_),
+                                     settings, device_fn = function(w, h) {
+                                       svglite::svglite(f, width = w, height = h)
+                                       dev <<- grDevices::dev.cur()
+                                     }))
+    grDevices::dev.off(dev)
+    dev <- NULL
+    paste(readLines(f), collapse = "\n")
+  }
+  # The value axis' top tick label reads the file under data_dir.
+  ticks <- function(svg) {
+    t <- regmatches(svg, gregexpr(">[0-9]+</text>", svg))[[1]]
+    max(as.numeric(gsub("[^0-9]", "", t)))
+  }
+  a <- svg_for(samples("#123456"), root10)
+  b <- svg_for(samples("#123456"), root100)
+  c <- svg_for(samples("#AB0042"), root10)
+  expect_lte(ticks(a), 10)
+  expect_gte(ticks(b), 100)
+  # The sample's colour from samples[] fills its coverage.
+  expect_match(a, "fill: #123456", fixed = TRUE)
+  expect_false(grepl("fill: #AB0042", a, fixed = TRUE))
+  expect_match(c, "fill: #AB0042", fixed = TRUE)
 })

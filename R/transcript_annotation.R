@@ -1,9 +1,9 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_annotation.R:1"
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_annotation.R:14"
+# Per-transcript annotation for the Gene info table (not part of any figure): coding status,
+# and each canonical-transcript system's call kept separate (Ensembl canonical, APPRIS, CCDS,
+# GENCODE basic), since they routinely disagree and one combined flag would hide that.
 
-# The OrgDb and the two lookup paths are explicit arguments (bug 44): they
-# used to be read as app.R globals, which in the package exist only inside
-# the composer, so every call errored and the Gene info table never showed.
+# The OrgDb and the two lookup paths are explicit arguments, so the table works
+# outside the composer too (the composer's own values are not package globals).
 
 # appris_principal_N/appris_alternative_N tags are the one GTF tag not subsumed by a plain flag -- pull out the tier so "principal_2"/"alternative_2" stay distinguishable, not collapsed into one boolean.
 .appris_tier_from_tag <- function(tag) {
@@ -18,12 +18,12 @@
 
 # One row per annotated transcript of GENE_SYMBOL (NULL if it doesn't resolve to an Ensembl gene ID / has no transcripts).
 transcript_annotations <- function(gene_symbol, txdb, orgdb_pkg, tx_name_lookup_path, tx_meta_lookup_path) {
-  ens_res <- AnnotationDbi::select(get(orgdb_pkg, envir = asNamespace(orgdb_pkg)),
-    keys = gene_symbol, keytype = "SYMBOL", columns = "ENSEMBL")
+  ens_res <- suppressMessages(AnnotationDbi::select(get(orgdb_pkg, envir = asNamespace(orgdb_pkg)),
+    keys = gene_symbol, keytype = "SYMBOL", columns = "ENSEMBL"))
   ens_id <- ens_res$ENSEMBL[!is.na(ens_res$ENSEMBL)][1]
   if (length(ens_id) == 0 || is.na(ens_id)) return(NULL)
 
-  q <- AnnotationDbi::select(txdb, keys = ens_id, keytype = "GENEID", columns = "TXNAME")
+  q <- suppressMessages(AnnotationDbi::select(txdb, keys = ens_id, keytype = "GENEID", columns = "TXNAME"))
   tx_ids <- unique(q$TXNAME)
   if (length(tx_ids) == 0) return(NULL)
   tx_stripped <- sub("\\.[0-9]+$", "", tx_ids)
@@ -61,16 +61,10 @@ transcript_annotations <- function(gene_symbol, txdb, orgdb_pkg, tx_name_lookup_
   out[order(out$transcript_name), ]
 }
 
-# NCBI taxon ID per orgdb this app supports -- duplicated from
-# utils/protein_domains.R's ORGDB_TAXON_ID (same "just two species, no
-# generic orgdb->taxon accessor worth adding" reasoning there) rather than
-# shared. Keep in sync with protein_domains.R's copy if either changes.
-ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
-
-# `orgdb` is required, not defaulted (2026-09-08 GTF-consistency audit) -- this used to hardcode organism_id:10090 (mouse) regardless of the loaded genome, so every UniProt link-out searched mouse even on a human project. Full rationale: solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_annotation.R:102".
+# `orgdb` is required, not defaulted, so the UniProt link-out searches the loaded genome's species.
 uniprot_search_url <- function(gene_symbol, orgdb, reviewed_only = FALSE) {
   if (!orgdb %in% names(ORGDB_TAXON_ID))
-    stop("No taxon ID mapping for orgdb '", orgdb, "' in ORGDB_TAXON_ID (utils/transcript_annotation.R) -- add one.")
+    stop("No taxon ID mapping for orgdb '", orgdb, "' in ORGDB_TAXON_ID (needed to link the gene to its UniProt search) -- add one.", call. = FALSE)
   query <- sprintf("(gene:%s) AND (organism_id:%d)", gene_symbol, ORGDB_TAXON_ID[[orgdb]])
   if (reviewed_only) query <- paste(query, "AND (reviewed:true)")
   paste0("https://www.uniprot.org/uniprotkb?query=", utils::URLencode(query, reserved = TRUE))

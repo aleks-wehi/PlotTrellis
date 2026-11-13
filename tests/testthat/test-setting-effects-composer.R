@@ -1,4 +1,4 @@
-# Phase I.3 step 28 (stage B): effect tests for the settings whose only
+# Effect tests for the settings whose only
 # consumer is the composer server, not render_all(): reference_colour /
 # comparison_colour (resolved onto comparison entries by build_entries()) and
 # uniprot_reviewed_only (the Gene info panel's UniProt link-out).

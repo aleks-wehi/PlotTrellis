@@ -8,6 +8,8 @@ Description: A plotgardener-based genomic track composer that lets biologists
     writing code, and download a standalone R script that reproduces the
     exact figure offline.
 License: Artistic-2.0
+URL: https://github.com/aleks-wehi/PlotTrellis
+BugReports: https://github.com/aleks-wehi/PlotTrellis/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends:
@@ -36,9 +38,9 @@ Imports:
     utils,
     strawr,
     data.table,
+    R.utils,
     RSQLite,
-    later,
-    ggplot2
+    later
 Suggests:
     testthat (>= 3.1.7),
     vdiffr,

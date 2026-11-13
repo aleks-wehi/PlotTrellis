@@ -1,9 +1,9 @@
-# Phase D.3 step 4a: non-default settings$atac_height/hic_height/hic_style,
+# Non-default settings$atac_height/hic_height/hic_style,
 # asserting the rendered track height actually reflects the override (not
 # just that a render happens to succeed either way).
 #
 # render_all() computes entry$height internally, during its settings-fold
-# loop (pipeline/_render_all.R calls each item's settings_<viz>()) -- there
+# loop (it calls each item's settings_<viz>()) -- there
 # is no pre-render height on a caller-built entry to assert on directly. So
 # each case below calls the real settings_bw()/settings_hic() function
 # itself (expected_settings_height(), below) to get the computed height, the
@@ -21,9 +21,8 @@ expected_settings_height <- function(viz, entry, settings, region_params, page_w
   fn(list(), entry, settings, track_w, region_params)$entry$height
 }
 
-# app.R:build_entries()'s hic_height() formula, reproduced here since app.R
-# itself (Shiny reactive code) isn't sourced by this harness -- pipeline/viz/
-# hic.R's settings_hic() uses this exact same formula as its own default.
+# settings_hic()'s default height formula (viz-hic.R), reproduced here so the
+# test states the expected value independently.
 expected_hic_height <- function(page_w = 9, hic_style = "rectangle") {
   track_w <- page_w - 0.8 - 1.0
   if (hic_style == "square") track_w else round(track_w / 2, 2)
@@ -88,13 +87,7 @@ test_that("settings$hic_style square vs rectangle changes hic track height (mous
   expect_identical(height_square, expected_hic_height(9, "square"))
   expect_identical(entry_square$hic_style, "square")
 
-  # No doppelganger here: BUGS.md #23 (plotHicSquare()'s width==height check
-  # tripping on a ~9e-16 float mismatch between two independently-recomputed
-  # copies of track_w) was a property of the OLD codegen, which recomputed
-  # track_w once as a literal embedded in the assembled script and again at
-  # render_code() call time. pipeline/_render_all.R computes track_w ONCE and
-  # threads the same value through both settings_hic() and ctx$track_w, so
-  # the original root cause may no longer apply -- not reverified here
-  # (out of this migration's scope); the numeric assertions above are what
-  # this test guards regardless.
+  # No doppelganger here: plotHicSquare() checks width == height exactly, and
+  # whether a square render passes that check is not verified here; the
+  # numeric assertions above are what this test guards.
 })

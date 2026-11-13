@@ -1,11 +1,11 @@
-# Phase I.3 step 28 (stage B): per-setting effect tests for the Hi-C settings
+# Per-setting effect tests for the Hi-C settings
 # (hic_norm, zrange_cap, hic_style triangle vs rectangle). Each test renders
 # or loads the same track at two values of one setting and asserts a specific
 # difference. Needs the mouse fixture (Ba .hic around Elf5, a ~45Kb window at
 # 10Kb resolution, so each render is well under a second).
 #
 # zrange_cap reaches render_all() as settings$zrange = c(0, cap) (the
-# composer renames it, R/app.R settings_base); that rename is the composer's
+# composer renames it, .pt_settings_base() in R/figure_helpers.R); that rename is the composer's
 # wiring and is not covered here.
 
 hic_fixture <- function() {

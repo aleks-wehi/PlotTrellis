@@ -1,7 +1,6 @@
-# Bug 44: the Gene info table was always empty because
-# transcript_annotations() read the OrgDb and lookup paths as globals that, in
-# the package, exist only inside the composer. It now takes them as arguments;
-# this checks it returns a real table for a known gene in a fresh session.
+# transcript_annotations() takes the OrgDb and lookup paths as arguments, not
+# as globals that exist only inside the composer; this checks it returns a
+# real table for a known gene in a fresh session.
 test_that("transcript_annotations() returns a table for a known gene, no app globals needed", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   g <- GENOMES$mouse

@@ -1,26 +1,14 @@
-# Phase D.3 step 5: "settings-actually-wired QC" (phase-D.3.md step 15's
-# last bullet) -- confirms a setting doesn't just reach the UI, it changes
-# the render. Restricted to settings with a live consumer today:
-# control_colour/treatment_colour (both comparison vizzes), diff_colour_lo/
-# diff_colour_hi (pipeline/viz/bw_diff_stacked.R specifically),
-# junction_opacity_cap (pipeline/viz/junctions_mirrored_diff.R specifically),
-# and hic_res_mode/hic_max_bins_per_view (single-sample pipeline/viz/hic.R
-# only -- no 2-sample hic comparison viz exists).
-#
-# CORRECTION (Step 5 adversarial review finding 1, 2026-09-01): this file
-# originally also excluded diff_colour_lo/diff_colour_hi/
-# junction_opacity_cap as "dead settings" per BUGS.md #16 -- that bug's
-# claim was WRONG for these three (confirmed live: bw_diff_stacked.R DOES
-# consume DIFF_COLOUR_HI/DIFF_COLOUR_LO, junctions_mirrored_diff.R DOES
-# consume JUNCTION_OPACITY_CAP -- see BUGS.md #16's own correction note).
-# Only diff_log2fc_cap is genuinely dead (zero code references anywhere)
-# and stays excluded.
+# "Settings-actually-wired QC" -- confirms a setting doesn't just reach the
+# UI, it changes the render: control_colour/treatment_colour (both
+# comparison vizzes), diff_colour_lo/diff_colour_hi (viz-bw_diff_stacked.R
+# specifically), junction_opacity_cap (viz-junctions_mirrored_diff.R
+# specifically), and hic_res_mode/hic_max_bins_per_view (single-sample
+# viz-hic.R only -- no 2-sample hic comparison viz exists).
 #
 # Each case asserts a SPECIFIC, semantic signal (a colour hex string
 # present in the assembled script text; a resolved bin/resolution value) --
 # never a whole-file diff or an exact coordinate -- so a future pure
-# spacing/layout change can't break these assertions (Step 1's
-# "regeneration-friendly" design decision).
+# spacing/layout change can't break these assertions.
 
 test_that("control_colour/treatment_colour are wired through bw_diff_stacked (mouse dataset)", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
@@ -84,7 +72,7 @@ test_that("junction_opacity_cap is wired through junctions_mirrored_diff (human 
   spec          <- pair_track("junctions_mirrored_diff", rows[["GM12878"]], rows[["K562"]])
 
   # settings gets deparse()d verbatim into the assembled download script's
-  # data block (utils/assemble.R) -- render_junctions_mirrored_diff() itself
+  # data block (assemble_download_script()) -- render_junctions_mirrored_diff() itself
   # only reads ctx$junction_opacity_cap (render_all()'s per-track context,
   # set from settings$junction_opacity_cap), so the literal only appears
   # once, at the settings list's own declaration.
@@ -107,13 +95,12 @@ hic_setting_check <- function(dataset, sample, chrom, start, end, settings) {
 }
 
 # No doppelganger for the two cases below (deliberate, not an oversight):
-# Step 4 already committed a 108MB baseline SVG for this identical
-# large-span mouse window (test-hic-resolution.R's large-span case), and a
+# test-hic-resolution.R's large-span case already has a ~100MB baseline SVG
+# for this identical large-span mouse window, and a
 # second/third 100MB+ binary just to re-prove settings threading would be
 # pure repo bloat. What IS proven here is that the setting reaches
 # load_hic()'s own resolution-selection logic (the resolution differs).
-# CAVEAT (Step 5 adversarial review finding 2, confirmed live): for the
-# "finest" case specifically, plotgardener's own pixel-count safety valve
+# CAVEAT (confirmed live): for the "finest" case specifically, plotgardener's own pixel-count safety valve
 # ("Attempting to plot too many Hi-C pixels. Adjusting to a resolution of
 # 50000 BP.") silently re-coarsens the ACTUAL displayed matrix back to the
 # same 50000bp grid as "auto" on this large a span -- so the resolution

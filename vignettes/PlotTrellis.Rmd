@@ -3,6 +3,7 @@ title: "PlotTrellis"
 output:
   BiocStyle::html_document:
     toc: false
+    pandoc_args: ["--preserve-tabs"]
 vignette: >
   %\VignetteIndexEntry{PlotTrellis}
   %\VignetteEngine{knitr::rmarkdown}
@@ -13,15 +14,15 @@ vignette: >
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 ```
 
-PlotTrellis turns your sequencing data into multi-track genomic figures (transcript counts,
+PlotTrellis turns your sequencing data into multi-track genomic figures (transcript expression,
 transcript structures, splice junctions, coverage, comparisons between samples), in a
 point-and-click app or in a few lines of R.
 
 # Installation
 
 PlotTrellis is not on CRAN, so `repos` tells R where to find it. `BiocManager::repositories()`
-adds the Bioconductor and CRAN packages that match your R (from scratch this can take up to
-15 minutes):
+adds the Bioconductor and CRAN packages that match your R. From scratch this takes roughly
+40 minutes on Linux (adding `Ncpus = 4` speeds it up):
 
 ```{r install, eval=FALSE}
 install.packages("BiocManager")
@@ -35,7 +36,7 @@ PlotTrellis ships one example: mouse mammary basal cells (Basal) and luminal pro
 around the *Elf5*, *Ehf* and *Cat* genes.
 
 ```{r app-example, eval=FALSE}
-BiocManager::install("org.Mm.eg.db", update = FALSE)   # mouse gene annotation (for human data: "org.Hs.eg.db")
+if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) BiocManager::install("org.Mm.eg.db", update = FALSE)   # mouse gene annotation (for human data: "org.Hs.eg.db")
 library(PlotTrellis)
 run_plottrellis(project_dir = "PlotTrellis-example", samples_txt = pt_example())
 ```
@@ -99,32 +100,33 @@ The rest of this vignette is for working in R. The example figure from the app:
 library(PlotTrellis)
 proj <- pt_project(project_dir = "PlotTrellis-example", samples_txt = pt_example())
 fig  <- pt_figure(proj, "Elf5", tracks = c("atac@Basal", "atac@LP",
-                                           "transcript_counts@Basal", "transcript_counts@LP",
+                                           "transcript_expression@Basal", "transcript_expression@LP",
                                            "transcripts_annotated", "genes"))
 pt_save(fig, "Elf5.pdf")   # or .svg, .png
 ```
 
-```{r code-example-run, echo=FALSE, fig.alt="Elf5 in mouse mammary basal cells and luminal progenitors: ATAC coverage and transcript counts for each, then the annotated transcripts and the gene."}
+```{r code-example-run, echo=FALSE, fig.alt="Elf5 in mouse mammary basal cells and luminal progenitors: ATAC coverage and transcript expression for each, then the annotated transcripts and the gene."}
 library(PlotTrellis)
 proj <- pt_project(project_dir = file.path(tempdir(), "PlotTrellis-example"), samples_txt = pt_example())
 pt_figure(proj, "Elf5", tracks = c("atac@Basal", "atac@LP",
-                                   "transcript_counts@Basal", "transcript_counts@LP",
+                                   "transcript_expression@Basal", "transcript_expression@LP",
                                    "transcripts_annotated", "genes"))
 ```
 
 # Your own data in code (writing a samples.txt)
 
 A project can also come from a `samples.txt`, a tab-separated table with one row per
-sample under a few header lines. For example:
+sample under a few header lines. Separate the columns with a tab, not spaces (the example
+below is written with tabs, so copying it works). For example:
 
 ```
 # data_root: /data/smithlab/tcell_2026
 # gtf_path: /data/reference/gencode.v44.annotation.gtf.gz
 # orgdb: org.Hs.eg.db
 # genome_label: hg38
-condition  colour   bw:atac                 paired-end:junctions        quantdir:salmon
-Control    #1b9e77  atac/Control_merged.bw  junctions/Control_SJ.bed    salmon/Control
-KO         #d95f02  atac/KO_merged.bw       junctions/KO_SJ.bed         salmon/KO
+condition	colour	bw:atac	paired-end:junctions	quantdir:salmon
+Control	#1b9e77	atac/Control_merged.bw	junctions/Control_SJ.bed	salmon/Control
+KO	#d95f02	atac/KO_merged.bw	junctions/KO_SJ.bed	salmon/KO
 ```
 
 The lines starting with `#` are the project's settings:
@@ -146,10 +148,12 @@ The columns (separated by tabs):
 | Type | File | Track |
 |---|---|---|
 | `bw` | bigWig | coverage (ATAC-seq, RNA-seq) |
-| `quantdir` | a Salmon output folder (with `quant.sf`) | `transcript_counts` |
-| `paired-end` | BEDPE or BED12 | splice junctions |
+| `quantdir` | a Salmon output folder (with `quant.sf`) | `transcript_expression` |
+| `paired-end` | BED12 or BED6 junctions, BEDPE, or a HiCCUPS loop file as it comes | arcs between two regions (splice junctions, loop calls) |
 | `hic` | `.hic`, `.cool`, `.mcool` | Hi-C contact map |
-| `bed` | BED12 | annotation |
+| `bed` | BED, 3 or more columns | intervals (peaks, regions) as plain boxes on one row |
+
+`bed` and `paired-end` files can also be gzipped (for example `peaks.bed.gz`, `loops.bedpe.gz`).
 
 If you would rather not write it by hand, or already have a sample sheet with the same
 information, paste this section and your file list (or sheet) into an AI assistant and ask it
@@ -167,7 +171,7 @@ Then open it like the example: `run_plottrellis(project_dir = "my-project", samp
 - **Comparisons** name two samples, the second being the reference:
   `"junctions_diff@KO vs Control"`.
 - **`parallel = TRUE`** repeats every track written without `@` for each sample, so
-  `pt_figure(proj, "Elf5", c("atac", "transcript_counts", "transcripts_annotated", "genes"),
+  `pt_figure(proj, "Elf5", c("atac", "transcript_expression", "transcripts_annotated", "genes"),
   parallel = TRUE)` is the
   figure above. `parallel = c("LP", "Basal")` picks the samples and their order.
 - **`region = "chr2:103,400,000-103,460,000"`** instead of a gene shows any coordinates.

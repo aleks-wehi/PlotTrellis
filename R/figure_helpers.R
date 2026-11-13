@@ -1,23 +1,21 @@
 # Figure-building helpers shared by the composer app (R/app.R) and the code API
 # (R/api.R), so a figure made either way gets the same entries, settings and
-# colours. They used to live inside .pt_composer_app()'s closure, bound to its
-# GENOME/TRACK_ITEMS/ORGDB_PKG globals; now those are arguments.
+# colours. The genome, track items and OrgDb are arguments, not globals.
 
 PALETTE <- c("#1f78b4","#33a02c","#e31a1c","#ff7f00","#6a3d9a",
              "#a6761d","#e6ab02","#66a61e","#e7298a","#7570b3")
 
-# Treat NULL/NA/non-finite/list alike as "unset" (list: jsonlite::toJSON() used to round-trip a NULL setting as {}, fixed at the write site in wizard.R's wiz_save, but a settings.json written before that fix still reads {} back as an empty list via fromJSON()); shared by RENDER_CFG's zrange_cap and hic_height, both falling back to auto.
+# Treat NULL/NA/non-finite/list alike as "unset" (list: a settings file written without toJSON(null = "null"), as .pt_write_project_files() now writes it, stores a NULL setting as {}, which fromJSON() reads back as an empty list); shared by RENDER_CFG's zrange_cap and hic_height, both falling back to auto.
 clean_optional_numeric <- function(v) {
   if (is.null(v) || is.list(v) || is.na(v) || !is.finite(v)) NULL else v
 }
 
-# Every render/lookup call site's single "cfg" object (Phase C.3 decision 7,
-# replaces the old cur_settings() reactive + settings_modal()'s session-only
-# input$s_... overrides). Bundles a few genome-derived fields
+# Every render/lookup call site's single "cfg" object. Bundles a few genome-derived fields
 # (orgdb_pkg/genome_label/tx_*_lookup_path) alongside the flat CFG keys purely
-# so callers keep getting one object with both.
-.pt_render_cfg <- function(CFG, GENOME) list(
+# so callers keep getting one object with both, plus the project's cache folder.
+.pt_render_cfg <- function(CFG, GENOME, cache_dir) list(
   txdb_path   = GENOME$txdb_path,
+  cache_dir   = cache_dir,
   gtf_path    = CFG$gtf_path,
   samples     = CFG$samples,
   orgdb_pkg           = GENOME$orgdb,
@@ -39,6 +37,7 @@ clean_optional_numeric <- function(v) {
   hic_height   = clean_optional_numeric(CFG$hic_height),
   hic_res_mode = CFG$hic_res_mode %||% "auto",
   hic_max_bins_per_view = CFG$hic_max_bins_per_view %||% 500,
+  hic_resolution = clean_optional_numeric(CFG$hic_resolution),
   diff_colour_lo  = trimws(CFG$diff_colour_lo %||% "#0033CC"),
   diff_colour_hi  = trimws(CFG$diff_colour_hi %||% "#CC0000"),
   junction_opacity_cap = CFG$junction_opacity_cap %||% 2,
@@ -65,12 +64,14 @@ clean_optional_numeric <- function(v) {
   hic_res_mode = cfg$hic_res_mode,
   hic_height   = cfg$hic_height,
   hic_max_bins_per_view = cfg$hic_max_bins_per_view,
+  hic_resolution = cfg$hic_resolution,
   atac_height = cfg$atac_height,
   chr_fmt   = cfg$chr_fmt,
   show_track_axes = cfg$show_track_axes,
   show_title      = cfg$show_title,
   show_scale_bar  = cfg$show_scale_bar,
   txdb_path = cfg$txdb_path,
+  cache_dir = cfg$cache_dir,
   gtf_path  = cfg$gtf_path,
   orgdb_pkg           = cfg$orgdb_pkg,
   genome_label        = cfg$genome_label,
@@ -119,7 +120,7 @@ clean_optional_numeric <- function(v) {
   )
 }
 
-# Converts TRACK_ITEMS entries (picker selections, utils/track_detection.R's shape) into pipeline/render_all()'s entry shape; height/data are always NULL here since render_all()'s settings_<viz>() functions compute height themselves.
+# Converts track items (picker selections, track_detection.R's shape) into render_all()'s entry shape; height/data are always NULL here since render_all()'s settings_<viz>() functions compute height themselves.
 .pt_build_entries <- function(figure_labels, track_items, col_map, settings) {
   Filter(Negate(is.null), lapply(figure_labels, function(lbl) {
     sp <- track_items[[lbl]]
@@ -132,7 +133,7 @@ clean_optional_numeric <- function(v) {
     # identity/PALETTE colour -- "which one is the baseline" reads the same
     # way in every comparison track regardless of the samples involved.
     if (!is.null(sp$samples) && length(sp$samples) == 2) {
-      known <- c("key", "label", "type", "sample", "file", "colour_key", "samples",
+      known <- c("key", "label", "type", "name", "sample", "file", "colour_key", "samples",
                  "control_label", "treatment_label", "control_path", "treatment_path")
       extra <- sp[setdiff(names(sp), known)]  # e.g. junctions_mirrored_diff_tpm_scaled's control_quant/treatment_quant
       return(c(list(
@@ -147,14 +148,22 @@ clean_optional_numeric <- function(v) {
 
     col <- if (!is.na(sp$colour_key %||% NA)) col_map[[sp$colour_key]] else NA_character_
     entry <- list(viz = sp$type, height = NULL, data = NULL)
-    if (sp$type == "tpm_usage") {
-      entry <- c(entry, list(sample = sp$sample, colour = col, quant_path = sp$quant_path, junction_path = sp$junction_path))
-    } else if (sp$type == "sashimi") {
-      entry <- c(entry, list(sample = sp$sample, colour = col, name = sp$name, path = sp$junction_path))
-    } else if (sp$type %in% c("bw", "hic", "bed")) {
-      entry <- c(entry, list(sample = sp$sample, colour = col, name = sp$name, path = sp$file))
-      if (sp$type == "hic") entry$hic_style <- settings$hic_style
-    }
+    if (is.na(sp$sample %||% NA)) return(entry)  # a sample-free track
+    # A per-sample track: its sample and colour, then the item's data fields, then the
+    # project settings its module copies into each entry. The data fields are the item's
+    # name, its path (from the module's path_field) and whatever its own detect_<key>() put
+    # on the item, except fields named like the entry's own (viz, height, data, colour,
+    # path, the module's entry settings). An item made by the generic detection keeps an
+    # NA path, so a track with no file says so; one made by a detect_<key>() has a path
+    # only when its path field holds one.
+    info <- .pt_viz_info(sp$type)
+    ui <- c("key", "label", "type", "sample", "file", "colour_key", "broken", info$path_field)
+    data <- sp[setdiff(names(sp), c(ui, "viz", "height", "data", "colour", "path"))]
+    path <- sp[[info$path_field]]
+    no_path <- length(path) == 0 || (length(path) == 1 && is.na(path))
+    if (is.null(.pt_module_fn("detect", sp$type)) || !no_path) data$path <- path
+    entry <- c(entry, list(sample = sp$sample, colour = col), data)
+    for (s in info$entry_settings) entry[[s]] <- settings[[s]]
     entry
   }))
 }

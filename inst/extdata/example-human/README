@@ -4,7 +4,7 @@ PlotTrellis example dataset
 A small slice of human (hg38) ENCODE data around chr14:24128000-24170000 (PSME1, EMC9, PSME2,
 RNF31, IRF9 and neighbours), for two cell lines: GM12878 (lymphoblastoid) and K562
 (myeloid leukaemia). Open it with plottrellis_example(); the tracks are called 'atac'
-and 'junctions' (plus transcript-usage tracks from the quant folders).
+and 'junctions' (plus transcript expression tracks from the quant folders).
 
 Files
   samples.txt           the PlotTrellis samples file (relative paths)

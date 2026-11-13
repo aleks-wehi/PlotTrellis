@@ -1,33 +1,28 @@
-# Phase D.3 step 2: one correct-render golden image per surviving module,
-# per fixture dataset (mouse/human) -- the phase's own "every surviving
-# module has at least one correct-render test" bar. Later steps in this
-# file's siblings (cross-module composition, non-default settings, Hi-C
+# One correct-render golden image per module, per fixture dataset
+# (mouse/human), so every module has at least one correct-render test. The
+# sibling files (cross-module composition, non-default settings, Hi-C
 # resolution tiers, settings-wired QC) build on top of this grid, they
 # don't replace it.
 #
 # Every region_params/rows/settings binding below is fresh inside its own
-# test_that() (never shared across blocks) -- plain style hygiene, kept from
-# the pre-cutover suite; render_all() takes region_params/settings as
-# explicit arguments and has no global-state side effects, so cross-block
-# reuse would no longer be a correctness risk the way it once was.
+# test_that() (never shared across blocks) -- plain style hygiene;
+# render_all() takes region_params/settings as explicit arguments and has
+# no global-state side effects.
 #
-# viz/bed.R gap: mouse_mammary_test has no standalone BED-interval file
-# (D.2 only produced bigWig ATAC coverage for mouse, no peak calls) -- only
-# the human dataset's ATAC IDR-peaks BED exercises this module. Logged as
-# an open, known fixture gap (not papered over with fabricated mouse data);
-# revisit if a mouse peaks BED ever lands.
+# bed gap: mouse_mammary_test has no standalone BED-interval file (only
+# bigWig ATAC coverage for mouse, no peak calls) -- only the human
+# dataset's ATAC IDR-peaks BED exercises this module. A known fixture gap
+# (not papered over with fabricated mouse data); revisit if a mouse peaks
+# BED ever lands.
 #
 # hic/human uses a wider region (flank_pct=25, i.e. a 2500% flank
 # MULTIPLIER, not a literal percent -- don't "fix" this down to 0.25) --
 # ~4Mb around PTPRC, instead of the dataset default. The human .hic
 # fixture is CTCF ChIA-PET data,
 # much sparser than a real Hi-C matrix, and the default gene-scale window
-# (~150kb) has no bins with any signal, hitting the pre-existing empty-
-# matrix crash logged as BUGS.md #14 ("Cannot add heatmap legend to a plot
-# without a colour palette"). Confirmed live 2026-09-01: flank_pct=25 is
-# the first value of {2, 10, 25, 50} that actually renders. Out of D.3's
-# surgical scope to fix #14 itself; this just picks a region where the
-# real bug doesn't fire, same principle as sashimi's mouse case below.
+# (~150kb) has no bins with any signal, so it would only draw an empty track
+# (test-soft-fail.R covers that). flank_pct=25 is the first value of
+# {2, 10, 25, 50} that draws a matrix.
 single_cases <- list(
   list(module = "bw",                    dataset = "mouse", sample = "Ba"),
   list(module = "bw",                    dataset = "human", sample = "GM12878"),
@@ -37,7 +32,7 @@ single_cases <- list(
   list(module = "hic",                   dataset = "human", sample = "GM12878", flank_pct = 25),
   list(module = "protein_domains",       dataset = "mouse", sample = "Ba"),
   list(module = "protein_domains",       dataset = "human", sample = "GM12878"),
-  list(module = "sashimi",               dataset = "human", sample = "GM12878"),
+  list(module = "junctions",             dataset = "human", sample = "GM12878"),
   list(module = "tpm_usage",             dataset = "mouse", sample = "Ba"),
   list(module = "tpm_usage",             dataset = "human", sample = "GM12878"),
   list(module = "transcripts",           dataset = "mouse", sample = "Ba"),
@@ -68,25 +63,10 @@ for (cs in single_cases) {
   })
 }
 
-# sashimi's mouse case is a known, logged, pre-existing gap, not a
-# golden-image case: the mouse dataset's only "Junctions"-slot data is
-# repurposed OmniC/FitHiChIP Hi-C loop calls (BEDPE), not real splice
-# junctions. Every window with a real loop call hits BUGS.md #20 (crashes
-# formatting a non-integer nSupport with "%d"); an empty window hits #19
-# (zero-row data.frame() crash). Both are pre-existing bugs, out of this
-# phase's surgical scope. Human's real BED12 junction data already gives
-# sashimi its required correct-render coverage above.
-test_that("sashimi mouse dataset: known-blocked by pre-existing bugs 19/20, not a golden-image case", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
-  skip(paste(
-    "mouse fixture's Junctions slot is repurposed HiChIP loop data with",
-    "continuous (non-integer) scores -- any region with a real loop hits",
-    "BUGS.md #20's heading-format crash, an empty region hits #19's",
-    "zero-row crash. Pre-existing bugs, not fixed by this phase."
-  ))
-})
+# junctions has no mouse case: the mouse dataset's "Junctions" slot holds Hi-C loop
+# calls (BEDPE), not splice junctions. Human's BED12 junctions cover it above.
 
-# ---- Pair (viz_comparisons/*.R) modules -------------------------------------
+# ---- Comparison (two-sample) modules ---------------------------------------
 # junctions_mirrored_diff needs both control/treatment to actually carry
 # junction data -- mouse's LP has none (see helper-fixtures.R), so its pair
 # uses Ba (control) vs P6 (treatment) instead of the Ba/LP pairing used for
@@ -96,7 +76,7 @@ test_that("sashimi mouse dataset: known-blocked by pre-existing bugs 19/20, not 
 # quantdir data (its per-side gene-TPM lookup requires quantdir). No mouse
 # pair satisfies both: Ba has junction+quantdir but LP/P6/P7 each have only
 # one of the two (see helper-fixtures.R's FIXTURES$mouse). Human-only
-# coverage below, same principle as the bed/sashimi mouse gaps above --
+# coverage below, same principle as the bed/junctions mouse gaps above --
 # a real fixture gap, not papered over.
 
 pair_cases <- list(

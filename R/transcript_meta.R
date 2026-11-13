@@ -1,9 +1,8 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/transcript_meta.R:1"
+# Coding status and canonical flag per transcript, from the transcript meta lookup
+# (build_tx_meta_lookup()), keyed by the version-stripped transcript_id.
 
-# TX_META_LOOKUP_PATH is NOT defined here -- this file is only ever inlined
-# (never sourced, see header comment above), and scripts/01_imports.R
-# already defines it as a global in every assembled script (Phase C.0
-# decision 6, GENOME$tx_meta_lookup_path) before this text is pasted in.
+# The transcript metadata lookup is read from the path the caller passes
+# (settings$tx_meta_lookup_path, the file ensure_genome_ready() built).
 
 # GENCODE (vM39) biotypes confidently bucketed as non-protein-coding.
 # Deliberately excludes a few biotypes whose coding status GENCODE itself

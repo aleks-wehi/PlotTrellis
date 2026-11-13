@@ -1,4 +1,4 @@
-# Phase I.1 (2026-10-27): render_all() isolates each track's errors. A failing
+# render_all() isolates each track's errors. A failing
 # settings_/render_ call becomes a red in-figure message naming the track and
 # the reason, and the other tracks still render. Asserts on the SVG text
 # rather than golden images, so no new snapshot files.
@@ -15,10 +15,10 @@ render_svg_text <- function(items, region, settings) {
 test_that("a settings_ error fails only its own track, with the reason shown", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
-  local_mocked_bindings(settings_sashimi = function(...) stop("boom in settings"))
-  items <- list(single_track("bw", rows[["Ba"]]), single_track("sashimi", rows[["Ba"]]))
+  local_mocked_bindings(settings_junctions = function(...) stop("boom in settings"))
+  items <- list(single_track("bw", rows[["Ba"]]), single_track("junctions", rows[["Ba"]]))
   expect_message(svg <- render_svg_text(items, test_region("mouse"), test_settings("mouse")),
-                 "sashimi \\(.*\\) track failed: boom in settings")
+                 "junctions \\(.*\\) track failed: boom in settings")
   expect_match(svg, "track failed: boom in settings", fixed = TRUE)
   expect_match(svg, "<polygon", fixed = TRUE)  # the bw signal track still drew
 })
@@ -27,11 +27,11 @@ test_that("a render_ error fails only its own track, with the reason shown", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   local_mocked_bindings(render_bw = function(...) stop("boom in render"))
-  items <- list(single_track("bw", rows[["Ba"]]), single_track("sashimi", rows[["Ba"]]))
+  items <- list(single_track("bw", rows[["Ba"]]), single_track("junctions", rows[["Ba"]]))
   expect_message(svg <- render_svg_text(items, test_region("mouse"), test_settings("mouse")),
                  "bw \\(.*\\) track failed: boom in render")
   expect_match(svg, "track failed: boom in render", fixed = TRUE)
-  expect_match(svg, ">No data<", fixed = TRUE)  # the sashimi track (no junctions here) still drew
+  expect_match(svg, "Ba (max_h=0 reads)", fixed = TRUE)  # the junctions track (no junctions here) still drew
 })
 
 test_that("the error label survives a message with invalid bytes, and covers partial drawing", {
@@ -49,7 +49,7 @@ test_that("the error label survives a message with invalid bytes, and covers par
   expect_true(any(gregexpr("fill: #FFFFFF", svg, fixed = TRUE)[[1]] > partial_at))
 })
 
-test_that("sashimi heading accepts a non-integer junction score (BUGS.md #20)", {
+test_that("junctions heading accepts a non-integer junction score", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows   <- test_rows("mouse")
   region <- test_region("mouse")
@@ -57,7 +57,7 @@ test_that("sashimi heading accepts a non-integer junction score (BUGS.md #20)", 
   # A FitHiChIP-style BEDPE score, fed in as the pooled junction data.
   local_mocked_bindings(load_junctions = function(...)
     data.frame(intron_start = mid - 5000L, intron_end = mid + 5000L, nSupport = 3.457920544))
-  svg <- render_svg_text(list(single_track("sashimi", rows[["Ba"]])), region, test_settings("mouse"))
+  svg <- render_svg_text(list(single_track("junctions", rows[["Ba"]])), region, test_settings("mouse"))
   expect_match(svg, "max_h=3.46 reads", fixed = TRUE)
   expect_false(grepl("track failed", svg, fixed = TRUE))
 })

@@ -1,3 +1,8 @@
+info_protein_domains <- function() list(
+  kind = "fixed", order = 20, label = "Canonical protein annotation", filter = c(annotation = "Annotations"),
+  needs_gene = TRUE
+)
+
 settings_protein_domains <- function(dict, entry, settings, track_w, region_params) {
   if (is.null(entry$height)) entry$height <- 2.0
   list(dict = dict, entry = entry)
@@ -7,10 +12,12 @@ settings_protein_domains <- function(dict, entry, settings, track_w, region_para
 # lookup outcome, so the whole lookup happens here rather than in settings.
 render_protein_domains <- function(entry, dict, ctx) {
   gene <- ctx$region_params$gene
-  res <- if (.gene_missing(gene)) {
+  res <- if (.pt_no_gene(gene)) {
     list(status = "no_gene")
   } else {
-    gene_protein_domains(gene, ctx$txdb, ctx$gtf_path, ctx$orgdb_pkg, ctx$genome_label)
+    gene_protein_domains(gene, ctx$txdb, ctx$tx_meta_lookup_path, ctx$orgdb_pkg, ctx$genome_label,
+                         cache_dir = file.path(.pt_cache_root(ctx$cache_dir), "protein_domains"),
+                         cds_by_tx = ctx$cds_by_tx)
   }
 
   plotText(label = "Canonical protein annotation", x = ctx$track_x + 0.05, y = ctx$y + 0.02,
@@ -33,13 +40,7 @@ render_protein_domains <- function(entry, dict, ctx) {
   }
 
   if (res$status != "ok") {
-    msg <- switch(res$status,
-      no_gene = "No gene selected for this region",
-      no_uniprot_entry = "No reviewed UniProt entry found for this gene",
-      uniprot_unreachable = "UniProt could not be reached or returned an error (no internet on this machine?) -- retries automatically after 2 minutes",
-      no_domains = "No annotated domain/region/motif features for this gene's canonical isoform",
-      no_canonical_transcript = "UniProt has domain/region/motif features for this gene, but neither the CCDS ID nor a protein-length match could resolve them to a transcript",
-      "Protein domain lookup failed (network issue?) -- will retry on next render")
+    msg <- .pd_status_text(res$status)
     plotText(label = msg, x = ctx$track_x + ctx$track_w / 2, y = ctx$y + header_h + (ctx$height - header_h) / 2,
              just = "center", fontsize = ctx$fontsize - 1, fontfamily = ctx$font, fontcolor = ctx$fontcol)
     return(invisible(NULL))
@@ -60,7 +61,7 @@ render_protein_domains <- function(entry, dict, ctx) {
   n <- length(dids)
 
   if (n == 0) {
-    plotText(label = "No annotated domain/region/motif features for this gene's canonical isoform",
+    plotText(label = .pd_status_text("no_domains"),
              x = ctx$track_x + ctx$track_w / 2, y = ctx$y + (ctx$height + header_h) / 2, just = "center",
              fontsize = ctx$fontsize - 1, fontfamily = ctx$font, fontcolor = ctx$fontcol)
     return(invisible(NULL))
@@ -78,7 +79,7 @@ render_protein_domains <- function(entry, dict, ctx) {
     legend_x <- legend_x + pd_text_w(ty, ctx$fontsize - 2, ctx$font) + 0.14
   }
 
-  # PAGE_W - TRACK_X - TRACK_W is always exactly 1.0in (render_all's fixed right margin).
+  # render_all() leaves a fixed 1.0in right margin (page_w - track_x - track_w) for labels.
   label_maxw <- 1.0 - 0.05 - 0.05
   row_h <- (ctx$height - header_h) / n
 

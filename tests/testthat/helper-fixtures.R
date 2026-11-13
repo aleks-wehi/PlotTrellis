@@ -3,17 +3,15 @@
 # any test-*.R file (its own convention) -- nothing in here should be
 # re-sourced by an individual test file.
 #
-# Fixture-path design (solutions/phase-logs/phase-D.3.md's
-# "regeneration-friendly" decision, 2026-09-01): every dataset's file list
+# Fixture paths: every dataset's file list
 # lives in ONE entry of the FIXTURES list below, with paths relative to
 # that dataset's own data_dir, exactly like project_settings.json's own
 # `samples` shape. Adding a new dataset, or a new file to an existing one
 # (e.g. the user's incoming additional junction/HiC data), is a one-line
 # addition here, never a change to a test-*.R file.
 #
-# Package version (Phase G.1): render_all()/gene_to_coords()/etc. are already
-# in the PlotTrellis namespace via test_check("PlotTrellis") loading the
-# package under test -- no source()/APP_DIR bootstrap needed any more.
+# render_all()/gene_to_coords()/etc. are already in the PlotTrellis namespace
+# via test_check("PlotTrellis") loading the package under test.
 
 suppressMessages({
   library(plotgardener)
@@ -22,9 +20,6 @@ suppressMessages({
   library(GenomicFeatures)
   library(GenomicRanges)
   library(rtracklayer)
-  library(ggplot2)
-  library(org.Mm.eg.db)
-  library(org.Hs.eg.db)
 })
 
 # Real fixture data (genome caches, ATAC/HiC/junction/quant files) lives in a
@@ -33,17 +28,15 @@ suppressMessages({
 # (far too large, and licensed test data) -- every test_that() below starts
 # with skip_if_not(PT_TEST_DATA_AVAILABLE, ...) so `R CMD check` on a machine
 # without this data (e.g. R-universe's build farm) reports these as skipped,
-# not failed. PT_TEST_DATA_DIR overrides the location (the monorepo keeps the
-# fixtures at its root data/, see scripts/sync-plottrellis-to-public.sh).
+# not failed. PT_TEST_DATA_DIR overrides the location.
 DATA_ROOT <- Sys.getenv("PT_TEST_DATA_DIR")
 if (!nzchar(DATA_ROOT)) DATA_ROOT <- testthat::test_path("..", "..", "data")
 PT_TEST_DATA_AVAILABLE <- dir.exists(DATA_ROOT)
 
 # ---- Genome fixtures --------------------------------------------------------
-# Real D.2 annotation caches (data/annotations/gencode.vM25*/gencode.v46*).
-# ensure_genome_ready() is idempotent (utils/genomes.R) -- the TxDb .sqlite
-# already exists from D.2, so only the tx_name/tx_meta lookups get built
-# here, once, the first time this helper runs.
+# Real annotation caches (data/annotations/gencode.vM25*/gencode.v46*).
+# ensure_genome_ready() is idempotent (genomes.R) -- whatever caches are
+# missing get built here, once, the first time this helper runs.
 if (PT_TEST_DATA_AVAILABLE) {
   GENOMES <- list(
     mouse = ensure_genome_ready(
@@ -75,8 +68,8 @@ if (PT_TEST_DATA_AVAILABLE) {
 #   - Mouse `loops/LP_*.bedpe`/`ML_*.bedpe` are genuine 2-byte empty source
 #     files, so LP/ML have no junction entry here; Ba+P6 (both real BEDPE)
 #     cover the mouse-side junction/BEDPE fixtures instead.
-#   - Mouse has no per-condition RNA-seq bigWig (D.2 only produced Salmon
-#     quant.sf, no coverage track) -- no "rna-seq"-named bw instance for
+#   - Mouse has no per-condition RNA-seq bigWig (only Salmon quant.sf, no
+#     coverage track) -- no "rna-seq"-named bw instance for
 #     mouse, only "atac".
 #   - Human junctions/*.bed are real BED12 splice-junction files (STAR/
 #     TopHat convention) -- the human side exercises read_junction_file()'s
@@ -150,11 +143,9 @@ test_rows <- function(dataset) {
 
 # region_params for a dataset's default fixture gene, or an explicit
 # gene/flank override. Uses the real, shared gene_to_coords()
-# (utils/gene_lookup.R) directly -- BUGS.md #17's gene_id-versioning bug
-# that used to break this against the vM25/v46 fixture TxDbs is fixed at
-# the source (utils/genomes.R's ensure_genome_ready() now strips GENCODE
-# version suffixes from a freshly-built TxDb's gene table), so no local
-# workaround is needed here any more.
+# (gene_lookup.R) directly; it matches the fixture TxDbs' gene ids because
+# ensure_genome_ready() strips GENCODE version suffixes from a freshly built
+# TxDb's gene table.
 test_region <- function(dataset, gene = NULL, flank_pct = 0.15) {
   fx   <- FIXTURES[[dataset]]
   gene <- if (is.null(gene)) fx$gene else gene
@@ -165,9 +156,9 @@ test_region <- function(dataset, gene = NULL, flank_pct = 0.15) {
 
 # Minimal settings list for a dataset, with any field overridable (e.g. a
 # non-default atac_height/hic_style/hic_res_mode fixture). settings$samples/
-# data_dir are the RAW shape (see FIXTURES above) -- required by
-# tpm_usage.R/transcripts.R/transcripts_annotated.R's gene_display_transcripts()
-# calls, which do their own load_samples_from_settings() internally.
+# data_dir are the RAW shape (see FIXTURES above) -- required by the
+# transcript tracks' gene_display_transcripts() calls, which do their own
+# load_samples_from_settings() internally.
 test_settings <- function(dataset, overrides = list()) {
   fx <- FIXTURES[[dataset]]
   gm <- GENOMES[[fx$genome]]
@@ -186,29 +177,31 @@ test_settings <- function(dataset, overrides = list()) {
 }
 
 # ---- render_all() entry constructors ----------------------------------------
-# app.R's build_entries() job, reimplemented here since this harness
-# deliberately doesn't source app.R (Shiny-reactive code): converts a
-# sample_row (test_rows()) into the entry shape render_all() consumes.
+# What .pt_build_entries() (figure_helpers.R) does for the app, here from a
+# sample_row (test_rows()) instead of the app's track items: converts it
+# into the entry shape render_all() consumes.
 #
 # entry$viz vs data-instance `type`: a single underlying FILE FORMAT ("bw")
 # can back more than one VISUALISATION (a plain bw track, and a bw-vs-bw
-# comparison track). `viz` is the only field render_all()'s dispatch tables
-# read; for a plain single-file track it's also the data-instance type
-# (bw/hic/bed), except sashimi/junctions_mirrored_diff*, which read
-# "paired-end" instances under a viz name that's never literally that.
+# comparison track). `viz` is the only field render_all() dispatches on; for a plain single-file track it's also the data-instance type
+# (bw/hic/bed), except junctions/junctions_mirrored_diff*, which read
+# "paired-end" instances under a viz name that's never literally that. The data
+# type and the kind come from the module's own info_<key>(); a type that is not a
+# declared track of the kind asked for is an error.
 build_entry <- function(type, sample_row) {
-  if (type %in% c("genes", "transcripts_all", "transcripts", "transcripts_annotated", "protein_domains")) {
+  info <- .pt_viz_info(type)
+  if (identical(info$kind, "fixed")) {
     return(list(viz = type, height = NULL, data = NULL))
   }
   if (type == "tpm_usage") {
     return(list(
       viz = "tpm_usage", sample = sample_row$display, colour = sample_row$colour %||% "#1B9E77",
       quant_path = sample_data_path(sample_row, "quantdir"),
-      junction_path = sample_data_path(sample_row, "paired-end", name = "Junctions"),
       height = NULL, data = NULL
     ))
   }
-  data_type <- if (type == "sashimi") "paired-end" else type
+  if (!identical(info$kind, "sample")) stop("build_entry(): '", type, "' is not a per-sample or sample-free track type")
+  data_type <- info$data_type
   inst <- Find(function(d) d$type == data_type, sample_row$data)
   if (is.null(inst)) stop("build_entry(): no '", data_type, "' instance for sample '", sample_row$display, "'")
   list(
@@ -218,7 +211,9 @@ build_entry <- function(type, sample_row) {
 }
 
 build_comparison_entry <- function(type, control_row, treatment_row) {
-  data_type <- if (type == "bw_diff_stacked") "bw" else "paired-end"
+  info <- .pt_viz_info(type)
+  if (!identical(info$kind, "comparison")) stop("build_comparison_entry(): '", type, "' is not a comparison track type")
+  data_type <- info$data_type
   ctrl_inst  <- Find(function(d) d$type == data_type, control_row$data)
   treat_inst <- Find(function(d) d$type == data_type, treatment_row$data)
   if (is.null(ctrl_inst) || is.null(treat_inst)) {
@@ -239,9 +234,9 @@ build_comparison_entry <- function(type, control_row, treatment_row) {
 }
 
 # One entry for a single-sample viz. `settings` only matters for "hic"
-# (production's build_entries() attaches settings$hic_style onto the entry
-# itself -- settings_hic()/render_hic() never read settings$hic_style
-# directly, see pipeline/viz/hic.R). An explicit `height` sets entry$height
+# (.pt_build_entries() copies settings$hic_style onto the entry itself --
+# settings_hic()/render_hic() never read settings$hic_style directly,
+# see viz-hic.R). An explicit `height` sets entry$height
 # up front, same override precedence render_all()'s settings_<viz>()
 # functions already give a non-NULL entry$height.
 single_track <- function(type, sample_row, extra = list(), height = NULL, settings = NULL) {
@@ -261,8 +256,7 @@ pair_track <- function(type, control_row, treatment_row, extra = list(), height 
 # whichever device is already open when called, same convention vdiffr's
 # writer/comparer already expects.
 #
-# Phase D.4 step 8: optional perf_id/module (both default NULL, so every
-# pre-existing call site is unaffected). When perf_id is supplied, the
+# Optional perf_id/module (both default NULL). When perf_id is supplied, the
 # returned closure times its own draw (system.time() around the real
 # render_all() call) and records it via record_perf() -- which also
 # asserts against _perf_baseline.csv's recorded value for this exact
@@ -283,7 +277,7 @@ test_fig <- function(track_specs, region_params, settings, perf_id = NULL, modul
   }
 }
 
-# ---- Performance-baseline instrumentation (Phase D.4 step 8) ---------------
+# ---- Performance-baseline instrumentation ---------------------------------
 # _perf_baseline.csv (columns: fixture, module, seconds) lives alongside
 # _snaps/ and is committed the same way -- written once, the first time this
 # suite runs clean with every correct-render fixture instrumented (see
@@ -303,11 +297,9 @@ PERF_TIMES <- new.env()
 PERF_TIMES$records <- list()
 PERF_TIMES$started <- character(0)
 
-# Per Phase D Q3 (solutions/concepts/11-phase-dry-run-decisions.md) the
-# regression ceiling is a multiple of the recorded baseline seconds, not an
-# absolute ceiling: 2x. (Briefly 3x on 2026-10-27 for login-node load noise;
-# back to 2x once full runs moved to a compute node via
-# scripts/run-tests-on-node.sh, where 2x passes.) Asserted here (inside the helper) rather
+# The regression ceiling is a multiple of the recorded baseline seconds, not an
+# absolute ceiling: 2x (a loaded login node can exceed it; a compute node
+# doesn't). Asserted here (inside the helper) rather
 # than at each call site -- testthat attributes an expectation raised from
 # inside a helper function to whichever test_that() block is currently
 # executing, the same convention every other assertion helper in this file

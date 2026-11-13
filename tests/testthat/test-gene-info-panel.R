@@ -6,9 +6,6 @@
 # protein-domain lookup are replaced in memory. render_all() is stubbed (the figure
 # itself doesn't matter here).
 
-# No project open (an earlier test file may have opened one): caches go beside the GTF.
-.pt_set_cache_root(NULL)
-
 gi_composer <- function() {
   proj <- tempfile("pt-gene-info-"); dir.create(proj)
   json <- file.path(proj, "project_settings.json")
@@ -26,17 +23,24 @@ local_fake_uniprot <- function(env = parent.frame()) {
   mem$cache <- list(); mem$reads <- 0L; mem$pd_genes <- character(0); mem$pd_calls <- 0L
   local_mocked_bindings(
     render_all = function(entries, region_params, settings, device_fn) invisible(NULL),
-    .uniprot_canonical_cache_load = function() mem$cache,
-    .uniprot_canonical_cache_save = function(cache) mem$cache <- cache,
+    .uniprot_canonical_cache_load = function(path) {
+      mem$uniprot_cache_path <- path
+      mem$cache
+    },
+    .uniprot_canonical_cache_save = function(cache, path) mem$cache <- cache,
     .uniprot_read_lines = function(url) {
       mem$reads <- mem$reads + 1L
       if (grepl("/search?", url, fixed = TRUE)) "Q99999"
       else c("ID   TEST_MOUSE              Reviewed;          99 AA.",
              "SQ   SEQUENCE   99 AA;  11111 MW;  0000000000000000 CRC64;")
     },
-    .pt_gi_pd_cached = function(gene, genome_label) gene %in% mem$pd_genes,
+    .pt_gi_pd_cached = function(gene, genome_label, pd_dir) {
+      mem$pd_dir <- pd_dir
+      gene %in% mem$pd_genes
+    },
     gene_protein_domains = function(gene_symbol, ...) {
       mem$pd_calls <- mem$pd_calls + 1L
+      mem$pd_got_cds <- methods::is(list(...)$cds_by_tx, "GRangesList")  # the app's CDS_BY_TX is passed on
       mem$pd_genes <- union(mem$pd_genes, gene_symbol)
       list(status = "no_domains", gene = gene_symbol)
     },
@@ -119,6 +123,10 @@ test_that("UniProt parts show a loading note when their cache is cold, and fill 
   expect_equal(mem$reads, 2L)  # one search + one record, then cached
   expect_true("org.Mm.eg.db|Elf5" %in% names(mem$cache))
   expect_equal(mem$pd_calls, 1L)
+  expect_true(mem$pd_got_cds)
+  # Both caches are the project's own.
+  expect_identical(dirname(mem$uniprot_cache_path), file.path(cp$proj, "cache"))
+  expect_identical(mem$pd_dir, file.path(cp$proj, "cache", "protein_domains"))
 
   # Warm (a new session, so nothing is held in memory): filled from the first value on.
   shiny::testServer(cp$app, {

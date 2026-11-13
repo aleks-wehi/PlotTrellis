@@ -1,19 +1,21 @@
+info_transcripts_all <- function() list(
+  kind = "fixed", order = 30, label = "Transcripts", filter = c(annotation = "Annotations"),
+  needs_gene = TRUE
+)
+
 settings_transcripts_all <- function(dict, entry, settings, track_w, region_params) {
   entry <- load_transcripts(entry, region_params, settings)
   tx <- entry$data$tx_all[order(entry$data$tx_all$transcript_name), ]
   entry$data$tx <- tx
   entry$data$colours <- transcript_colours(tx$transcript_name)
-  if (is.null(entry$height)) {
-    n <- nrow(tx)
-    entry$height <- if (n > 0) 0.2 + n * 0.16 else 2.4  # row_h below must match this 0.16
-  }
+  if (is.null(entry$height)) entry$height <- .pt_tx_height(nrow(tx), settings$fontsize)
   list(dict = dict, entry = entry)
 }
 
 render_transcripts_all <- function(entry, dict, ctx) {
   plotText(label = "Transcripts", x = ctx$track_x + 0.05, y = ctx$y + 0.02, just = c("left", "top"),
            fontsize = ctx$fontsize - 1, fontface = "bold", fontfamily = ctx$font, fontcolor = ctx$fontcol)
-  header_h <- 0.2
+  header_h <- .pt_tx_header_h(ctx$fontsize)
   tx <- entry$data$tx
   n_rows <- nrow(tx)
 
@@ -24,7 +26,7 @@ render_transcripts_all <- function(entry, dict, ctx) {
     return(invisible(NULL))
   }
 
-  row_h <- 0.16  # must match settings_transcripts_all's height formula
+  row_h <- .pt_tx_row_h(ctx$fontsize)
   row_y <- ctx$y + header_h + (seq_len(n_rows) - 1) * row_h
   label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches", valueOnly = TRUE)
   colours <- entry$data$colours

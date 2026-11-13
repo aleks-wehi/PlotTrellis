@@ -1,5 +1,5 @@
 # Builds inst/extdata/example-human/, the small example dataset bundled with PlotTrellis
-# (copied to a temporary folder and returned by plottrellis_example()).
+# (its samples.txt is what pt_example("human") returns).
 #
 # One ~65 kb locus on chr14 (hg38), cut from the ENCODE GM12878 vs K562 fixture in the
 # monorepo's data/human_encode_test/ (see that folder's README.md for how those files
@@ -8,7 +8,7 @@
 # PSME1 are expressed much higher in GM12878 than in K562 (a visible TPM contrast).
 #
 # Run from the package root (Shiny-apps/PlotTrellis-pkg/):
-#   Rscript data-raw/make-example.R
+#   Rscript data-raw/build-example-data-human.R
 # The full-size source data is looked for in $PT_TEST_DATA_DIR (the same variable the
 # test suite uses), else ../../data. Not part of the installed package (.Rbuildignore).
 #
@@ -111,7 +111,7 @@ writeLines(c(
           CHROM, GENE_WINDOW[1], GENE_WINDOW[2]),
   "RNF31, IRF9 and neighbours), for two cell lines: GM12878 (lymphoblastoid) and K562",
   "(myeloid leukaemia). Open it with plottrellis_example(); the tracks are called 'atac'",
-  "and 'junctions' (plus transcript-usage tracks from the quant folders).",
+  "and 'junctions' (plus transcript expression tracks from the quant folders).",
   "",
   "Files",
   "  samples.txt           the PlotTrellis samples file (relative paths)",

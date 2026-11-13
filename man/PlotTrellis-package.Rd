@@ -9,9 +9,10 @@
 A plotgardener-based genomic track composer that lets biologists build common EDA visualisations (coverage, Hi-C, splice junctions, transcript structure, protein domains) via a Shiny interface, without writing code, and download a standalone R script that reproduces the exact figure offline.
 }
 \details{
-For developers: adding a new viz type is a matter of defining a
-\verb{settings_<key>()}/\verb{render_<key>()} pair -- see \link{viz-module-contract} for
-the convention and \link{viz-module-discovery} for how modules are found.
+For developers: adding a new track type is a matter of defining its
+\verb{info_<key>()}, \verb{settings_<key>()} and \verb{render_<key>()} functions -- see
+\link{viz-module-contract} for the convention and \link{viz-module-discovery} for how
+modules are found.
 }
 \author{
 \strong{Maintainer}: Aleksander Pacnik \email{pacnik.a@wehi.edu.au}

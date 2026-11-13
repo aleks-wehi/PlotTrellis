@@ -8,8 +8,8 @@
 # The .gz files live in a sibling _snaps_gz/ directory, not inside _snaps/
 # itself: testthat::test_dir() prunes any file under _snaps/<test-file>/ that
 # a test run didn't touch as an "unused snapshot", and it doesn't recognise
-# .svg.gz as a snapshot format, so it silently deleted these 6 files after
-# every run when they lived alongside the plain .svg (BUGS.md #45).
+# .svg.gz as a snapshot format, so it would silently delete them after every
+# run if they lived alongside the plain .svg.
 #
 # To update one of these snapshots: run the normal vdiffr snapshot-update
 # workflow (produces a plain .svg under _snaps/), then replace the
@@ -22,9 +22,8 @@
 # "g") -- every expect_doppelganger() call is behind
 # skip_if_not(PT_TEST_DATA_AVAILABLE) too, so without fixture data none of
 # these references would ever be touched by a test in the run. Decompressing
-# them anyway just leaves all 45 for testthat's unused-snapshot pruning (see
-# above) to delete again. Pruning deletes but doesn't fail the test run
-# (BUGS.md #50 spike, 2026-10-27: 39 pruned, still FAIL 0), and the plain
+# them anyway just leaves them all for testthat's unused-snapshot pruning (see
+# above) to delete again. Pruning deletes but doesn't fail the test run, and the plain
 # _snaps/*.svg are untracked, so this only avoids wasted work.
 if (PT_TEST_DATA_AVAILABLE) {
   snaps_gz_dir <- testthat::test_path("_snaps_gz")

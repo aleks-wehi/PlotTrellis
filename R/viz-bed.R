@@ -1,3 +1,5 @@
+info_bed <- function() list(kind = "sample", data_type = "bed", order = 30, filter = c(bed = "BED"))
+
 settings_bed <- function(dict, entry, settings, track_w, region_params) {
   if (is.null(entry$height)) entry$height <- 0.32
   list(dict = dict, entry = entry)
@@ -5,14 +7,13 @@ settings_bed <- function(dict, entry, settings, track_w, region_params) {
 
 render_bed <- function(entry, dict, ctx) {
   entry <- load_bed(entry, ctx$region_params)
-  if (isTRUE(entry$data$failed)) {
-    label <- if (isTRUE(entry$data$no_chrom)) "Chromosome not found" else "No data"
-    no_data_text(ctx$track_x, ctx$y, ctx$track_w, ctx$height, ctx$fontsize - 1, ctx$font, ctx$fontcol, label = label)
+  if (isTRUE(entry$data$no_chrom)) {
+    .pt_status_text(ctx, "Chromosome not found")
     return(invisible(NULL))
   }
   line_h <- 0.16
   line_y <- ctx$y + ctx$height - line_h
-  plotRanges(
+  if (!isTRUE(entry$data$empty)) plotRanges(
     data = entry$path, params = ctx$region,
     chrom = entry$data$chrom, chromstart = ctx$region_params$start, chromend = ctx$region_params$end,
     x = ctx$track_x, y = line_y, width = ctx$track_w, height = line_h,

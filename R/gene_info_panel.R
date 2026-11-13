@@ -39,23 +39,27 @@
 
 .PT_GI_UNIPROT_LOADING <- "Fetching UniProt annotations (first time for this gene can take a few seconds)..."
 
-# Whether the UniProt canonical-isoform cache already holds this gene (same key as
-# uniprot_canonical_match()).
-.pt_gi_uniprot_cached <- function(gene, orgdb) {
-  !is.null(.uniprot_canonical_cache_load()[[paste0(orgdb, "|", gene)]])
+# Whether the UniProt canonical-isoform cache file at cache_path already holds this
+# gene (same key as uniprot_canonical_match()).
+.pt_gi_uniprot_cached <- function(gene, orgdb, cache_path) {
+  !is.null(.uniprot_canonical_cache_load(cache_path)[[paste0(orgdb, "|", gene)]])
 }
 
-# Whether gene_protein_domains() has this gene on disk (same path as its cache_file).
-.pt_gi_pd_cached <- function(gene, genome_label) {
-  file.exists(file.path(PROTEIN_DOMAINS_CACHE_DIR, genome_label, paste0(gene, ".rds")))
+# Whether gene_protein_domains() has this gene on disk in the protein-domain cache
+# folder pd_dir (same path as its cache_file).
+.pt_gi_pd_cached <- function(gene, genome_label, pd_dir) {
+  file.exists(file.path(pd_dir, genome_label, paste0(gene, ".rds")))
 }
 
-# genome: list(orgdb_pkg, tx_name_lookup_path, tx_meta_lookup_path, gtf_path,
-# genome_label). reviewed_only: a reactive giving the live uniprot_reviewed_only.
-.pt_gene_info_server <- function(input, output, session, state, txdb, cds_by_tx, genome, reviewed_only) {
+# genome: list(orgdb_pkg, tx_name_lookup_path, tx_meta_lookup_path, genome_label,
+# cache_dir). reviewed_only: a reactive giving the live uniprot_reviewed_only.
+.pt_gene_info_server <- function(output, session, state, txdb, cds_by_tx, genome, reviewed_only) {
+  cache_root <- .pt_cache_root(genome$cache_dir)
+  uc_path <- file.path(cache_root, "uniprot_canonical_cache.rds")
+  pd_dir  <- file.path(cache_root, "protein_domains")
   gene <- reactive({
     g <- state$rendered_gene
-    if (is.null(g) || length(g) != 1 || is.na(g) || !nzchar(g)) NULL else g
+    if (.pt_no_gene(g)) NULL else g
   })
 
   output$gene_info_gene <- renderText(gene() %||% "")
@@ -99,10 +103,11 @@
   }
 
   uc_fetch <- function(g, ann) tryCatch(
-    uniprot_canonical_match(g, ann$tx_id, cds_by_tx, ann$ccds_id, orgdb = genome$orgdb_pkg),
+    uniprot_canonical_match(g, ann$tx_id, cds_by_tx, ann$ccds_id, orgdb = genome$orgdb_pkg, cache_path = uc_path),
     error = function(e) NULL)
   pd_fetch <- function(g) tryCatch(
-    gene_protein_domains(g, txdb, genome$gtf_path, genome$orgdb_pkg, genome$genome_label),
+    gene_protein_domains(g, txdb, genome$tx_meta_lookup_path, genome$orgdb_pkg, genome$genome_label,
+                         cache_dir = pd_dir, cds_by_tx = cds_by_tx),
     error = function(e) list(status = "error", message = conditionMessage(e)))
 
   output$gr_extras_ui <- renderUI({
@@ -118,12 +123,12 @@
       # GTF-derived columns above, which don't depend on it.
       hit <- stored(uc_store, gene)
       uc <- if (!is.null(hit)) hit$value
-            else if (.pt_gi_uniprot_cached(gene, genome$orgdb_pkg)) uc_fetch(gene, ann)
+            else if (.pt_gi_uniprot_cached(gene, genome$orgdb_pkg, uc_path)) uc_fetch(gene, ann)
             else {
               uc_loading <- TRUE
               if (is_open("gr_extras_ui"))
                 defer(uc_store, "uc", gene, function() uc_fetch(gene, ann),
-                      function() .pt_gi_uniprot_cached(gene, genome$orgdb_pkg))
+                      function() .pt_gi_uniprot_cached(gene, genome$orgdb_pkg, uc_path))
               NULL
             }
       if (is.null(uc) || nrow(uc) != nrow(ann)) {
@@ -247,23 +252,17 @@
 
     hit <- stored(pd_store, gene)
     pd <- if (!is.null(hit)) hit$value
-          else if (.pt_gi_pd_cached(gene, genome$genome_label)) pd_fetch(gene)
+          else if (.pt_gi_pd_cached(gene, genome$genome_label, pd_dir)) pd_fetch(gene)
           else NULL
     if (is.null(pd)) {
       if (is_open("gr_protein_ui"))
         defer(pd_store, "pd", gene, function() pd_fetch(gene),
-              function() .pt_gi_pd_cached(gene, genome$genome_label))
+              function() .pt_gi_pd_cached(gene, genome$genome_label, pd_dir))
       return(tags$div(class = "text-muted gene-info-uniprot-loading", style = "font-style:italic;",
                       .PT_GI_UNIPROT_LOADING))
     }
 
-    pd_msg <- switch(pd$status,
-      no_uniprot_entry     = "No reviewed UniProt entry found for this gene",
-      no_domains           = "No annotated domain/region/motif features for this gene's canonical isoform",
-      no_canonical_transcript = "UniProt's canonical isoform could not be matched to any annotated transcript for this gene",
-      ok = NULL,
-      "Protein domain lookup failed (network issue?) -- will retry on next render"
-    )
+    pd_msg <- .pd_status_text(pd$status, panel = TRUE)
 
     method_label <- if (identical(pd$status, "ok")) switch(pd$method,
       ccds_id_join                    = "via CCDS ID",

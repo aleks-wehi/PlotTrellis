@@ -24,7 +24,7 @@ app opens the project already there, or the setup wizard if there is none.}
 Invisibly, the value the app finally stopped with (\code{"closed"} from Close app).
 }
 \description{
-The usual way to start PlotTrellis: a 2-page Shiny app (Compose | Output) for building
+The usual way to start PlotTrellis: a Shiny app (Compose, then Output on the same page) for building
 plotgardener figures without writing code, and downloading a standalone R script that
 reproduces each one. Opens the setup wizard when \code{project_dir} has no
 \code{project_settings.json} yet (or after Edit project settings), otherwise the composer,

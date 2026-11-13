@@ -1,6 +1,6 @@
 load_transcripts <- function(entry, region_params, settings) {
   gene <- region_params$gene
-  if (.gene_missing(gene)) {
+  if (.pt_no_gene(gene)) {
     entry$data <- list(
       tx_all = data.frame(transcript_id = character(0), transcript_name = character(0),
                            tx_id_stripped = character(0), coding_status = character(0), is_canonical = logical(0)),
@@ -8,15 +8,18 @@ load_transcripts <- function(entry, region_params, settings) {
     )
     return(entry)
   }
-  .set_transcript_filter_globals(settings)
-  tx_all <- gtf_transcript_structure(gene, settings$gtf_path)
+  anno <- .pt_annotation(settings)
+  tx_all <- gtf_transcript_structure(gene, anno)
   meta <- transcript_coding_meta(tx_all$tx_id_stripped, lookup_path = settings$tx_meta_lookup_path)
   tx_all$coding_status <- meta$coding_status
   tx_all$is_canonical  <- meta$is_canonical
 
   needs_named <- entry$viz %in% c("transcripts", "transcripts_annotated", "tpm_usage")
   named <- if (needs_named) {
-    gene_display_transcripts(gene, settings$gtf_path, settings$samples, settings$data_dir)$named
+    gene_display_transcripts(gene, anno, settings$samples, settings$data_dir,
+                             min_display_tpm = settings$min_display_tpm,
+                             cache_path = file.path(.pt_cache_root(settings$cache_dir),
+                                                    "gene_display_transcripts_cache.rds"))$named
   } else {
     tx_all$transcript_name
   }

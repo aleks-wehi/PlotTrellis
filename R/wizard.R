@@ -1,13 +1,17 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/wizard.R:1"
+# The setup wizard: a Shiny app of its own (wizard_ui()/wizard_server()) for a first-time
+# setup and for editing an existing project's settings, with nothing from the composer
+# loaded. Save writes project_settings.json; Save and Close then stop it with "restart",
+# and run_plottrellis()'s loop starts the composer. The samples live in
+# project_settings.json; a samples.txt is only imported or exported here.
 
-WIZARD_DEFAULT_COLOUR <- "#1f78b4"  # PALETTE[1] -- see app.R; not re-cycled per sample, a minor known simplification
+WIZARD_DEFAULT_COLOUR <- "#1f78b4"  # PALETTE[1] (figure_helpers.R); the same for every new sample, not cycled
 
 WIZARD_DATA_TYPES <- list(
   bw          = list(label = "BigWig coverage (ATAC / ChIP-seq / CUT&RUN / RNA-seq)", ext = "\\.(bw|bigWig)$"),
   hic         = list(label = "Hi-C contact map",                                     ext = "\\.(hic|cool|mcool)$"),
-  bed         = list(label = "BED intervals",                                       ext = "\\.(bed|narrowPeak|broadPeak|gappedPeak)$"),
-  `paired-end` = list(label = "Paired-interval arcs (BED12 splice junctions or BEDPE loop calls)",
-                       ext  = "\\.(bed|bed12|bedpe)$")
+  bed         = list(label = "BED intervals",                                       ext = "\\.(bed|narrowPeak|broadPeak|gappedPeak)(\\.gz)?$"),
+  `paired-end` = list(label = "Paired-interval arcs (BED12 or BED6 splice junctions, or BEDPE or HiCCUPS loop calls)",
+                       ext  = "\\.(bed|bed12|bedpe)(\\.gz)?$")
 )
 
 # Returns paths relative to data_root (for populating an instance's path selectize); quantdir instead lists directories containing quant.sf, not extension-matched files.
@@ -23,34 +27,35 @@ wizard_scoped_choices <- function(data_root, type) {
   substring(files, nchar(data_root) + 2)
 }
 
-# A literal "\u00b7" not surrounded by spaces breaks format_track_label()'s bolding regex (Phase C.0 open issue #2) -- reject at entry time.
+# A literal "\u00b7" not surrounded by spaces breaks format_track_label()'s bolding regex -- reject at entry time.
 wizard_name_has_bad_dot <- function(name) {
   grepl("\u00b7", name, fixed = TRUE) && !grepl("\\s\u00b7\\s", name)
 }
 
-# Treats NULL/NA/non-finite/list alike as unset (list too, for jsonlite's NULL/{} round-trip -- see app.R's copy); duplicated from app.R's clean_optional_numeric() since this file's separate shinyApp() never reaches app.R's main-app-only copy; used for zrange_cap/hic_height.
-wiz_clean_optional_numeric <- function(v) {
-  if (is.null(v) || is.list(v) || is.na(v) || !is.finite(v)) NULL else v
-}
-
-# Same idea as wiz_clean_optional_numeric(): normalizes a blank input to NULL, not "", matching how an unbuilt path is represented elsewhere (CFG, GENOME_PRESETS) and avoiding a spurious is_dirty()/export delta trip against NULL.
+# Same idea as clean_optional_numeric(): normalizes a blank input to NULL, not "", matching how an unset path is represented in the settings (CFG) and avoiding a spurious is_dirty()/export delta trip against NULL.
 wiz_clean_optional_text <- function(v) {
   v <- trimws(v %||% "")
   if (nchar(v) == 0) NULL else v
 }
 
 # The checks the wizard's Save runs before writing project_settings.json, shared with
-# parse_samples_txt() so the two can't drift (phase-I.3 step 25). Returns the problems, as
-# the wizard's own messages; character(0) means OK. A genome_label that GenomeInfoDb can't
-# look chromosome sizes up by (bug 62, e.g. "m10") otherwise only fails at the first cold
-# start, after Save; a blank one is allowed.
+# parse_samples_txt() so the two can't drift. Returns the problems, as
+# the wizard's own messages; character(0) means OK. An OrgDb package that isn't installed
+# otherwise only fails at the first cold start, after Save restarts the app, with the hint
+# in the console only. A genome_label that GenomeInfoDb can't look chromosome sizes
+# up by (e.g. "m10") otherwise only fails at the first cold start, after Save; a
+# blank one is allowed.
 wiz_save_problems <- function(data_root, samples, gtf_path, orgdb, genome_label = NULL) {
   errs <- character(0)
   if (is.null(wiz_clean_optional_text(data_root))) errs <- c(errs, "Data root is required.")
   else if (!dir.exists(data_root)) errs <- c(errs, "Data root directory does not exist.")
   if (length(samples) == 0) errs <- c(errs, "Add at least one sample before saving.")
   if (is.null(wiz_clean_optional_text(gtf_path))) errs <- c(errs, "GTF path is required.")
-  if (is.null(wiz_clean_optional_text(orgdb))) errs <- c(errs, "OrgDb package is required.")
+  orgdb <- wiz_clean_optional_text(orgdb)
+  if (is.null(orgdb)) errs <- c(errs, "OrgDb package is required.")
+  else if (!requireNamespace(orgdb, quietly = TRUE))
+    errs <- c(errs, sprintf("OrgDb package '%s' is not installed. Install it first, e.g. BiocManager::install('%s').",
+                            orgdb, orgdb))
   label <- wiz_clean_optional_text(genome_label)
   if (!is.null(label) && !label %in% c(GenomeInfoDb::registered_UCSC_genomes()$genome,
                                        GenomeInfoDb::registered_NCBI_assemblies()$assembly))
@@ -67,7 +72,7 @@ wiz_help <- function(label_text, help_text) {
 }
 
 # A colour swatch with no shiny.js binding (type="color"): oninput reports changes, and the
-# inline script reports the shown value on render (bug 60), so a re-rendered swatch (the
+# inline script reports the shown value on render, so a re-rendered swatch (the
 # composer's Revert) never leaves input[[id]] at a stale colour.
 .pt_colour_input <- function(id, label, title, value) {
   tagList(tags$label(label, title = title), br(),
@@ -79,11 +84,11 @@ wiz_help <- function(label_text, help_text) {
 
 # Core settings: what identifies and locates the project's data. Set only in the wizard;
 # every other .pt_default_settings() key is a display setting, adjustable live in the
-# composer (phase-I.3 step 28).
+# composer.
 .PT_CORE_SETTINGS <- c("gtf_path", "orgdb", "genome_label", "data_dir", "samples")
 
 # Inputs for every display setting, ids paste0(prefix, key), initial values from cfg: the
-# composer's Figure settings panel (the wizard showed them too before Phase I.3 step 28).
+# composer's Figure settings panel.
 # Returns list(display =, diff =): the general settings and the 2-sample comparison ones.
 .pt_display_settings_ui <- function(cfg, prefix) {
   list(
@@ -100,7 +105,7 @@ wiz_help <- function(label_text, help_text) {
                                choices = c("Dot (chr.19)" = "dot", "Space (chr 19)" = "space", "None (chr19)" = "plain"),
                                selected = cfg$chr_fmt %||% "dot")),
         column(3, checkboxInput(paste0(prefix, "show_track_axes"),
-                                 wiz_help("Show track value axes", "Draws a numeric value axis on coverage (bigWig) and junction/sashimi tracks. On by default."),
+                                 wiz_help("Show track value axes", "Draws a numeric value axis on coverage (bigWig) and junction tracks. On by default."),
                                  value = cfg$show_track_axes %||% TRUE))
       ),
       fluidRow(
@@ -129,30 +134,34 @@ wiz_help <- function(label_text, help_text) {
                              value = cfg$hic_norm %||% "KR")),
         column(3, numericInput(paste0(prefix, "zrange_cap"),
                                 wiz_help("Colour scale cap:", "Caps the Hi-C colour scale at this contact-count value. Leave blank to scale automatically per plot."),
-                                value = wiz_clean_optional_numeric(cfg$zrange_cap) %||% NA, min = 1, step = 10)),
+                                value = clean_optional_numeric(cfg$zrange_cap) %||% NA, min = 1, step = 10)),
         column(3, numericInput(paste0(prefix, "hic_height"),
                                 wiz_help("Track height (in):", "Height in inches of each Hi-C track. Leave blank to size automatically based on the display style."),
-                                value = wiz_clean_optional_numeric(cfg$hic_height) %||% NA, min = 0.5, max = 15, step = 0.5))
+                                value = clean_optional_numeric(cfg$hic_height) %||% NA, min = 0.5, max = 15, step = 0.5))
       ),
       fluidRow(
         column(3, selectizeInput(paste0(prefix, "hic_res_mode"),
-                               wiz_help("Resolution mode:", "Auto picks the coarsest resolution that keeps the view under the bin cap; Finest always uses the highest-resolution matrix available (slower for wide views)."),
-                               choices = c("Auto" = "auto", "Finest" = "finest"), selected = cfg$hic_res_mode %||% "auto")),
+                               wiz_help("Resolution mode:", "Auto picks the coarsest resolution that still gives at least the \"Max bins per view\" number of bins across the view; Finest always uses the highest-resolution matrix available (slower for wide views); Fixed uses the one bin size you type (a Hi-C track whose file lacks that bin size shows an error). plotgardener draws at most 1,000 bins across a view, so for a wider view it uses a coarser size instead (\"too many Hi-C pixels\"), in every mode."),
+                               choices = c("Auto" = "auto", "Finest" = "finest", "Fixed" = "fixed"), selected = cfg$hic_res_mode %||% "auto")),
         column(3, numericInput(paste0(prefix, "hic_max_bins_per_view"),
-                                wiz_help("Max bins per view:", "Upper limit on how many Hi-C bins are drawn at once -- used by Auto resolution mode to avoid overly dense plots."),
-                                value = cfg$hic_max_bins_per_view %||% 500, min = 50, max = 5000, step = 50))
+                                wiz_help("Max bins per view:", "Auto resolution mode picks the coarsest resolution that still gives at least this many bins across the view (the finest if none does). Despite the name it is a minimum, not an upper limit."),
+                                value = cfg$hic_max_bins_per_view %||% 500, min = 50, max = 5000, step = 50)),
+        column(3, conditionalPanel(paste0("input.", prefix, "hic_res_mode === 'fixed'"),
+                 numericInput(paste0(prefix, "hic_resolution"),
+                                wiz_help("Bin size (bp):", "The Hi-C bin size, in base pairs, used for every Hi-C track (e.g. 10000). A track whose file has no bin of exactly this size shows an error naming the closest sizes the file has."),
+                                value = clean_optional_numeric(cfg$hic_resolution) %||% NA, min = 0, step = 1000)))
       )),
 
       .pt_settings_group("Junction / arc tracks",
       fluidRow(
         column(4, checkboxInput(paste0(prefix, "arc_clip_partial"),
-                                 wiz_help("Clip partial arcs", "When an arc's anchors straddle the edge of the plotted region (one anchor visible, the other outside it), truncate the arc at the boundary instead of drawing it extending past the edge. Off by default. Long-range BEDPE-sourced pairs (e.g. Hi-C loop calls) are more likely to need this than short RNA-seq splice junctions -- see the BED12/BEDPE intake notes for why."),
+                                 wiz_help("Clip partial arcs", "For an arc that runs past the edge of the plotted region (one anchor inside it, the other outside): on, the arc is left out; off, it is drawn, cut off at the edge. Off by default. Long-range BEDPE-sourced pairs (e.g. Hi-C loop calls) run past the edge more often than short RNA-seq splice junctions."),
                                  value = cfg$arc_clip_partial %||% FALSE)),
         column(3, numericInput(paste0(prefix, "min_junction_support"),
-                                wiz_help("Min arc support:", "Minimum pooled nSupport for a paired-end arc (BED12 splice junction or BEDPE loop call) to be drawn. Default 0 (show everything) -- a BEDPE score column's scale is caller-specific (e.g. a HiChIP loop caller's continuous significance score, not a read count), so raise this only once you know your own data's scale."),
+                                wiz_help("Min arc support:", "Minimum pooled nSupport for a paired-end arc (BED12 or BED6 splice junction, or BEDPE or HiCCUPS loop call) to be drawn. Default 0 (show everything) -- a BEDPE score column's scale is caller-specific (e.g. a HiChIP loop caller's continuous significance score, not a read count), so raise this only once you know your own data's scale."),
                                 value = cfg$min_junction_support %||% 0, min = 0, step = 1)),
         column(3, numericInput(paste0(prefix, "junction_height"),
-                                wiz_help("Junction track height (in):", "Height in inches of each junction (sashimi arc) track."),
+                                wiz_help("Junction track height (in):", "Height in inches of a junction track's arcs, below its heading. A mirrored comparison draws two samples, so its arcs are twice this tall."),
                                 value = cfg$junction_height %||% 0.85, min = 0.3, max = 8, step = 0.1))
       )),
 
@@ -197,7 +206,7 @@ wiz_help <- function(label_text, help_text) {
   get <- function(k) input[[paste0(prefix, k)]] %||% cfg[[k]] %||% dflt[[k]]
   opt <- function(k) {
     v <- input[[paste0(prefix, k)]]
-    wiz_clean_optional_numeric(if (is.null(v)) cfg[[k]] else v)
+    clean_optional_numeric(if (is.null(v)) cfg[[k]] else v)
   }
   list(
     font        = trimws(get("font")),
@@ -214,6 +223,7 @@ wiz_help <- function(label_text, help_text) {
     hic_height  = opt("hic_height"),
     hic_res_mode = get("hic_res_mode"),
     hic_max_bins_per_view = get("hic_max_bins_per_view"),
+    hic_resolution = opt("hic_resolution"),
     diff_colour_lo    = trimws(get("diff_colour_lo")),
     diff_colour_hi    = trimws(get("diff_colour_hi")),
     junction_opacity_cap = get("junction_opacity_cap"),
@@ -230,7 +240,7 @@ wiz_help <- function(label_text, help_text) {
 }
 
 # Writes project_settings.json and, beside it, the project_samples.txt copy the project can
-# be rebuilt from (feature 43), with absolute paths since the importer resolves relative ones
+# be rebuilt from, with absolute paths since the importer resolves relative ones
 # against the file's own folder. Shared by the wizard's Save and the composer's Save as
 # project default. Returns whether the samples.txt copy was written; a failure there
 # doesn't block.
@@ -251,7 +261,7 @@ wiz_help <- function(label_text, help_text) {
   }, error = function(e) FALSE)
 }
 
-# Shared Genome/Data-root/Samples/Other-settings/Save form for every entry path (import, manual, edit-mode re-entry); `cfg` supplies initial values (CFG when editing, DEFAULT_SETTINGS when fresh), `is_edit` governs what else differs (data-root's blank default, Save's label, the extra Close button). See solutions/concepts/19-relocated-code-rationale.md, "utils/wizard.R:66".
+# Shared Genome/Data-root/Samples/Save form for every entry path (import, manual, edit-mode re-entry; import only prefills it); `cfg` supplies initial values (CFG when editing, DEFAULT_SETTINGS when fresh), `is_edit` governs what else differs (data-root's blank default, Save's label, the extra Close button).
 wiz_shared_form <- function(cfg, is_edit) {
   tagList(
     # Deliberately at the very top with muted styling and an explicit
@@ -297,7 +307,7 @@ wiz_shared_form <- function(cfg, is_edit) {
       hr(),
       uiOutput("wiz_samples_ui")
     ),
-    # Phase I.3 step 28: the display settings live in the composer's Figure settings
+    # The display settings live in the composer's Figure settings
     # panel; Save keeps their saved values (plus any imported from a samples.txt).
     p(class = "text-muted",
       "Display settings (fonts, track heights, Hi-C, junction and comparison options) are set in the composer's Figure settings panel."),
@@ -309,7 +319,8 @@ wiz_shared_form <- function(cfg, is_edit) {
   )
 }
 
-wizard_ui <- function() {
+# The wizard's page for the project whose settings file is (or will be) `SETTINGS_JSON`.
+wizard_ui <- function(SETTINGS_JSON) {
   is_edit <- file.exists(SETTINGS_JSON)
   fluidPage(
     tags$head(tags$title(if (is_edit) "PlotTrellis: edit project settings" else "PlotTrellis: first-time setup")),
@@ -331,12 +342,6 @@ wizard_ui <- function() {
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      /* The Display / Comparison (diff) settings collapsible sections (tags$details) --
-         summary is the only clickable toggle, so it needs to look like one.
-         display: list-item brings back the open/closed triangle, which
-         Bootstrap 3's summary { display: block } otherwise hides. */
-      details > summary { display: list-item; cursor: pointer; font-weight: 600; margin-bottom: 4px; }
-      details[open] > summary { margin-bottom: 10px; }
       .wiz-help-icon { user-select: none; }
     ")),
     h2(if (is_edit) "PlotTrellis: edit project settings" else "PlotTrellis: first-time project setup"),
@@ -348,7 +353,10 @@ wizard_ui <- function() {
   )
 }
 
-wizard_server <- function(input, output, session) {
+# Builds the wizard's server function for one project: `SETTINGS_JSON` is the settings file it
+# writes on Save, `CFG` the project's current settings (shown for editing when that file
+# exists), `DEFAULT_SETTINGS` the defaults a first-time setup starts from.
+wizard_server <- function(SETTINGS_JSON, CFG, DEFAULT_SETTINGS) function(input, output, session) {
 
   is_edit <- file.exists(SETTINGS_JSON)
   cfg     <- if (is_edit) CFG else DEFAULT_SETTINGS
@@ -370,25 +378,25 @@ wizard_server <- function(input, output, session) {
   # modal_field_errors. Both reset to list() on a genuinely fresh modal open.
   modal_row_errors   <- reactiveVal(list())
   modal_field_errors <- reactiveVal(list())
-  # Bumped on every failed Save (bug 58): re-showing the modal replaces
+  # Bumped on every failed Save: re-showing the modal replaces
   # uiOutput("wiz_instance_rows"), and shiny.js repaints it from its cached
   # last render, so without a fresh render the rows snap back to stale values.
   modal_fail_count   <- reactiveVal(0)
   # NULL = landing screen (choose a path); "import" / "manual" = which entry
   # path was chosen; "edit" = re-entered from the running app to edit an
-  # existing project (Phase C.3), which skips the landing screen entirely --
+  # existing project, which skips the landing screen entirely --
   # there's no "start fresh vs. import" choice to make when a project already
   # exists. Every non-NULL mode renders the same wiz_shared_form() below an
   # optional import box -- see wiz_shared_form()'s comment.
-  # Feature 43: a first-time wizard that finds the project_samples.txt an
+  # A first-time wizard that finds the project_samples.txt an
   # earlier Save left beside project_settings.json (settings since reset or
   # deleted) opens straight on Import, prefilled, so the project rebuilds in
   # one click. Its own name, so it never overwrites a user's samples.txt.
   mirror_txt <- file.path(dirname(SETTINGS_JSON), "project_samples.txt")
   has_mirror <- !is_edit && file.exists(mirror_txt)
   wiz_mode <- reactiveVal(if (is_edit) "edit" else if (has_mirror) "import" else NULL)
-  # Display settings imported from a samples.txt (the wizard has no inputs for them since
-  # Phase I.3 step 28): Save writes cfg's values with these on top (bug 56).
+  # Display settings imported from a samples.txt (the wizard has no inputs for them):
+  # Save writes cfg's values with these on top.
   import_visual <- reactiveVal(list())
 
   observeEvent(input$wiz_mode_import, wiz_mode("import"))
@@ -397,7 +405,7 @@ wizard_server <- function(input, output, session) {
 
   # Snapshot of every field this form can change, taken once at edit-mode
   # entry -- the baseline is_dirty() compares live values against, for the
-  # Close-without-saving confirm guard (Phase C.3 steps 12/13). Not used
+  # Close-without-saving confirm guard. Not used
   # (and not needed) in fresh-setup mode: there's no prior configuration to
   # accidentally discard.
   original_snapshot <- if (is_edit) {
@@ -406,7 +414,7 @@ wizard_server <- function(input, output, session) {
       samples   = cfg$samples,
       flat      = cfg[c("font", "fontsize", "page_w", "chr_fmt", "show_track_axes", "hic_norm", "hic_style",
                          "zrange_cap", "atac_height", "hic_height", "hic_res_mode",
-                         "hic_max_bins_per_view", "diff_colour_lo", "diff_colour_hi",
+                         "hic_max_bins_per_view", "hic_resolution", "diff_colour_lo", "diff_colour_hi",
                          "junction_opacity_cap", "min_junction_support", "reference_colour", "comparison_colour",
                          "gene_flank_pct", "min_display_tpm", "uniprot_reviewed_only", "arc_clip_partial",
                          "show_title", "show_scale_bar", "junction_height", "diff_shared_alpha",
@@ -446,9 +454,8 @@ wizard_server <- function(input, output, session) {
   # Quick-fill the genome identity fields from a bundled GENOME_PRESETS
   # entry -- pure convenience, nothing is stored under the preset's id; Save
   # always writes the plain field values. GENOME_PRESETS carries no
-  # gtf_path (2026-09-01, portability -- see utils/genomes.R's header), so
-  # the GTF path field is left alone: always the user's own file, and a path
-  # already entered survives a preset pick (bug 48).
+  # gtf_path, so the GTF path field is left alone: always the user's own
+  # file, and a path already entered survives a preset pick.
   observeEvent(input$wiz_genome_preset, {
     preset <- GENOME_PRESETS[[input$wiz_genome_preset]]
     if (is.null(preset)) return()
@@ -478,8 +485,7 @@ wizard_server <- function(input, output, session) {
     field_errors <- if (fresh) list() else modal_field_errors()
     # Editing an existing sample (modal_edit_index() set) prefills name/
     # colour/quantdir from that sample. Adding a brand-new sample prefills
-    # only the quantdir NAME (not path) -- feature 32, 2026-09-02 revision
-    # (user's call): scans every already-committed sample for a quantdir
+    # only the quantdir NAME (not path): scans every already-committed sample for a quantdir
     # entry, most recent match wins, rather than only the very last sample --
     # so a naming convention set early on isn't lost just because the most
     # recent sample happens to have no quantdir at all. Nothing
@@ -509,14 +515,13 @@ wizard_server <- function(input, output, session) {
       fluidRow(
         column(6, textInput("wiz_sample_name", "Condition (unique):", value = seed("wiz_sample_name", default_name))),
         column(6, tags$label("Colour:"), br(),
-               # shiny.js has no input binding for type="color" (confirmed against the
-               # installed shiny.js; app.R's own s_diff_colour_lo/hi settings inputs hit
-               # this same gap and work around it identically) -- without the oninput
+               # shiny.js has no input binding for type="color" (.pt_colour_input()
+               # works around the same gap the same way) -- without the oninput
                # handler below, input$wiz_sample_colour never updates from its initial value.
                tags$input(type = "color", id = "wiz_sample_colour", value = seed("wiz_sample_colour", default_colour),
                           style = "width:60px; height:34px; padding:2px; border:1px solid #ccc; border-radius:4px; cursor:pointer; display:block;",
                           oninput = "Shiny.setInputValue('wiz_sample_colour', this.value, {priority: 'event'});"),
-               # Report the shown colour as soon as the modal renders (bug 60):
+               # Report the shown colour as soon as the modal renders:
                # oninput alone leaves input$wiz_sample_colour at whatever the
                # previous modal set, so an untouched swatch saved that colour.
                tags$script(sprintf("Shiny.setInputValue('wiz_sample_colour', %s);",
@@ -545,7 +550,7 @@ wizard_server <- function(input, output, session) {
     )
   }
 
-  # `samples` is a list to prefill rows from: keep_path=TRUE for one sample being edited, FALSE for the deduped union of every committed sample's type:name pairs (feature 32); quantdir isn't included here, see add_sample_modal(). See solutions/concepts/19-relocated-code-rationale.md, "utils/wizard.R:458".
+  # `samples` is a list to prefill rows from: keep_path=TRUE for one sample being edited, FALSE for the deduped union (first-seen order) of every committed sample's type:name pairs, so a pair missing from the latest sample isn't lost; quantdir isn't included here, see add_sample_modal().
   wiz_prefill_rows <- function(samples, keep_path) {
     rows <- list()
     seen <- character(0)
@@ -615,7 +620,7 @@ wizard_server <- function(input, output, session) {
       row_err <- errs[[as.character(r$id)]]
       fluidRow(class = if (is.null(row_err)) "wiz-row" else "wiz-row wiz-row-error",
         column(2, tags$b(toupper(r$type))),
-        # r$name/r$path (return-pass fix): a row added via wiz_prefill_rows()
+        # r$name/r$path: a row added via wiz_prefill_rows()
         # (edit-sample prefill, or a new sample carrying over the previous
         # one's instance layout) carries its prefill value here, since its
         # input id is freshly minted and isolate(input[[...]]) is NULL until
@@ -623,10 +628,10 @@ wizard_server <- function(input, output, session) {
         # has no r$name/r$path (NULL), so this falls through to "" exactly
         # as before.
         column(4, textInput(name_id, NULL, value = isolate(input[[name_id]]) %||% r$name %||% "", placeholder = "instance name")),
-        # "" prepended (return-pass fix, see add_sample_modal()): otherwise
+        # "" prepended (see add_sample_modal()): otherwise
         # selected="" matches no real <option> and the browser silently
         # falls back to the first matching file.
-        # The current value is also added to choices (bug 59): a path typed via
+        # The current value is also added to choices: a path typed via
         # create = TRUE that isn't in the scoped file list would otherwise be
         # dropped on re-render, since selected must be one of the choices.
         column(5, selectizeInput(path_id, NULL,
@@ -660,7 +665,7 @@ wizard_server <- function(input, output, session) {
     for (r in modal_instances()) {
       nm  <- trimws(input[[paste0("wiz_inst_name_", r$id)]] %||% "")
       pth <- trimws(input[[paste0("wiz_inst_path_", r$id)]] %||% "")
-      if (nchar(pth) == 0) next  # blank instance = not declared, silently dropped (per phase-C.1.md step 2)
+      if (nchar(pth) == 0) next  # blank instance = not declared, silently dropped
       if (nchar(nm) == 0) {
         msg <- sprintf("A %s instance has a path but no name.", r$type)
         errs <- c(errs, msg); row_errs[[as.character(r$id)]] <- msg
@@ -684,10 +689,10 @@ wizard_server <- function(input, output, session) {
         errs <- c(errs, msg); row_errs[[as.character(r$id)]] <- msg
       } else if (identical(r$type, "paired-end") && !is.null(data_root()) &&
                  !is_paired_end_structural(file.path(data_root(), pth))) {
-        # Cheap fail-fast check (utils/samples_txt_io.R): must be BED12 (12
-        # cols) or BEDPE (6-10 cols) -- read_junction_file()'s real dispatch,
-        # solutions/concepts/18-bed12-bedpe-arc-format.md.
-        msg <- sprintf("Paired-end file for %s is not BED12 (12 columns) or BEDPE (6-10 columns): %s", nm, pth)
+        # Cheap fail-fast check (is_paired_end_structural()): must be BED12
+        # (12 cols), BED6 or BEDPE (6-10 cols) or a HiCCUPS loop file, the
+        # formats read_junction_file() reads.
+        msg <- sprintf("Paired-end file for %s is not BED12 (12 columns), BED6 or BEDPE (6-10 columns), or a HiCCUPS loop file: %s", nm, pth)
         errs <- c(errs, msg); row_errs[[as.character(r$id)]] <- msg
       }
       data[[length(data) + 1]] <- list(type = r$type, name = nm, path = pth)
@@ -763,15 +768,11 @@ wizard_server <- function(input, output, session) {
       return()
     }
     res <- tryCatch(
-      # defaults = DEFAULT_SETTINGS (Phase C.3 decision 6): lets any
-      # `# <key>: value` line in the file be parsed back into
-      # `res$overrides` and applied to the Other-settings fields below --
-      # since the standalone genome-config task, that includes the 3 genome
-      # identity fields (gtf_path/orgdb/genome_label), which are plain
-      # DEFAULT_SETTINGS keys with no separate `# genome:` line or id
-      # validation needed. Cache paths (txdb_path/tx_name_lookup_path/
-      # tx_meta_lookup_path) are no longer settings at all (2026-08-25) --
-      # a stray `# txdb_path: ...` line from an old export is simply ignored.
+      # defaults = DEFAULT_SETTINGS: lets any `# <key>: value` line in the
+      # file be parsed back into `res$overrides`, applied below: the 3 genome
+      # fields (gtf_path/orgdb/genome_label) fill their inputs, the display
+      # settings are kept for Save. A line for a key that isn't a setting
+      # (e.g. a cache path like `# txdb_path: ...`) is ignored.
       import_samples_txt(path, defaults = DEFAULT_SETTINGS),
       error = function(e) list(errors = conditionMessage(e))
     )
@@ -784,9 +785,8 @@ wizard_server <- function(input, output, session) {
     if (!is.null(res$data_root)) updateTextInput(session, "wiz_data_root", value = res$data_root)
     wiz_samples(res$samples)
 
-    # Apply any `# <key>: value` overrides (Phase C.3 decision 6): the genome
-    # fields onto their inputs, the display settings into import_visual() for
-    # Save (bug 56: the colour overrides used to be dropped). Numbers for the
+    # Apply any `# <key>: value` overrides: the genome fields onto their
+    # inputs, the display settings into import_visual() for Save. Numbers for the
     # NULL-default ("auto") keys are converted the way parse_samples_txt() does.
     coerced <- .pt_coerce_auto_overrides(res$overrides, DEFAULT_SETTINGS)
     ov <- coerced$overrides
@@ -805,7 +805,7 @@ wizard_server <- function(input, output, session) {
 
   # ── Export samples.txt ────────────────────────────────────────────────────
 
-  # A separate action from Save, never triggered automatically (Phase C.3 decision 2).
+  # A separate action from Save, never triggered automatically.
   wiz_collect_flat_settings <- function() {
     c(list(
       gtf_path            = wiz_clean_optional_text(input$wiz_gtf_path),
@@ -854,7 +854,7 @@ wizard_server <- function(input, output, session) {
     if (ok) output$wiz_export_status <- renderUI(div(class = "wiz-ok", sprintf("Wrote %s.", path)))
   })
 
-  # ── Dirty guard (edit mode only, Phase C.3 steps 12/13) ───────────────────
+  # ── Dirty guard (edit mode only) ──────────────────────────────────────────
   is_dirty <- reactive({
     if (!is_edit) return(FALSE)
     if (!identical(data_root(), original_snapshot$data_root)) return(TRUE)
@@ -864,10 +864,6 @@ wizard_server <- function(input, output, session) {
   })
 
   wiz_do_close <- function() {
-    # Clear so a later re-click of "Edit project settings" from the main app
-    # re-enters the wizard on its own terms rather than being permanently
-    # stuck routing back here.
-    Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS")
     showModal(modalDialog(
       title = "Closing", easyClose = FALSE, footer = NULL,
       p("Returning to the app without saving."),
@@ -919,12 +915,9 @@ wizard_server <- function(input, output, session) {
     if (file.exists(SETTINGS_JSON))
       settings$samples_txt_source <- tryCatch(jsonlite::read_json(SETTINGS_JSON)$samples_txt_source,
                                               error = function(e) NULL)
-    # Feature 43: always keep a plain-text project_samples.txt beside it, the
+    # Always keep a plain-text project_samples.txt beside it, the
     # human-readable record the project can be rebuilt from (mirror_txt).
     txt_ok <- .pt_write_project_files(settings, SETTINGS_JSON)
-
-    # See wiz_do_close()'s comment -- same reasoning applies to Save.
-    Sys.unsetenv("PLOTTRELLIS_EDIT_SETTINGS")
 
     output$wiz_completion_error <- renderUI(NULL)
     showModal(modalDialog(

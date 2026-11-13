@@ -1,14 +1,11 @@
-settings_transcripts_annotated <- function(dict, entry, settings, track_w, region_params) {
-  entry <- load_transcripts(entry, region_params, settings)
-  tx_all <- entry$data$tx_all
-  kept <- tx_all[tx_all$transcript_name %in% entry$data$named, ]
-  kept <- kept[order(kept$transcript_name), ]
-  entry$data$kept <- kept
-  entry$data$n_excluded <- nrow(tx_all) - nrow(kept)
-  entry$data$colours <- transcript_colours(kept$transcript_name)
-  if (is.null(entry$height)) entry$height <- 2.0
-  list(dict = dict, entry = entry)
-}
+info_transcripts_annotated <- function() list(
+  kind = "fixed", order = 50, label = "Transcripts annotated (filtered)",
+  filter = c(annotation = "Annotations"), needs_gene = TRUE
+)
+
+# The same transcripts and height as the Transcripts (filtered) track.
+settings_transcripts_annotated <- function(dict, entry, settings, track_w, region_params)
+  settings_transcripts(dict, entry, settings, track_w, region_params)
 
 render_transcripts_annotated <- function(entry, dict, ctx) {
   plotText(label = "Transcripts annotated (filtered)", x = ctx$track_x + 0.05, y = ctx$y + 0.02,
@@ -19,11 +16,11 @@ render_transcripts_annotated <- function(entry, dict, ctx) {
     header_text_h <- grid::convertHeight(grid::grobHeight(grid::textGrob("Xg", gp = grid::gpar(
       fontsize = ctx$fontsize - 1, fontface = "bold", fontfamily = ctx$font))), "inches", valueOnly = TRUE)
     plotText(label = sprintf("+%d not shown", entry$data$n_excluded), x = ctx$track_x + ctx$track_w,
-             y = ctx$y + 0.02 + header_text_h / 2, just = c("right", "center"),
+             y = ctx$y + 0.02 + header_text_h, just = c("right", "bottom"),  # on the heading's baseline
              fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = "grey50")
   }
 
-  header_h <- 0.2
+  header_h <- .pt_tx_header_h(ctx$fontsize)
   kept <- entry$data$kept
   n_rows <- nrow(kept)
 
@@ -34,7 +31,7 @@ render_transcripts_annotated <- function(entry, dict, ctx) {
     return(invisible(NULL))
   }
 
-  row_h <- (ctx$height - header_h) / n_rows
+  row_h <- .pt_tx_row_h(ctx$fontsize)
   row_y <- ctx$y + header_h + (seq_len(n_rows) - 1) * row_h
   label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches", valueOnly = TRUE)
 

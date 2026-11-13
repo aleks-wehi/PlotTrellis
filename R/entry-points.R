@@ -1,4 +1,4 @@
-# Tier 1 entry points (phase-I.3 step 25): the exported ways to start
+# The exported ways to start
 # PlotTrellis. run_plottrellis() is the usual one; the others open one piece on
 # its own. The project-settings defaults/reader and the composer app builder
 # they share are in R/app.R.
@@ -87,7 +87,7 @@ parse_samples_txt <- function(samples_txt,
   dir.create(project_dir, recursive = TRUE, showWarnings = FALSE)
   # Same toJSON() call as the wizard's Save (null = "null", see its comment).
   writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE, null = "null"), settings_json)
-  # Refresh the wizard Save's project_samples.txt copy too (feature 43): Reset and the
+  # Refresh the wizard Save's project_samples.txt copy too: Reset and the
   # broken-settings error both point at it, so a stale one would restore the old samples.
   # As in Save, a failure here doesn't block.
   tryCatch(writeLines(export_samples_txt(c(list(data_root = settings$data_dir), settings[names(settings) != "data_dir"]),
@@ -121,8 +121,8 @@ parse_samples_txt <- function(samples_txt,
 #' @export
 plottrellis_wizard <- function(project_dir = .pt_default_dir(), ...) {
   p <- .pt_project(project_dir)
-  .set_wizard_globals(p$settings_json, p$cfg, p$defaults)
-  invisible(shiny::runApp(shinyApp(ui = wizard_ui(), server = wizard_server), ...))
+  invisible(shiny::runApp(shinyApp(ui = wizard_ui(p$settings_json),
+                                   server = wizard_server(p$settings_json, p$cfg, p$defaults)), ...))
 }
 
 #' Open the PlotTrellis composer on its own
@@ -155,7 +155,7 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...) {
 
 #' Launch PlotTrellis
 #'
-#' The usual way to start PlotTrellis: a 2-page Shiny app (Compose | Output) for building
+#' The usual way to start PlotTrellis: a Shiny app (Compose, then Output on the same page) for building
 #' plotgardener figures without writing code, and downloading a standalone R script that
 #' reproduces each one. Opens the setup wizard when `project_dir` has no
 #' `project_settings.json` yet (or after Edit project settings), otherwise the composer,
@@ -183,29 +183,21 @@ run_plottrellis <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
   if (inherits(project_dir, "pt_project")) project_dir <- project_dir$dir
   # Same rules as pt_project(): created or refreshed from samples_txt, one project per folder.
   if (!is.null(samples_txt)) .pt_import(project_dir, samples_txt)
-  # Loops so the wizard-to-app transition needs no manual re-launch: the
-  # settings file and WIZARD_EDIT_MODE are re-read each pass since a completed
-  # wizard Save (or the main app's "Edit project settings" restart) changes
-  # both on disk/env between iterations. Mirrors the restart contract
-  # wizard.R already relies on (stopApp(returnValue = "restart"/"edit_settings")).
-  # Each pass calls the exported launchers, so the standalone and looped paths
-  # are the same code.
+  # Loops so going from the wizard to the composer and back needs no manual re-launch. Each
+  # pass opens the wizard when there are no settings yet, or when the composer just stopped
+  # with "edit_settings" (its Edit project settings button); otherwise the composer. The
+  # wizard decides by itself whether to start blank or pre-filled (settings file present or
+  # not). Each pass calls the exported launchers, so the standalone and looped paths are the
+  # same code.
+  edit_settings <- FALSE
   repeat {
-    # Phase C.1 step 1: no project_settings.json yet -> guided first-run wizard
-    # instead of the normal app. Phase C.3 decision 1 extends this branch to also
-    # cover re-entering the wizard to EDIT an existing settings file: the main
-    # app's "Edit project settings" button sets this env var and restarts --
-    # same process-restart requirement as first-run, see utils/wizard.R's header
-    # comment for why. wizard_server() itself decides prefill-vs-blank-landing
-    # purely from file.exists(SETTINGS_JSON), not this flag -- this flag only
-    # controls which of the two cases routes here at all.
-    WIZARD_EDIT_MODE <- identical(Sys.getenv("PLOTTRELLIS_EDIT_SETTINGS", "0"), "1")
-    result <- if (!file.exists(file.path(project_dir, "project_settings.json")) || WIZARD_EDIT_MODE) {
+    result <- if (!file.exists(file.path(project_dir, "project_settings.json")) || edit_settings) {
       plottrellis_wizard(project_dir, ...)
     } else {
       plottrellis_composer(project_dir, ...)
     }
     if (!identical(result, "restart") && !identical(result, "edit_settings")) return(invisible(result))
+    edit_settings <- identical(result, "edit_settings")
   }
 }
 

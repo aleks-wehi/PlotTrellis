@@ -1,7 +1,6 @@
-# Code API (replaces phase-I.3 step 26's Tier 2): open a project once, then
-# describe figures by gene + track names and save them. Builds the same
-# entries/settings as the composer's Generate, through the shared helpers in
-# R/figure_helpers.R. Design notes: solutions/spikes/bioinf-api/README.md.
+# Code API: open a project once, then describe figures by gene + track names
+# and save them. Builds the same entries/settings as the composer's Generate,
+# through the shared helpers in R/figure_helpers.R.
 
 # The bare-call project folder: visible, in the home directory, one per user.
 .pt_default_dir <- function() file.path(path.expand("~"), "PlotTrellis")
@@ -34,26 +33,26 @@
 #' @export
 pt_project <- function(project_dir = .pt_default_dir(), samples_txt = NULL, overwrite = FALSE) {
   .pt_import(project_dir, samples_txt, overwrite)
-  cfg <- .pt_project(project_dir)$cfg
+  p <- .pt_project(project_dir)
+  cfg <- p$cfg
   if (!requireNamespace(cfg$orgdb, quietly = TRUE))
     stop("This project needs the Bioconductor package '", cfg$orgdb, "'. Install it with ",
          "BiocManager::install(\"", cfg$orgdb, "\").", call. = FALSE)
-  genome <- ensure_genome_ready(gtf_path = cfg$gtf_path, orgdb = cfg$orgdb, genome_label = cfg$genome_label)
-  # Attached as in .pt_composer_app(): the pipeline looks the OrgDb up by name.
-  suppressPackageStartupMessages(library(genome$orgdb, character.only = TRUE))
+  genome <- ensure_genome_ready(gtf_path = cfg$gtf_path, orgdb = cfg$orgdb, genome_label = cfg$genome_label,
+                                cache_dir = p$cache_dir)
   samples <- load_samples_from_settings(cfg$samples, cfg$data_dir)
   items   <- c(build_track_items(samples), build_comparison_track_items(samples))
   structure(list(
     dir        = normalizePath(project_dir),
     cfg        = cfg,
     genome     = genome,
-    txdb       = AnnotationDbi::loadDb(genome$txdb_path),
+    txdb       = .pt_annotation(genome)$txdb,
     genes      = sort(AnnotationDbi::keys(get(genome$orgdb, envir = asNamespace(genome$orgdb)), keytype = "SYMBOL")),
     samples    = samples,
     colours    = .pt_sample_colours(samples),
     items      = items,
     tracks     = .pt_track_table(items),
-    render_cfg = .pt_render_cfg(cfg, genome)
+    render_cfg = .pt_render_cfg(cfg, genome, p$cache_dir)
   ), class = "pt_project")
 }
 
@@ -117,26 +116,22 @@ print.pt_project <- function(x, ...) {
 
 # One row per track item: the name pt_figure() accepts, its sample (NA for
 # sample-free tracks, "B vs A" for comparisons), kind and TRACK_ITEMS key. Data
-# tracks are named after samples.txt's own `type:name` column names.
+# tracks are named after samples.txt's own `type:name` column names, through the
+# `api` template of their module's info_<key>().
 .pt_track_table <- function(items) {
-  cmp_suffix <- c(bw_diff_stacked = "_diff", junctions_mirrored_diff = "_diff",
-                  junctions_mirrored_diff_tpm_scaled = "_diff_tpm")
   rows <- lapply(items, function(it) {
     kind <- if (!is.null(it$samples)) "comparison" else if (is.na(it$sample)) "fixed" else "sample"
-    track <- switch(kind,
-      fixed      = it$type,
-      comparison = paste0(it$name, cmp_suffix[[it$type]]),
-      sample     = if (it$type == "tpm_usage") "transcript_counts" else it$name)
+    track <- .pt_fill_name(.pt_viz_info(it$type)$api, it$name %||% it$type)
     data.frame(track = track, type = it$type, kind = kind, key = it$key, label = it$label,
                sample = if (kind == "comparison") paste(it$samples[2], "vs", it$samples[1]) else it$sample,
                stringsAsFactors = FALSE)
   })
   tab <- do.call(rbind, rows)
   tab <- tab[order(match(tab$kind, c("fixed", "sample", "comparison"))), ]
-  # Two data types under one column name (e.g. bw:atac and bed:atac): the
-  # later types get a _<type> suffix so every name stays unambiguous.
+  # Two types under one name (e.g. bw:atac and bed:atac): the later types
+  # get a _<type> suffix so every name stays unambiguous.
   first_type <- tapply(tab$type, tab$track, `[`, 1)
-  dup <- tab$kind != "fixed" & tab$type != first_type[tab$track]
+  dup <- tab$type != first_type[tab$track]
   tab$track[dup] <- paste0(tab$track[dup], "_", tab$type[dup])
   rownames(tab) <- NULL
   tab[, c("track", "sample", "kind", "label", "key")]
@@ -155,7 +150,7 @@ print.pt_project <- function(x, ...) {
 pt_tracks <- function(proj) proj$tracks[, c("track", "sample", "kind", "label")]
 
 # tracks -> TRACK_ITEMS keys, in order. A bare per-sample name expands over
-# `par` (track-major, so e.g. adjacent transcript_counts tracks merge); a bare
+# `par` (track-major, so e.g. adjacent transcript_expression tracks merge); a bare
 # comparison needs exactly 2 there (second vs first). "name@sample" always
 # picks exactly that one, with or without parallel.
 .pt_resolve_tracks <- function(tab, tracks, par) {
@@ -165,6 +160,11 @@ pt_tracks <- function(proj) proj$tracks[, c("track", "sample", "kind", "label")]
     name <- trimws(sub("@.*$", "", spec))
     smp  <- if (has_at) gsub("\\s+", " ", trimws(sub("^[^@]*@", "", spec))) else NA_character_
     hit <- tab[tab$track == name, ]
+    # transcript_counts, this track's former name, still works.
+    # It means the quantification track, whatever name that got.
+    if (nrow(hit) == 0 && identical(name, "transcript_counts")) hit <- tab[startsWith(tab$key, "tpm_usage_"), ]
+    # A junction track sharing its column name with another type was "<name>_sashimi".
+    if (nrow(hit) == 0 && grepl("_sashimi$", name)) hit <- tab[tab$track == sub("_sashimi$", "_junctions", name), ]
     if (nrow(hit) == 0)
       stop("Unknown track '", name, "'. This project has: ", paste(unique(tab$track), collapse = ", "),
            ". See pt_tracks(proj).", call. = FALSE)
@@ -213,7 +213,8 @@ pt_tracks <- function(proj) proj$tracks[, c("track", "sample", "kind", "label")]
 #' Track names are the ones [pt_tracks()] lists: `genes`, `transcripts`,
 #' `transcripts_all`, `transcripts_annotated` and `protein_domains` need no sample. The
 #' others are named after your `samples.txt`'s columns (`bw:atac` gives `atac`;
-#' `quantdir:` gives `transcript_counts`; comparisons get a `_diff` suffix, such as
+#' `quantdir:` gives `transcript_expression` (`transcript_counts`, its old name, still works);
+#' comparisons get a `_diff` suffix, such as
 #' `junctions_diff`) and need a sample, written `"atac@K562"` (or
 #' `"junctions_diff@K562 vs GM12878"`, K562 against reference GM12878).
 #'
@@ -242,6 +243,7 @@ pt_tracks <- function(proj) proj$tracks[, c("track", "sample", "kind", "label")]
 #' @export
 pt_figure <- function(proj, gene = NULL, tracks = "genes", parallel = FALSE, region = NULL, title = "") {
   stopifnot(inherits(proj, "pt_project"))
+  proj <- .pt_renamed_junctions_project(proj)
   all_samples <- names(proj$colours)
   par <- if (isTRUE(parallel)) all_samples else if (is.character(parallel)) parallel else NULL
   bad <- setdiff(par, all_samples)
@@ -303,19 +305,32 @@ print.pt_figure <- function(x, ...) {
 #' @export
 pt_save <- function(fig, file, dpi = 300) {
   stopifnot(inherits(fig, "pt_figure"))
+  fig$entries <- lapply(fig$entries, function(e) replace(e, "viz", .pt_renamed_junctions_key(e$viz)))
   dev <- switch(tolower(tools::file_ext(file)),
     svg = function(w, h) svglite::svglite(file, width = w, height = h),
     pdf = function(w, h) grDevices::cairo_pdf(file, width = w, height = h),
     png = function(w, h) grDevices::png(file, width = w, height = h, units = "in", res = dpi),
     stop("pt_save() writes .pdf, .svg or .png files.", call. = FALSE))
+  # Closes only the device it opened (its number), then makes the caller's current
+  # device current again.
   before <- grDevices::dev.cur()
-  on.exit(if (grDevices::dev.cur() != before) grDevices::dev.off())
-  .pt_quiet(render_all(fig$entries, fig$region_params, fig$settings, device_fn = dev))
+  opened <- NULL
+  on.exit({
+    if (!is.null(opened) && opened %in% grDevices::dev.list()) grDevices::dev.off(opened)
+    if (before %in% grDevices::dev.list()) grDevices::dev.set(before)
+  })
+  .pt_quiet(render_all(fig$entries, fig$region_params, fig$settings,
+                       device_fn = function(w, h) { dev(w, h); opened <<- grDevices::dev.cur() }))
+  if (!is.null(opened)) grDevices::dev.off(opened)
+  opened <- NULL
+  if (tolower(tools::file_ext(file)) == "svg") .pt_tidy_svg(file)
   invisible(file)
 }
 
-# Hides plotgardener's per-grob "segments[segments2]" lines and AnnotationDbi's
-# "select() returned 1:many" notes, hundreds per figure; other messages pass.
+# Hides plotgardener's per-grob "segments[segments2]" lines, hundreds per figure,
+# for the API and the app; other messages pass. (AnnotationDbi's "select()
+# returned 1:many" notes are silenced at each select() call; the pattern stays
+# as a backstop.)
 .pt_quiet <- function(expr) withCallingHandlers(expr, message = function(m) {
   if (grepl("^\\w+\\[\\w+\\]\\s*$|^'select\\(\\)' returned", conditionMessage(m))) invokeRestart("muffleMessage")
 })
@@ -332,6 +347,7 @@ pt_save <- function(fig, file, dpi = 300) {
 #' @export
 pt_script <- function(fig, file) {
   stopifnot(inherits(fig, "pt_figure"))
+  fig$entries <- lapply(fig$entries, function(e) replace(e, "viz", .pt_renamed_junctions_key(e$viz)))
   writeLines(assemble_download_script(fig$entries, fig$region_params, fig$settings), file)
   invisible(file)
 }
@@ -350,10 +366,10 @@ knit_print.pt_figure <- function(x, ...) {
 #' own folder), and the app opens on it with a gene and tracks already picked.
 #'
 #' - `"mammary"` (the default): mouse mammary basal cells (Basal) vs luminal progenitors (LP)
-#'   (Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat, mm10: ATAC and transcript counts.
+#'   (Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat, mm10: ATAC and transcript expression.
 #'   Elf5 is almost silent in Basal and highly expressed in LP. Needs `org.Mm.eg.db`.
 #' - `"human"`: ENCODE GM12878 vs K562 at PSME1/PSME2, hg38: ATAC, splice junctions and
-#'   transcript counts. Needs `org.Hs.eg.db`.
+#'   transcript expression. Needs `org.Hs.eg.db`.
 #'
 #' @param dataset `"mammary"` or `"human"`.
 #' @return The path of the example's `samples.txt`.
@@ -390,7 +406,8 @@ pt_example <- function(dataset = c("mammary", "human")) {
 pt_preload <- function(proj, fig) {
   stopifnot(inherits(proj, "pt_project"), inherits(fig, "pt_figure"))
   if (is.na(fig$gene)) stop("pt_preload() needs a figure made with gene =.", call. = FALSE)
-  .pt_start_view(proj$dir, proj$items, fig$keys, fig$gene, names(proj$colours))
+  proj <- .pt_renamed_junctions_project(proj)
+  .pt_start_view(proj$dir, proj$items, .pt_renamed_junctions_key(fig$keys), fig$gene, names(proj$colours))
   invisible(proj$dir)
 }
 
@@ -404,7 +421,7 @@ pt_preload <- function(proj, fig) {
   mode <- if (length(conds) == 1) "single" else if (length(conds) == 2) "two" else "compose"
   if (mode == "compose" && length(cmp)) {
     warning("The app's Multi mode (3+ samples) has no comparison tracks; preloading without them.", call. = FALSE)
-    keys <- setdiff(keys, names(cmp))
+    keys <- keys[!keys %in% names(cmp)]
   }
   .pt_write_start_view(dir, mode, if (mode == "compose") character(0) else conds, gene, keys)
 }
@@ -416,4 +433,26 @@ pt_preload <- function(proj, fig) {
   settings$start_view <- list(view_mode = view_mode, conditions = as.list(conditions), gene = gene,
                               tracks = as.list(keys))
   writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE, null = "null"), json)
+}
+
+# The junction track's viz key used to be "sashimi". A saved start view can still hold
+# its item keys ("sashimi_<name>_<sample>") and a saved pt_figure its entries' viz
+# ("sashimi"); this gives their "junctions" equivalents. NULL (no tracks) stays NULL.
+.pt_renamed_junctions_key <- function(keys) {
+  if (is.null(keys)) return(NULL)
+  sub("^sashimi(_|$)", "junctions\\1", keys)
+}
+
+# A pt_project made before that rename and kept (saveRDS()), with its track items and
+# track table keyed as they are made now. A project made since comes back as it is.
+.pt_renamed_junctions_project <- function(proj) {
+  if (!any(grepl("^sashimi(_|$)", names(proj$items)))) return(proj)
+  proj$items <- lapply(proj$items, function(it) {
+    it$key  <- .pt_renamed_junctions_key(it$key)
+    it$type <- .pt_renamed_junctions_key(it$type)
+    it
+  })
+  names(proj$items) <- .pt_renamed_junctions_key(names(proj$items))
+  proj$tracks$key <- .pt_renamed_junctions_key(proj$tracks$key)
+  proj
 }

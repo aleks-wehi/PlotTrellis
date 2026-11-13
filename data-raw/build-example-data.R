@@ -1,5 +1,5 @@
 # Rebuild the data files in inst/extdata/example/ (plottrellis_example()'s
-# data, phase-I.2 step 23): the Ehf-Elf5-Cat locus of the mouse mammary
+# and pt_example()'s data): the Ehf-Elf5-Cat locus of the mouse mammary
 # dataset (Milevskiy et al. 2023, Cell Genomics, GEO GSE227750), Basal vs LP.
 # samples.txt and README in that folder are hand-written, not built here.
 #

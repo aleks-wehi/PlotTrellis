@@ -1,4 +1,4 @@
-# Phase I.1 step 4a review: the real app server's gene observer. testServer()
+# The real app server's gene observer. testServer()
 # doesn't echo updateSelectizeInput() back, so each echo the browser would
 # send after a resolved ID or case fix is set by hand.
 

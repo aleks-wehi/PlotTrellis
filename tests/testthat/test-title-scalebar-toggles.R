@@ -1,7 +1,7 @@
-# Feature 40 (Phase I.3 step 28): show_title / show_scale_bar switch off the
+# show_title / show_scale_bar switch off the
 # figure title and the first coverage track's scale bar. Both default to on,
 # so a settings list without them (test_settings(), or a script calling
-# render_all() directly) must give today's figure.
+# render_all() directly) must give a figure with both.
 test_that("show_title and show_scale_bar remove the title and the scale bar", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")

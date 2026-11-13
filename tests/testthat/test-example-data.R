@@ -1,4 +1,4 @@
-# Phase I.2 step 23: the bundled example project (plottrellis_example(),
+# The bundled example project (plottrellis_example(),
 # inst/extdata/example/). Uses only the installed example data, never the
 # data/ fixtures, so these run on R-universe too.
 
@@ -14,9 +14,6 @@ local({
     close(con)
   }
 })
-
-# No project open (an earlier test file may have opened one): caches go beside the GTF.
-.pt_set_cache_root(NULL)
 
 # Every file of the installed example with its md5, to show nothing writes there.
 example_fingerprint <- function() {
@@ -93,7 +90,7 @@ test_that("the example's Elf5 figure renders from a fresh copy, offline; golden 
   render_all(specs, region, cfg)
   grDevices::dev.off()
   text <- paste(readLines(svg, warn = FALSE), collapse = "\n")
-  for (label in c("Elf5-201", "Elf5-207", "Basal", "LP", "Transcript counts"))
+  for (label in c("Elf5-201", "Elf5-207", "Basal", "LP", "Transcript expression"))
     expect_match(text, label, fixed = TRUE)
   expect_identical(example_fingerprint(), before)
 

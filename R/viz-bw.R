@@ -1,22 +1,34 @@
+info_bw <- function() list(
+  kind = "sample", data_type = "bw", order = 10, filter = c(bw = "Coverage"), scale_bar = TRUE
+)
+
 settings_bw <- function(dict, entry, settings, track_w, region_params) {
   entry$data <- load_bw_file(entry$path, region_params)
-  if (is.null(entry$height)) entry$height <- settings$atac_height %||% 0.85
+  if (is.null(entry$height)) entry$height <- settings$atac_height
 
-  key <- paste0("bw_range_", gsub("[^A-Za-z0-9._]", "_", entry$name))
-  this_max <- if (length(entry$data$gr) > 0) max(entry$data$gr$score, na.rm = TRUE) else 0
+  key <- .pt_shared_range_key("bw_range_", entry)
+  # -Inf: no signal in view at all. `bw_negative_`: some track sharing the range has a score
+  # below 0 in view (render_bw() then keeps plotgardener's own range rather than 0-1).
+  scores <- entry$data$gr$score
+  this_max <- if (length(scores) > 0) max(scores, na.rm = TRUE) else -Inf
   cur <- dict[[key]]
   dict[[key]] <- if (is.null(cur)) this_max else max(cur, this_max)
+  neg_key <- .pt_shared_range_key("bw_negative_", entry)
+  dict[[neg_key]] <- isTRUE(dict[[neg_key]]) || any(scores < 0, na.rm = TRUE)
   list(dict = dict, entry = entry)
 }
 
 render_bw <- function(entry, dict, ctx) {
-  key   <- paste0("bw_range_", gsub("[^A-Za-z0-9._]", "_", entry$name))  # must match settings_bw's key
+  key   <- .pt_shared_range_key("bw_range_", entry)
   raw   <- dict[[key]]
-  range <- if (!is.null(raw) && is.finite(raw) && raw > 0) c(0, round(raw * (10 / 9), 4)) else NULL
+  # Signal above 0: 0 to its shared maximum. None above 0 and none below (no signal in view, or
+  # only explicit zeros): an empty 0-1 scale, axis included. Some below 0 and none above (all
+  # negative, say): plotgardener's own range (NULL), which draws it.
+  negative <- isTRUE(dict[[.pt_shared_range_key("bw_negative_", entry)]])
+  range <- if (!is.null(raw) && is.finite(raw) && raw > 0) c(0, round(raw * (10 / 9), 4)) else if (!negative) c(0, 1)
 
-  if (isTRUE(entry$data$failed)) {
-    label <- if (isTRUE(entry$data$no_chrom)) "Chromosome not found" else "No data"
-    no_data_text(ctx$track_x, ctx$y, ctx$track_w, ctx$height, ctx$fontsize - 1, ctx$font, ctx$fontcol, label = label)
+  if (isTRUE(entry$data$no_chrom)) {
+    .pt_status_text(ctx, "Chromosome not found")
   } else {
     plotSignal(
       data = entry$path, params = ctx$region,
@@ -24,11 +36,7 @@ render_bw <- function(entry, dict, ctx) {
       x = ctx$track_x, y = ctx$y, width = ctx$track_w, height = ctx$height,
       fill = entry$colour, linecolor = entry$colour, range = range
     )
-    mixed_text(
-      list(list(text = entry$name, colour = ctx$fontcol, fontface = "bold"),
-           list(text = paste0(" \u00B7 ", entry$sample), colour = entry$colour)),
-      x = ctx$track_x + 0.05, y = ctx$y + 0.08, fontsize = ctx$fontsize - 1, fontfamily = ctx$font
-    )
+    .pt_heading(ctx, entry)
     if (isTRUE(ctx$show_track_axes) && !is.null(range)) {
       draw_value_axis(range, ctx$track_x - 0.08, ctx$y, ctx$height, ctx$fontsize - 2, ctx$font, ctx$fontcol)
     }

@@ -2,30 +2,122 @@
 % Please edit documentation in R/render_all.R
 \name{viz-module-contract}
 \alias{viz-module-contract}
-\title{The \verb{settings_<key>()}/\verb{render_<key>()} module contract}
+\title{The \verb{info_<key>()}/\verb{settings_<key>()}/\verb{render_<key>()} module contract}
 \description{
-A viz module is a pair of top-level functions, \verb{settings_<key>()} and
-\verb{render_<key>()}, defined anywhere under \verb{R/} (by convention in a
-\verb{viz-<key>.R} file). Adding a new pair is enough for both the live render
-path (\code{render_all()}) and the downloaded-script assembly path
-(\code{assemble_download_script()}, \code{download-script.R}) to pick it up
-automatically -- see \link{viz-module-discovery} for how that lookup works.
-There is no list of modules to update by hand.
+A track type ("viz module") is a set of top-level functions named after its
+key, by convention all in one \verb{R/viz-<key>.R} file: the pair
+\verb{settings_<key>()}/\verb{render_<key>()}, which draw it, and \verb{info_<key>()}, which
+declares what it is. They are found by name (\link{viz-module-discovery}), both by
+\code{render_all()} and by the downloaded-script assembly (\code{download-script.R}).
+Every list of track types the app and the code API use is derived from the
+declarations: adding a track type is one new file plus a rebuild of
+\code{R/sysdata.rda} (\verb{Rscript --vanilla data-raw/build-source-text.R} in the
+package folder), which holds the source text a downloaded script is pasted
+from; without the rebuild, \code{pt_script()} stops for any figure using the new
+track type.
 }
 \details{
-\verb{settings_<key>(dict, entry, settings, track_w, region_params)} runs once
-per track before any drawing happens. It loads/validates this track's data,
-fills in \code{entry$height} if not already set, and can read or write shared
-state via \code{dict} (e.g. a cross-track value range every same-type track
-needs to agree on). It returns \code{list(dict = dict, entry = entry)}.
+\verb{settings_<key>(dict, entry, settings, track_w, region_params)} runs once per
+track (once per panel for a row-panel type, below), in figure order, before
+any drawing happens. It loads this track's data into \code{entry$data}, sets
+\code{entry$height} (inches) if it is not already set, and can read or write
+\code{dict}, a named list every track's settings call passes on to the next (e.g.
+a value range all tracks of the type share). It returns
+\code{list(dict = dict, entry = entry)}. \code{settings} has every display setting the
+caller left unset filled from its default (\code{.pt_fill_settings()}).
 
-\verb{render_<key>(entry, dict, ctx)} does the actual plotgardener drawing for
-one track, using the \code{entry}/\code{dict} from its matching \verb{settings_<key>()}
-call plus \code{ctx} (page geometry, region, fonts, per-render-call options)
-built once by \code{render_all()} and passed to every track's render function.
+\verb{render_<key>(entry, dict, ctx)} draws the track with plotgardener, from its
+\code{entry}, the final \code{dict} and \code{ctx}, built by \code{render_all()} for each track:
+its slot (\code{y}, \code{height}, \code{track_x}, \code{track_w}, inches from the page's top
+left), \code{region} (plotgardener params with the assembly), \code{region_params}
+(\code{chrom}, \code{start}, \code{end}, \code{gene}, the gene being \code{NA} or absent for a
+coordinates view), \code{font}, \code{fontsize}, \code{fontcol}, \code{scale} and \code{is_first}
+(below), \code{index}, the project-wide display options (\code{show_track_axes},
+\code{hic_norm}, \code{chr_fmt}, \code{diff_colour_hi}/\code{diff_colour_lo},
+\code{min_junction_support}, \code{junction_opacity_cap}) and the genome's annotation;
+the \code{ctx} list in \code{render_all()} is the complete set.
 
-A module with only one half defined is silently excluded from
-\code{\link[=.pt_viz_keys]{.pt_viz_keys()}} rather than erroring, so an in-progress module doesn't
-break discovery for every other one.
+A view with nothing in it (the file is read fine but has no data in the region)
+is not a special case: the track draws as usual (heading, axes, shared range),
+with nothing plotted and no message. Besides drawing, a track ends in one of
+three ways:
+\describe{
+\item{The track does not apply to the view}{(no gene, \code{.pt_no_gene()}; a
+chromosome the file lacks): the module draws a message across its slot with
+\code{.pt_status_text(ctx, label)} and returns.}
+\item{The track can't be drawn}{(a data file missing or unreadable,
+\code{.pt_check_file()}, \code{.pt_read_error()}; a wrong format): the module calls
+\code{stop(..., call. = FALSE)}; an error in either function becomes an in-figure
+"<key> track failed: ..." message in red in that track's slot, and the rest
+of the figure still draws.}
+\item{The figure can't be drawn}{An error outside the modules (the genome's
+annotation, an unknown track type, no height set) stops \code{render_all()}.}
+}
+
+The \code{entry} a module receives, by kind: a per-sample track has \code{viz} (the
+key), \code{sample}, \code{colour} (the sample's identity colour), \code{name} (its data's
+name in \code{samples.txt}, e.g. \code{atac}) and \code{path} (the data file), or the fields
+its own \verb{detect_<key>()} put on the track item (below); a two-sample
+comparison has \code{viz}, \code{name}, \code{control_label}/\code{treatment_label},
+\code{control_path}/\code{treatment_path}, \code{control_colour}/\code{treatment_colour} (the
+project's two role colours) and any fields its \verb{enrich_<key>()} added; a
+sample-free track has only \code{viz}. Each also has \code{height} (a preset, else
+\code{NULL}) and \code{data} (\code{NULL} until its settings call).
+
+\verb{info_<key>()} returns a plain list; only \code{kind} (and \code{data_type} for a track
+with data) is required:
+\describe{
+\item{\code{kind}}{\code{"sample"} (one track per sample that has the data),
+\code{"comparison"} (one track per ordered pair of samples that both have data
+of the same name) or \code{"fixed"} (one sample-free track).}
+\item{\code{data_type}}{The \code{samples.txt} data type it reads: one of
+\code{DATA_TYPE_VOCAB} (\code{bw}, \code{bed}, \code{hic}, \code{quantdir}, \code{paired-end}).}
+\item{\code{label}}{Its label in the app; \verb{\{name\}} stands for the data's name.
+The sample(s) follow it. Default \verb{"\{name\}"}, the key for a fixed track.}
+\item{\code{api}}{Its track name in \code{\link[=pt_tracks]{pt_tracks()}}/\code{\link[=pt_figure]{pt_figure()}}, \verb{\{name\}} as in
+\code{label}. Default \verb{"\{name\}"}, the key for a fixed track. When two types give
+the same name, the type detected later gets \verb{_<key>} appended.}
+\item{\code{order}}{Its position in detection among tracks of its kind (a
+number, default last). It orders \code{\link[=pt_tracks]{pt_tracks()}} and decides which of two
+same-named types keeps the plain name.}
+\item{\code{filter}}{The app's filter button that lists it, as
+\verb{c(<button id> = "<button label>")}; types sharing an id share the button.
+A button whose tracks are all comparisons shows in Two-sample mode only.
+Default none (listed under All only).}
+\item{\code{scale_bar}}{\code{TRUE}: when it is the figure's first track, \code{ctx$is_first}
+is \code{TRUE} (unless the scale bar is switched off) and the module draws the
+scale bar with \code{draw_scale_bar(ctx)}. Default \code{FALSE}.}
+\item{\code{row_panel}}{\code{TRUE}: adjacent tracks of the type draw as one panel
+(below). Default \code{FALSE}.}
+\item{\code{needs_gene}}{\code{TRUE}: it draws only for a gene, not for coordinates;
+the app flags it in a coordinates view. Default \code{FALSE}.}
+\item{\code{path_field}}{The track item field holding a per-sample track's data
+path. It reaches the entry as \code{path}; an item made by a module's own
+\verb{detect_<key>()} with no path there (\code{NA}, empty) gives an entry without \code{path}.
+Default \code{"file"}.}
+\item{\code{entry_settings}}{Names of project settings copied into each of its
+entries, so a downloaded script carries them per track. Default none.}
+}
+A per-sample track is offered for each of a sample's data of \code{data_type}; a
+module with its own rule defines \verb{detect_<key>(sample_row, info)}, returning
+a list of track items. A comparison can add fields to its items with
+\verb{enrich_<key>(items, control_row, treatment_row)}, returning the items (an
+empty list offers none). A declaration that is malformed (an unknown kind or
+field, a missing data type, a filter button given two labels) is an error
+naming the module, raised where tracks are listed (the app's start,
+\code{\link[=pt_project]{pt_project()}}). A module without
+\verb{info_<key>()} is offered nowhere, but still draws in a figure that names it
+(the genome axis \code{render_all()} adds is one).
+
+Adjacent tracks of a \code{row_panel} type draw as one panel with a row per track:
+such a run (a lone track too) reaches its module as a single entry,
+\verb{list(viz = <key>, rows = <the run's entries, in figure order>)}, plus
+\code{figure_rows}, the rows of every panel of that type in the figure. A row panel
+sizes itself: a height preset on one of its tracks is not used.
+
+A key with only one of \verb{settings_<key>()}/\verb{render_<key>()} is silently
+excluded from \code{\link[=.pt_viz_keys]{.pt_viz_keys()}}, so an in-progress module doesn't break
+discovery for every other one; an \verb{info_<key>()} without both of them is an
+error.
 }
 \keyword{internal}

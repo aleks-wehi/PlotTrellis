@@ -1,17 +1,17 @@
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/uniprot_canonical.R:1"
+# Per-gene UniProt canonical-isoform check for the Gene info table. Three tiers, most to least
+# authoritative: UniProt's DR Ensembl lines, its DR CCDS lines (matched to the GTF's ccds_id),
+# then translated CDS length against the canonical sequence length. An unreachable UniProt
+# gives NA results rather than an error; results are cached per OrgDb and gene.
 
-UNIPROT_CANONICAL_CACHE_PATH <- file.path(
-  tools::R_user_dir("PlotTrellis", which = "cache"), "uniprot_canonical_cache.rds"
-)
-
-# rationale: see solutions/concepts/19-relocated-code-rationale.md, "utils/uniprot_canonical.R:42"
-# 4 (2026-10-27, Phase I.1 step 5): drops entries that offline sessions
+# Bump when the shape of a cached entry changes: an entry missing a field the code reads
+# throws, so a cache written under another version is discarded whole.
+# 4: drops entries that offline sessions
 # cached as "no accession" before network failures stopped being cached.
 UNIPROT_CACHE_SCHEMA_VERSION <- 4L
 
-.uniprot_canonical_cache_load <- function() {
-  if (!file.exists(UNIPROT_CANONICAL_CACHE_PATH)) return(list())
-  cache <- tryCatch(readRDS(UNIPROT_CANONICAL_CACHE_PATH), error = function(e) NULL)
+.uniprot_canonical_cache_load <- function(path) {
+  if (!file.exists(path)) return(list())
+  cache <- tryCatch(readRDS(path), error = function(e) NULL)
   if (is.null(cache) || is.null(attr(cache, "schema_version")) ||
       attr(cache, "schema_version") != UNIPROT_CACHE_SCHEMA_VERSION) {
     return(list())
@@ -19,17 +19,15 @@ UNIPROT_CACHE_SCHEMA_VERSION <- 4L
   cache
 }
 
-.uniprot_canonical_cache_save <- function(cache) {
+.uniprot_canonical_cache_save <- function(cache, path) {
   attr(cache, "schema_version") <- UNIPROT_CACHE_SCHEMA_VERSION
-  dir.create(dirname(UNIPROT_CANONICAL_CACHE_PATH), recursive = TRUE, showWarnings = FALSE)
-  saveRDS(cache, UNIPROT_CANONICAL_CACHE_PATH)
+  .pt_cache_save(cache, path)
 }
 
-# NCBI taxon ID + Ensembl-transcript-ID prefix per orgdb this app supports --
-# duplicated from utils/protein_domains.R's ORGDB_TAXON_ID (same "just two
-# species, no generic accessor" reasoning there) rather than shared. Keep in
-# sync with protein_domains.R's copy (and utils/transcript_annotation.R's
-# ORGDB_TAXON_ID copy) if any of them change.
+# NCBI taxon ID and Ensembl-transcript-ID prefix per orgdb this app supports, for every
+# UniProt search (here, protein_domains.R and transcript_annotation.R). UniProt's search API
+# requires organism_id, and there's no generic orgdb->taxon accessor worth adding for just
+# two species. Extend when a new genome's orgdb is added.
 ORGDB_TAXON_ID <- c(org.Mm.eg.db = 10090L, org.Hs.eg.db = 9606L)
 ORGDB_ENSEMBL_TX_PREFIX <- c(org.Mm.eg.db = "ENSMUST", org.Hs.eg.db = "ENST")
 
@@ -60,8 +58,8 @@ UNIPROT_BACKOFF_SECS <- 120
   })
 }
 
-# gene_symbol -> reviewed (Swiss-Prot) UniProt accession, or NA if no reviewed hit; spike 0.5 validated this query for Nfatc1/Klrk1.
-uniprot_search_by_gene <- function(gene_symbol, organism_id = 10090) {
+# gene_symbol -> reviewed (Swiss-Prot) UniProt accession, or NA if no reviewed hit.
+uniprot_search_by_gene <- function(gene_symbol, organism_id) {
   url <- sprintf(
     "https://rest.uniprot.org/uniprotkb/search?query=gene:%s+AND+organism_id:%d+AND+reviewed:true&fields=accession&format=list",
     gene_symbol, organism_id
@@ -95,10 +93,10 @@ uniprot_search_by_gene <- function(gene_symbol, organism_id = 10090) {
              stringsAsFactors = FALSE)
 }
 
-# `orgdb` is required, not defaulted (2026-09-08 GTF-consistency audit) -- this used to hardcode organism_id:10090 (mouse) via uniprot_search_by_gene()'s own default AND hardcode "ENSMUST" (mouse) as the DR Ensembl id pattern. Full rationale: solutions/concepts/19-relocated-code-rationale.md, "utils/uniprot_canonical.R:123".
+# `orgdb` is required, not defaulted: it sets both the UniProt search's organism_id and the Ensembl transcript prefix matched in the DR lines, so a default species would search the wrong one on another genome's project.
 .uniprot_fetch_entry <- function(gene_symbol, orgdb) {
   if (!orgdb %in% names(ORGDB_TAXON_ID))
-    stop("No taxon ID mapping for orgdb '", orgdb, "' in ORGDB_TAXON_ID (utils/uniprot_canonical.R) -- add one.")
+    stop("No taxon ID mapping for orgdb '", orgdb, "' in ORGDB_TAXON_ID (needed to find the gene's canonical isoform in UniProt) -- add one.", call. = FALSE)
   ens_tx_prefix <- ORGDB_ENSEMBL_TX_PREFIX[[orgdb]]
 
   empty_map <- data.frame(id = character(0), isoform = character(0), stringsAsFactors = FALSE)
@@ -151,8 +149,9 @@ TIER_CCDS    <- "ccds_xref"
 TIER_LENGTH  <- "length_match"
 TIER_ORDER   <- c(TIER_ENSEMBL, TIER_CCDS, TIER_LENGTH)
 
-# One row per element of tx_ids (order preserved, versioned IDs matching cds_by_tx's names, NOT tx_id_stripped); tx_ccds_id must be in the same order. Full rationale: solutions/concepts/19-relocated-code-rationale.md, "utils/uniprot_canonical.R:200".
-uniprot_canonical_match <- function(gene_symbol, tx_ids, cds_by_tx, tx_ccds_id = NULL, orgdb) {
+# One row per element of tx_ids (order preserved, versioned IDs matching cds_by_tx's names, NOT tx_id_stripped); tx_ccds_id must be in the same order.
+# `cache_path`: the cache file, <cache root>/uniprot_canonical_cache.rds (see .pt_cache_root()).
+uniprot_canonical_match <- function(gene_symbol, tx_ids, cds_by_tx, tx_ccds_id = NULL, orgdb, cache_path) {
   n <- length(tx_ids)
   na_result <- data.frame(uniprot_accession = rep(NA_character_, n),
                            uniprot_match = rep(NA, n),
@@ -167,11 +166,10 @@ uniprot_canonical_match <- function(gene_symbol, tx_ids, cds_by_tx, tx_ccds_id =
   if (is.null(tx_ccds_id)) tx_ccds_id <- rep(NA_character_, n)
 
   # Cache scoped by orgdb, not just gene_symbol -- the same case-sensitive
-  # symbol string isn't guaranteed unique across species (mirrors
-  # utils/protein_domains.R's PAX5-bug fix: mixing species under one cache
-  # key served one species' cached UniProt entry for the other).
+  # symbol string isn't guaranteed unique across species, and one key for
+  # both would serve one species' cached UniProt entry for the other.
   cache_key <- paste0(orgdb, "|", gene_symbol)
-  cache <- .uniprot_canonical_cache_load()
+  cache <- .uniprot_canonical_cache_load(cache_path)
   entry <- cache[[cache_key]]
   if (is.null(entry)) {
     # UniProt unreachable: return the all-NA result uncached, so the next
@@ -180,7 +178,7 @@ uniprot_canonical_match <- function(gene_symbol, tx_ids, cds_by_tx, tx_ccds_id =
                       uniprot_unreachable = function(e) NULL)
     if (is.null(entry)) return(na_result)
     cache[[cache_key]] <- entry
-    tryCatch(.uniprot_canonical_cache_save(cache), error = function(e) NULL)
+    .uniprot_canonical_cache_save(cache, cache_path)
   }
   if (is.na(entry$accession) || is.na(entry$protein_len)) return(na_result)
 

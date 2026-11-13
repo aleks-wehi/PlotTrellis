@@ -15,7 +15,7 @@
 # orgdb: org.Mm.eg.db
 # genome_label: mm10
 # start_gene: Elf5
-# start_tracks: atac@Basal, atac@LP, transcript_counts@Basal, transcript_counts@LP, transcripts_annotated, genes
+# start_tracks: atac@Basal, atac@LP, transcript_expression@Basal, transcript_expression@LP, transcripts_annotated, genes
 condition	colour	bw:atac	quantdir:Quant
 Basal	#b31e1e	atac/Basal_ATAC.bw	quant/Basal_rep1
 LP	#4b7538	atac/LP_ATAC.bw	quant/LP_rep1

@@ -1,4 +1,4 @@
-# Phase I.3 step 28 (stage B): per-setting effect tests for the page/display
+# Per-setting effect tests for the page/display
 # settings (font, fontsize, page_w, chr_fmt, show_track_axes, atac_height on
 # the bw_diff_stacked path). Each test renders the same figure at two values
 # of one setting and asserts a specific difference, so it fails if the
@@ -75,12 +75,12 @@ synth_bw_track <- function() list(viz = "bw", sample = "S1", colour = "#1B9E77",
 synth_diff_track <- function() list(viz = "bw_diff_stacked", name = "atac", control_label = "A", treatment_label = "B",
                                     control_path = synth()$bw_a, treatment_path = synth()$bw_b,
                                     control_colour = "#4D4D4D", treatment_colour = "#56B4E9", height = NULL, data = NULL)
-synth_sashimi_track <- function() list(viz = "sashimi", sample = "S1", colour = "#1B9E77", name = "Junctions",
+synth_junctions_track <- function() list(viz = "junctions", sample = "S1", colour = "#1B9E77", name = "Junctions",
                                        path = synth()$bedpe, height = NULL, data = NULL)
 
 skip_no_synth <- function() {
   # R-universe Windows checks render these tracks without the SVG text these
-  # tests read (2026-10-27); they run on Linux and macOS.
+  # tests read; they run on Linux and macOS.
   skip_on_os("windows")
   skip_if_not_installed("org.Mm.eg.db")
   skip_if_not_installed("txdbmaker")
@@ -101,6 +101,152 @@ test_that("font changes the font-family of figure text (no fixture data)", {
   alt <- family(synth_svg(list(), synth_settings(list(font = "mono"))))
   expect_false(identical(def, alt))
 })
+
+# A bed track reads the first three columns of any BED file and draws plain boxes: extra
+# columns and BED12 blocks make no difference (the vignette's data-type table says so).
+# Not covered: gappedPeak-style files with a decimal column, which have a known problem.
+test_that("bed draws one plain box per interval from a BED3, BED6 or BED12 file (no fixture data)", {
+  skip_no_synth()
+  bed_file <- function(lines) { f <- tempfile(fileext = ".bed"); writeLines(lines, f); f }
+  spans <- rbind(c(2000, 2500), c(5000, 5800), c(9000, 9500))
+  bed3  <- bed_file(sprintf("chr1\t%d\t%d", spans[, 1], spans[, 2]))
+  bed6  <- bed_file(sprintf("chr1\t%d\t%d\tp%d\t5\t+", spans[, 1], spans[, 2], 1:3))
+  bed12 <- bed_file(sprintf("chr1\t%d\t%d\tp%d\t5\t+\t%d\t%d\t0\t2\t100,100\t0,%d",
+                            spans[, 1], spans[, 2], 1:3, spans[, 1], spans[, 2], spans[, 2] - spans[, 1] - 100))
+  outside <- bed_file("chr1\t100\t200")
+  on.exit(unlink(c(bed3, bed6, bed12, outside)), add = TRUE)
+  n_boxes <- function(path) {
+    track <- list(viz = "bed", sample = "S1", name = "peaks", colour = "#1B9E77", path = path, height = NULL, data = NULL)
+    svg <- suppressWarnings(synth_svg(list(track), synth_settings()))
+    rects <- regmatches(svg, gregexpr("<rect[^>]*>", svg))[[1]]
+    sum(grepl("fill: #1B9E77", rects, fixed = TRUE))  # the track's own colour: the interval boxes
+  }
+  expect_identical(n_boxes(bed3), 3L)
+  expect_identical(n_boxes(bed6), 3L)
+  expect_identical(n_boxes(bed12), 3L)  # blocks are not drawn: still one box per interval
+  expect_identical(n_boxes(outside), 0L)
+})
+
+# ---- Fonts: each offered font renders, a missing one falls back ------------
+
+# The Font choices offered in the composer's Figure settings, read from the UI
+# itself so a font added there is tested without editing this file.
+offered_fonts <- function() {
+  html <- as.character(.pt_display_settings_ui(list(), "s_")$display)
+  select <- regmatches(html, regexpr('(?s)<select [^>]*id="s_font"[^>]*>.*?</select>', html, perl = TRUE))
+  sub('value="([^"]*)"', "\\1", regmatches(select, gregexpr('value="[^"]*"', select))[[1]])
+}
+
+# The face svglite writes for `font` when the device resolves it on its own,
+# outside render_all(): what every figure label should say.
+resolved_family <- function(font) {
+  f <- tempfile(fileext = ".svg")
+  on.exit(unlink(f))
+  svglite::svglite(f, width = 1, height = 1)
+  grid::grid.text("x", gp = grid::gpar(fontfamily = font))
+  grDevices::dev.off()
+  sub(".*font-family: ([^;]*);.*", "\\1", grep("<text", readLines(f), value = TRUE)[1])
+}
+
+svg_families <- function(svg) sub(".*font-family: ([^;]*);.*", "\\1", svg_texts(svg))
+svg_labels <- function(svg) sub(".*>([^<]*)</text>", "\\1", svg_texts(svg))
+
+# Genes, coverage, junction and stacked-diff tracks plus the genome axis,
+# scale bar, value axes and title: every kind of text the synthetic data draws.
+synth_all_tracks <- function() {
+  list(list(viz = "genes", height = NULL, data = NULL), synth_bw_track(), synth_junctions_track(), synth_diff_track())
+}
+
+# render_all() draws a failed track as an error line and only says so in a
+# message, so a clean render means no warning and no "track failed" message.
+expect_clean_render <- function(expr) {
+  expect_no_warning(expect_no_message(expr, message = "track failed"))
+}
+
+# Renders through the same devices as pt_save(): .pdf and .png must open,
+# draw and close with no error, warning or failed track, and write a
+# non-empty file.
+expect_renders_on_pdf_and_png <- function(settings) {
+  for (ext in c("pdf", "png")) {
+    f <- tempfile(fileext = paste0(".", ext))
+    dev <- switch(ext,
+      pdf = function(w, h) grDevices::cairo_pdf(f, width = w, height = h),
+      png = function(w, h) grDevices::png(f, width = w, height = h, units = "in", res = 72))
+    before <- grDevices::dev.cur()
+    expect_clean_render(
+      utils::capture.output(render_all(synth_all_tracks(), SYNTH_REGION, settings, device_fn = dev))
+    )
+    if (grDevices::dev.cur() != before) grDevices::dev.off()
+    expect_gt(file.size(f), 0)
+    unlink(f)
+  }
+}
+
+test_that("every font offered in Figure settings renders to SVG, PDF and PNG, all labels in it (no fixture data)", {
+  skip_no_synth()
+  fonts <- offered_fonts()
+  expect_true(all(c("DejaVu Sans", "Helvetica", "Arial") %in% fonts))
+  for (font in fonts) {
+    settings <- synth_settings(list(font = font, title = "Title"))
+    svg <- expect_clean_render(synth_svg(synth_all_tracks(), settings))
+    fams <- svg_families(svg)
+    expect_gt(length(fams), 10)
+    expect_identical(unique(fams), resolved_family(font), label = paste("SVG text families for", font))
+    expect_renders_on_pdf_and_png(settings)
+  }
+})
+
+# A font the system doesn't have (a hand-edited project_settings.json or a
+# samples.txt "# font:" line can name any) must not break the figure: every
+# device falls back to the face the system uses for an unknown family.
+test_that("a font missing from the system falls back to the system's face and still draws every label (no fixture data)", {
+  skip_no_synth()
+  missing <- "PlotTrellis Missing Font"
+  def <- synth_svg(synth_all_tracks(), synth_settings(list(title = "Title")))
+  settings <- synth_settings(list(font = missing, title = "Title"))
+  svg <- expect_clean_render(synth_svg(synth_all_tracks(), settings))
+  fallback <- resolved_family(missing)
+  expect_false(identical(fallback, paste0('"', missing, '"')))
+  expect_identical(unique(svg_families(svg)), fallback)
+  expect_identical(svg_labels(svg), svg_labels(def))
+  expect_renders_on_pdf_and_png(settings)
+})
+
+# Every track type with fixture data, at a face distinct from the default:
+# catches a track that draws some text without ctx$font.
+font_cases <- list(
+  list(type = "genes", dataset = "mouse", sample = "Ba"),
+  list(type = "bw", dataset = "mouse", sample = "Ba"),
+  list(type = "hic", dataset = "mouse", sample = "Ba"),
+  list(type = "protein_domains", dataset = "mouse", sample = "Ba"),
+  list(type = "junctions", dataset = "human", sample = "GM12878"),
+  list(type = "tpm_usage", dataset = "mouse", sample = "Ba"),
+  list(type = "transcripts", dataset = "mouse", sample = "Ba"),
+  list(type = "transcripts_all", dataset = "mouse", sample = "Ba"),
+  list(type = "transcripts_annotated", dataset = "mouse", sample = "Ba"),
+  list(type = "bed", dataset = "human", sample = "GM12878"),
+  list(type = "bw_diff_stacked", dataset = "mouse", control = "Ba", treatment = "LP"),
+  list(type = "junctions_mirrored_diff", dataset = "mouse", control = "Ba", treatment = "P6"),
+  list(type = "junctions_mirrored_diff_tpm_scaled", dataset = "human", control = "GM12878", treatment = "K562")
+)
+
+for (cs in font_cases) {
+  local({
+    cs <- cs
+    test_that(paste0("every ", cs$type, " label follows the font setting (", cs$dataset, " dataset)"), {
+      skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+      rows <- test_rows(cs$dataset)
+      spec <- if (is.null(cs$sample)) pair_track(cs$type, rows[[cs$control]], rows[[cs$treatment]])
+              else single_track(cs$type, rows[[cs$sample]])
+      settings <- test_settings(cs$dataset, list(font = "mono", title = "Title"))
+      region <- test_region(cs$dataset)
+      fams <- svg_families(expect_clean_render(synth_svg(list(spec), settings, region = region)))
+      # More text than the title and genome axis alone: the track drew labels of its own.
+      expect_gt(length(fams), length(svg_texts(synth_svg(list(), settings, region = region))))
+      expect_identical(unique(fams), resolved_family("mono"))
+    })
+  })
+}
 
 test_that("fontsize changes text size (no fixture data)", {
   skip_no_synth()
@@ -136,9 +282,9 @@ left_of_track_texts <- function(svg) {
   t[x < 0.8 * 72]
 }
 
-test_that("show_track_axes toggles the value axis on bw, bw_diff_stacked and sashimi (no fixture data)", {
+test_that("show_track_axes toggles the value axis on bw, bw_diff_stacked and junctions (no fixture data)", {
   skip_no_synth()
-  for (track in list(synth_bw_track(), synth_diff_track(), synth_sashimi_track())) {
+  for (track in list(synth_bw_track(), synth_diff_track(), synth_junctions_track())) {
     on  <- synth_svg(list(track), synth_settings())
     off <- synth_svg(list(track), synth_settings(list(show_track_axes = FALSE)))
     expect_gte(length(left_of_track_texts(on)), 2, label = paste(track$viz, "axis labels with show_track_axes = TRUE"))
