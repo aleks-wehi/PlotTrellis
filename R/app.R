@@ -411,7 +411,10 @@ GENE_REQUIRED_TYPES_JS <- jsonlite::toJSON(GENE_REQUIRED_TYPES)
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 ui <- navbarPage(
-  title = "PlotTrellis",
+  title = tags$span("PlotTrellis",
+                    tags$small(class = "plottrellis-version",
+                               paste0("v", utils::packageVersion("PlotTrellis")))),
+  windowTitle = "PlotTrellis",
   id    = "main_tabs",
 
   tags$head(tags$style(HTML("
@@ -470,6 +473,7 @@ ui <- navbarPage(
     @keyframes plottrellis-spin { to { transform: rotate(360deg); } }
     /* Single-page layout: hide the nav tab links, keep the PlotTrellis title bar */
     .navbar-nav { display: none !important; }
+    .plottrellis-version { margin-left: 8px; font-size: 60%; opacity: 0.7; }
     /* Collapsible section panels */
     .plottrellis-section { margin-bottom: 12px; border-radius: 6px; }
     .plottrellis-section > .panel-heading {
