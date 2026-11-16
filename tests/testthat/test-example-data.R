@@ -22,13 +22,11 @@ example_fingerprint <- function() {
   setNames(unname(tools::md5sum(file.path(src, files))), files)
 }
 
-test_that("plottrellis_example() copies the example to a new folder each call", {
+test_that("plottrellis_example() gives the installed example, not a copy in tempdir()", {
   a <- plottrellis_example()
-  b <- plottrellis_example()
-  expect_false(identical(dirname(a), dirname(b)))
-  expect_true(startsWith(normalizePath(a), normalizePath(tempdir())))
-  expect_setequal(list.files(dirname(a), recursive = TRUE), names(example_fingerprint()))
-  expect_true(file.access(dirname(a), 2) == 0)
+  expect_identical(a, pt_example("mammary"))
+  expect_same_path(dirname(a), system.file("extdata", "example", package = "PlotTrellis"))
+  expect_false(startsWith(normalizePath(a), normalizePath(tempdir())))
 })
 
 test_that("the example samples.txt imports with no errors or warnings", {
@@ -52,21 +50,27 @@ test_that("the example samples.txt imports with no errors or warnings", {
     list(c("atac/Basal_ATAC.bw", "quant/Basal_rep1"), c("atac/LP_ATAC.bw", "quant/LP_rep1")))
 })
 
-test_that("the example's Elf5 figure renders from a fresh copy, offline; golden image", {
+test_that("the example's Elf5 figure renders where it is installed, offline, writing only to the project; golden image", {
   skip_if_not_installed("org.Mm.eg.db")
   before <- example_fingerprint()
   txt <- plottrellis_example()
-  settings <- parse_samples_txt(txt, project_dir = tempfile("pt-example-project-"))
+  project <- tempfile("pt-example-project-")
+  settings <- parse_samples_txt(txt, project_dir = project)
+  cache_dir <- file.path(normalizePath(project), "cache")
   # The shipped chromosome sizes must be used, not fetched from UCSC.
   local_mocked_bindings(build_chrom_sizes = function(...) stop("tried to download chromosome sizes"))
   # txdbmaker's two notices for any GENCODE GTF are expected; anything else still warns.
   genome <- withCallingHandlers(
-    ensure_genome_ready(settings$gtf_path, settings$orgdb, settings$genome_label),
+    ensure_genome_ready(settings$gtf_path, settings$orgdb, settings$genome_label, cache_dir = cache_dir),
     warning = function(w) {
       if (grepl("\"phase\" metadata column|genome version information", conditionMessage(w)))
         invokeRestart("muffleWarning")
     })
-  expect_identical(normalizePath(dirname(genome$txdb_path)), normalizePath(dirname(txt)))
+  # Every genome file is in the project's cache, the chromosome sizes copied from the shipped ones.
+  for (f in unlist(genome[c("txdb_path", "tx_name_lookup_path", "tx_meta_lookup_path", "chrom_sizes_path")]))
+    expect_true(startsWith(normalizePath(f), normalizePath(file.path(cache_dir, "genome"))), info = f)
+  expect_identical(readRDS(genome$chrom_sizes_path),
+                   readRDS(file.path(dirname(txt), "gencode.vM25.example_chrom_sizes.rds")))
 
   txdb <- AnnotationDbi::loadDb(genome$txdb_path)
   coords <- gene_to_coords("Elf5", txdb, flank_pct = settings$gene_flank_pct / 100, orgdb_pkg = genome$orgdb)
@@ -75,7 +79,7 @@ test_that("the example's Elf5 figure renders from a fresh copy, offline; golden 
   cfg <- modifyList(settings, list(
     txdb_path = genome$txdb_path, orgdb_pkg = genome$orgdb, genome_label = genome$genome_label,
     tx_name_lookup_path = genome$tx_name_lookup_path, tx_meta_lookup_path = genome$tx_meta_lookup_path,
-    title = "", output_path = tempfile(fileext = ".svg")))
+    title = "", output_path = tempfile(fileext = ".svg"), cache_dir = cache_dir))
   rows <- load_samples_from_settings(settings$samples, settings$data_dir)
   names(rows) <- vapply(rows, `[[`, "", "display")
   specs <- list(

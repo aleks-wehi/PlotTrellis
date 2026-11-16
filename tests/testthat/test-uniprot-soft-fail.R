@@ -96,10 +96,12 @@ test_that("gene_protein_domains(): network failure is not cached, a later succes
   expect_identical(res$status, "uniprot_unreachable")
   expect_false(file.exists(cache_file))
 
-  # Real "no reviewed entry" is a distinct status
+  # Real "no reviewed entry" is a distinct status, and a deterministic one: cached (for another
+  # gene here, so the success below is not served this answer)
   local_mocked_bindings(.uniprot_read_lines = .canned(search = character(0)))
-  res <- gene_protein_domains("Testgene", txdb, "unused_tx_meta.rds", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
+  res <- gene_protein_domains("Nogene", txdb, "unused_tx_meta.rds", "org.Mm.eg.db", "test_genome", cache_dir = cache_dir)
   expect_identical(res$status, "no_uniprot_entry")
+  expect_true(file.exists(file.path(cache_dir, "test_genome", "Nogene.rds")))
 
   # UniProt back: full success, cached
   local_mocked_bindings(.uniprot_read_lines = .canned())

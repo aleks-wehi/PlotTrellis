@@ -24,8 +24,12 @@ render_bw <- function(entry, dict, ctx) {
   # Signal above 0: 0 to its shared maximum. None above 0 and none below (no signal in view, or
   # only explicit zeros): an empty 0-1 scale, axis included. Some below 0 and none above (all
   # negative, say): plotgardener's own range (NULL), which draws it.
+  # The top is 10/9 of the maximum rounded to 4 decimals, or to 4 significant digits where that
+  # rounding would cut the signal off (a maximum below about 0.0004; below about 0.00005 it would
+  # even give 0, which plotSignal can't draw).
   negative <- isTRUE(dict[[.pt_shared_range_key("bw_negative_", entry)]])
-  range <- if (!is.null(raw) && is.finite(raw) && raw > 0) c(0, round(raw * (10 / 9), 4)) else if (!negative) c(0, 1)
+  top <- function(raw) { r <- round(raw * (10 / 9), 4); if (r >= raw) r else signif(raw * (10 / 9), 4) }
+  range <- if (!is.null(raw) && is.finite(raw) && raw > 0) c(0, top(raw)) else if (!negative) c(0, 1)
 
   if (isTRUE(entry$data$no_chrom)) {
     .pt_status_text(ctx, "Chromosome not found")

@@ -129,6 +129,7 @@ import_samples_txt <- function(path, defaults = list()) {
 
   seen_conditions <- character(0)
   samples <- list()
+  filled <- list()  # per imported row: its condition and the instance columns it fills
   if (length(body_lines) > 1) {
     for (i in seq(2, length(body_lines))) {
       fields <- strsplit(body_lines[i], "\t", fixed = TRUE)[[1]]
@@ -166,6 +167,7 @@ import_samples_txt <- function(path, defaults = list()) {
           }
         }
         data[[length(data) + 1]] <- list(type = spec$type, name = spec$name, path = val)
+        filled[[cond]] <- c(filled[[cond]], j)
       }
 
       col_val <- trimws(chr0(fields[match("colour", header)]))
@@ -186,7 +188,51 @@ import_samples_txt <- function(path, defaults = list()) {
   if (length(errors) > 0) samples <- list()
 
   list(errors = errors, warnings = warnings, data_root = data_root,
-       overrides = overrides, samples = samples)
+       overrides = overrides, samples = samples,
+       layout_warning = if (length(errors) == 0) .pt_layout_warning(header, col_spec, filled) else character(0))
+}
+
+# One column per sample instead of one per data type (`bw:Grans ATAC`, `bw:pDC ATAC`, each
+# filled on one row): tracks are named after their column, and only tracks of the same name
+# share a scale and get comparison tracks, so such a file imports but no two samples can be
+# compared. Flagged when two or more columns of one type are each filled on exactly one row, on
+# different rows, and have the same name once that row's sample name is taken out ("Grans ATAC",
+# "pDC ATAC" -> "ATAC"). Different data on different samples (`bw:CUT&RUN` only on A,
+# `bw:H3K27ac` only on B) is a normal file and isn't flagged. Not caught: replicate rows
+# (Grans_r1, Grans_r2 filling `bw:Grans ATAC`), since those columns fill more than one row.
+# Returns one message (character(1)) or character(0).
+.pt_layout_warning <- function(header, col_spec, filled) {
+  if (length(filled) < 2) return(character(0))
+  row_of <- list()  # column index -> conditions filling it
+  for (cond in names(filled)) for (j in filled[[cond]]) row_of[[as.character(j)]] <- c(row_of[[as.character(j)]], cond)
+  single <- Filter(function(j) length(row_of[[as.character(j)]]) == 1, as.integer(names(row_of)))
+  # The column's name without its sample's name, or NA if the name doesn't contain it.
+  base <- vapply(single, function(j) {
+    name <- col_spec[[j]]$name
+    cond <- row_of[[as.character(j)]]
+    pattern <- paste0("(^|[ _.:-])", gsub("([][{}()+*^$|\\\\.?])", "\\\\\\1", cond), "($|[ _.:-])")
+    stripped <- trimws(gsub("^[ _.:-]+|[ _.:-]+$", "", sub(pattern, " ", name, ignore.case = TRUE)))
+    if (nzchar(stripped) && !identical(stripped, name)) stripped else NA_character_
+  }, "")
+  keep <- !is.na(base)
+  if (!any(keep)) return(character(0))
+  single <- single[keep]
+  type_base <- paste0(vapply(col_spec[single], `[[`, "", "type"), ":", base[keep])
+  # Grouped ignoring case ("grans_atac", "PDC-ATAC"); the suggestion keeps the first column's case.
+  groups <- Filter(function(js) length(unique(unlist(row_of[as.character(js)]))) >= 2,
+                   split(single, tolower(type_base)))
+  if (length(groups) == 0) return(character(0))
+  flagged <- sort(unlist(groups, use.names = FALSE))
+  firsts <- sort(vapply(groups, min, 0L))
+  suggest <- type_base[match(firsts, single)]
+  shown <- header[flagged]
+  more <- if (length(shown) > 4) sprintf(" (and %d more)", length(shown) - 4) else ""
+  sprintf(paste0(
+    "Columns %s%s are each used by one sample only, so every sample gets its own track and ",
+    "its own scale, and there are no comparison tracks. Use one column per data type, with a ",
+    "row per sample: %s. See vignette(\"PlotTrellis\"), section \"Your own data in code ",
+    "(writing a samples.txt)\"."),
+    paste(head(shown, 4), collapse = ", "), more, paste(suggest, collapse = ", "))
 }
 
 # Mirrors import_samples_txt(): flattens settings$samples[] into a wide type:name-header samples.txt plus a `# data_root:` line and one `# <key>: value` delta line per non-default setting (only those, to keep the file short), except the 3 genome fields which always get a line (SAMPLES_TXT_ALWAYS_EXPORT); pass DEFAULT_SETTINGS as `defaults`.

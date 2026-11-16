@@ -305,7 +305,11 @@ test_that("a junction BED6 draws the same arcs as the BEDPE with the same intron
   bedpe <- bed6_as_bedpe_file()
   on.exit(unlink(c(bed6, bedpe)))
   svg_of <- function(path, ms) render_svg(list(junctions_track(path)), synth_settings(list(min_junction_support = ms)), SYNTH_REGION)
-  for (ms in c(0, 10)) expect_identical(svg_of(bed6, ms), svg_of(bedpe, ms))
+  # The same drawing; only the heading differs: a BED6's score is read counts, a BEDPE's isn't.
+  same_arcs <- function(svg) sub(" reads)", ")", gsub("textLength='[0-9.]+px'|width='[0-9.]+'", "", svg), fixed = TRUE)
+  for (ms in c(0, 10)) expect_identical(same_arcs(svg_of(bed6, ms)), same_arcs(svg_of(bedpe, ms)))
+  expect_match(svg_of(bed6, 0), "max_h=30 reads)", fixed = TRUE)
+  expect_match(svg_of(bedpe, 0), "max_h=30)", fixed = TRUE)
   expect_identical(n_arcs(svg_of(bed6, 0)), 3L)
   expect_identical(n_arcs(svg_of(bed6, 10)), 2L)  # the min-support filter acts on the score column
 })
@@ -438,3 +442,27 @@ test_that("TPM-scaled junctions: a quant file whose TPM column isn't numbers is 
   expect_no_error(run("Ba", "Ba"))
 })
 
+
+test_that("a junction opacity cap of 0 or below says so in the comparison track (no fixture data)", {
+  skip_no_synth()
+  track <- list(viz = "junctions_mirrored_diff", name = "Junctions", control_label = "A", treatment_label = "B",
+                control_path   = bed12_file(list(c(3000L, 7000L, 12L))),
+                treatment_path = bed12_file(list(c(3000L, 7000L, 30L))),
+                control_colour = "#4D4D4D", treatment_colour = "#56B4E9", height = NULL, data = NULL)
+  ok <- render_svg(list(track), synth_settings(), SYNTH_REGION)
+  height <- function(svg) regmatches(svg, regexpr("height='[0-9.]+pt'", svg))
+  for (cap in c(0, -1)) {
+    svg <- suppressMessages(render_svg(list(track), synth_settings(list(junction_opacity_cap = cap)), SYNTH_REGION))
+    expect_match(svg, sprintf("track failed: the junction opacity cap must be a number above 0 (it is %s).", cap), fixed = TRUE)
+    expect_false(grepl("log2FC", svg, fixed = TRUE))   # no "0.00 log2FC (full)" legend
+    expect_identical(height(svg), height(ok))           # the track keeps its height
+  }
+})
+
+test_that("TPM-scaled junctions: an opacity cap of 0 stops before reading any file (no fixture data)", {
+  run <- function(cap) settings_junctions_mirrored_diff_tpm_scaled(list(),
+    list(control_label = "A", treatment_label = "B", control_path = "missing.bed", treatment_path = "missing.bed"),
+    list(gtf_path = NULL, junction_height = 0.5, junction_opacity_cap = cap), 7.2, list(gene = "Elf5"))
+  expect_error(run(0), "the junction opacity cap must be a number above 0 (it is 0).", fixed = TRUE)
+  expect_error(run(c(1, 2)), "(it is 1, 2).", fixed = TRUE)
+})

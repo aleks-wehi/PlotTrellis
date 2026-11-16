@@ -1,5 +1,6 @@
 # PlotTrellis composer: one page with a Compose section and an Output section. Figures
-# render in-process with render_all(); the R script the page shows and downloads re-runs
+# render with render_all() in a background R process (R/render_worker.R), so a long render
+# can be cancelled; the R script the page shows and downloads re-runs
 # the same functions on the same entries and settings (assemble_download_script()).
 #
 # The exported entry points (run_plottrellis() and friends) are in R/entry-points.R; this file
@@ -105,13 +106,46 @@
   # to copy and silently discards every sample. Restore it directly instead
   # of trusting modifyList's recursive merge with it.
   cfg$samples <- if (is.null(parsed$samples)) list() else parsed$samples
+  .pt_clean_display_settings(cfg, SETTINGS_JSON)
+}
+
+# A hand-edited display setting of the wrong type or length (page_w = "wide",
+# fontsize = []), or a page_w of 0 or below, would stop every figure later with an R error: each one falls back to
+# its default instead, with one warning naming them all. A box the app saved empty
+# (null, NA, or toJSON()'s "NA") takes the default without a warning. Unset optional
+# numbers (NULL default) may also be {}, which the render settings treat as automatic.
+.pt_clean_display_settings <- function(cfg, SETTINGS_JSON) {
+  defaults <- .pt_display_defaults()
+  bad <- character(0)
+  for (k in names(defaults)) {
+    v <- cfg[[k]]; d <- defaults[[k]]
+    if (is.null(v) || (length(v) == 1 && !is.list(v) && (is.na(v) || identical(v, "NA")))) {
+      cfg[k] <- list(d)
+      next
+    }
+    if (is.null(d)) {
+      if (is.list(v)) next
+      if (!(is.numeric(v) && length(v) == 1 && is.finite(v))) { bad <- c(bad, k); cfg[k] <- list(NULL) }
+      next
+    }
+    ok <- length(v) == 1 && !is.list(v) &&
+      (if (is.numeric(d)) is.numeric(v) && is.finite(v) else if (is.logical(d)) is.logical(v) else is.character(v))
+    # A page width of 0 or below stops the whole figure (a narrow one only its tracks, each
+    # with its own message).
+    if (ok && k == "page_w") ok <- v > 0
+    if (!ok) { bad <- c(bad, k); cfg[[k]] <- d }
+  }
+  if (length(bad) > 0)
+    warning("Ignoring unusable value", if (length(bad) > 1) "s", " in ", SETTINGS_JSON, " for ",
+            paste(bad, collapse = ", "), "; using the default", if (length(bad) > 1) "s", ".",
+            call. = FALSE, immediate. = TRUE)  # immediate: the app's runApp() would hold it until the app closes
   cfg
 }
 
 # Shared setup for every entry point (R/entry-points.R): creates project_dir and
 # reads its settings merged onto the defaults.
 .pt_project <- function(project_dir) {
-  # tools::R_user_dir() only returns the path, it doesn't create it -- on a
+  # The project folder may not exist yet -- on a
   # genuinely first run (nothing has ever written here before) the wizard's
   # Save handler's writeLines(SETTINGS_JSON) fails with "No such file or
   # directory" otherwise.
@@ -121,8 +155,7 @@
   project_dir <- normalizePath(project_dir, winslash = "/")
   SETTINGS_JSON <- file.path(project_dir, "project_settings.json")
   DEFAULT_SETTINGS <- .pt_default_settings()
-  # A project's caches go to its own cache/ folder (genome files already beside the GTF are
-  # used where they are, see .genome_cache_path()).
+  # A project's caches, genome files included, go to its own cache/ folder.
   list(settings_json = SETTINGS_JSON, defaults = DEFAULT_SETTINGS,
        cfg = .pt_read_settings(SETTINGS_JSON, DEFAULT_SETTINGS),
        cache_dir = file.path(project_dir, "cache"))
@@ -130,9 +163,10 @@
 
 # Builds (does not run) the composer app for one project. Its startup below
 # (genome migration, TxDb load, ...) runs on each call.
-.pt_composer_app <- function(SETTINGS_JSON, CFG) {
+.pt_composer_app <- function(SETTINGS_JSON, CFG, RENDER_POOL = NULL) {
 
-# CFG/SETTINGS_JSON come from .pt_project(), see R/entry-points.R.
+# CFG/SETTINGS_JSON come from .pt_project(), see R/entry-points.R. RENDER_POOL: the launcher's
+# render processes (.pt_render_pool(), R/render_worker.R), or NULL: one per session.
 
 # ── Startup: load heavy objects once ──────────────────────────────────────────
 # The genome is the flat fields gtf_path, orgdb and genome_label on CFG. An older
@@ -148,7 +182,7 @@ if (is.null(CFG$orgdb) && !is.null(CFG$genome_id)) {
   CFG$genome_id    <- NULL
   CFG$orgdb        <- preset$orgdb
   CFG$genome_label <- preset$genome_label
-  writeLines(jsonlite::toJSON(CFG, auto_unbox = TRUE, pretty = TRUE, null = "null"), SETTINGS_JSON)
+  writeLines(jsonlite::toJSON(CFG, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), SETTINGS_JSON)
   message("Migrated project_settings.json's old genome_id ('", preset$label, "') to flat genome fields.")
 }
 
@@ -156,9 +190,10 @@ if (is.null(CFG$orgdb) && !is.null(CFG$genome_id)) {
 # genome's cache paths from gtf_path (ensure_genome_ready()). ORGDB_PKG below is a
 # local of this app; the figure and lookup functions get the genome's packages and
 # paths as arguments (RENDER_CFG, the render settings). Caches go to the project's
-# cache/ folder, beside its project_settings.json; genome files already beside the GTF
-# are used where they are (.genome_cache_path()).
-CACHE_DIR <- file.path(dirname(SETTINGS_JSON), "cache")
+# cache/ folder, beside its project_settings.json (.genome_cache_path()).
+PROJECT_DIR <- dirname(SETTINGS_JSON)
+CACHE_DIR <- file.path(PROJECT_DIR, "cache")
+.pt_require_genome_label(CFG$genome_label, SETTINGS_JSON)
 GENOME <- ensure_genome_ready(gtf_path = CFG$gtf_path, orgdb = CFG$orgdb, genome_label = CFG$genome_label,
                               cache_dir = CACHE_DIR)
 ORGDB_PKG           <- GENOME$orgdb
@@ -417,7 +452,10 @@ ui <- navbarPage(
   windowTitle = "PlotTrellis",
   id    = "main_tabs",
 
-  tags$head(tags$style(HTML("
+  # In `header`, not loose children: navbarPage treats every other child as a nav panel and
+  # bslib warns about each one. The tags$head() contents are hoisted to <head> either way.
+  header = tagList(
+  tags$head(.pt_theme_css(), .pt_once_js(), .pt_help_assets(), tags$style(HTML("
     :root {
       --bio-font-base:    15px;
       --bio-font-small:   13px;
@@ -425,8 +463,7 @@ ui <- navbarPage(
       --bio-font-heading: 19px;
       --bio-font-code:    12px;
     }
-    body  { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: var(--bio-font-base); }
+    body  { font-size: var(--bio-font-base); }
     label { font-size: var(--bio-font-label); }
     h4    { font-size: var(--bio-font-heading); font-weight: 600;
             margin-top: 8px; margin-bottom: 6px; }
@@ -435,14 +472,16 @@ ui <- navbarPage(
     .shiny-input-container .radio input[type='radio'] {
       transform: scale(1.35); transform-origin: center; margin-right: 4px; cursor: pointer;
     }
-    .zoom-group-label { font-size: var(--bio-font-label); font-weight:600; color:#555;
+    .zoom-group-label { font-size: var(--bio-font-label); font-weight:600; color:var(--pt-muted);
                         margin-bottom:5px; letter-spacing:0.03em; }
     .rank-list-container { min-height: 60px; max-height: 42vh; overflow-y: auto; }
     .rank-list-item { cursor: grab; }
     .rank-list-item:active { cursor: grabbing; }
     .track-filters { margin-bottom:10px; display:flex; flex-wrap:wrap; gap:4px; }
     .track-filters .btn { flex:1 1 0; margin-right:0; }
-    .track-filters .btn.active { background-color:#337ab7; color:#fff; border-color:#2e6da4; }
+    .track-filters .btn.active, .track-filters .btn.active:hover, .track-filters .btn.active:focus {
+      background-color:var(--pt-primary); color:var(--pt-on-primary); border-color:var(--pt-primary-edge);
+    }
     /* Gene-dependent tracks (Transcripts (filtered)/Transcripts/Transcripts
        annotated (filtered)/Canonical protein annotation/Transcript expression/
        Junctions mirrored diff (TPM-scaled), see GENE_REQUIRED_TYPES_JS)
@@ -456,38 +495,50 @@ ui <- navbarPage(
        as the gene-required flag above, in every view mode's picker. */
     .rank-list-item.track-gene-required,
     .rank-list-item.track-broken {
-      background-color: #fdecea !important;
-      border: 1px dashed #d9534f !important;
+      background-color: var(--pt-danger-soft) !important;
+      border: 2px dashed var(--pt-danger) !important;
       opacity: 0.7;
     }
     #loading-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(255,255,255,0.78); z-index: 9999;
+      background: var(--pt-overlay); z-index: 9999;
       text-align: center; padding-top: 38vh; box-sizing: border-box;
     }
+    /* A loading bar: blocks sliding along a framed track while the figure renders
+       (there is no progress to report, so it never fills). */
     .plottrellis-spinner {
-      display: inline-block; width: 54px; height: 54px;
-      border: 5px solid #ddd; border-top-color: #337ab7;
-      border-radius: 50%; animation: plottrellis-spin 0.75s linear infinite;
+      display: inline-block; position: relative; overflow: hidden; width: 280px; height: 22px;
+      border: 2px solid var(--pt-heading); border-radius: 7px; background: var(--pt-surface);
+      box-shadow: 0 3px 0 var(--pt-border-strong);
     }
-    @keyframes plottrellis-spin { to { transform: rotate(360deg); } }
+    .plottrellis-spinner::after {
+      content: ''; position: absolute; top: 3px; bottom: 3px; left: 0; width: 36%; border-radius: 3px;
+      background: repeating-linear-gradient(90deg, var(--pt-primary) 0, var(--pt-primary) 12px, transparent 12px, transparent 16px);
+      animation: plottrellis-load 1.4s linear infinite;
+    }
+    @keyframes plottrellis-load { from { transform: translateX(-100%); } to { transform: translateX(278%); } }
+    @media (prefers-reduced-motion: reduce) { .plottrellis-spinner::after { animation-duration: 6s; } }
     /* Single-page layout: hide the nav tab links, keep the PlotTrellis title bar */
     .navbar-nav { display: none !important; }
+    /* The title bar stays at the top of the window (plottrellis.css): keep anything
+       scrolled into view clear of it. */
+    html { scroll-padding-top: 66px; }
     .plottrellis-version { margin-left: 8px; font-size: 60%; opacity: 0.7; }
     /* Collapsible section panels */
-    .plottrellis-section { margin-bottom: 12px; border-radius: 6px; }
+    .plottrellis-section { margin-bottom: 12px; border-radius: 12px; }
     .plottrellis-section > .panel-heading {
-      background-color: #f0f4f8; border-bottom: 1px solid #dce3ea;
-      border-radius: 6px 6px 0 0; padding: 8px 18px; cursor: pointer;
+      background-color: var(--pt-surface-2); border-bottom: 1px solid var(--pt-border);
+      border-radius: 11px 11px 0 0; padding: 8px 18px; cursor: pointer;
     }
     .plottrellis-section.collapsed-panel > .panel-heading {
-      border-radius: 6px;
+      border-radius: 11px; border-bottom-color: transparent;
     }
     .plottrellis-section .panel-heading a {
-      color: #2c3e50; text-decoration: none; font-size: 16px;
+      color: var(--pt-heading); text-decoration: none; font-family: var(--pt-font-display); font-size: 19px;
       font-weight: 600; display: block;
     }
-    .plottrellis-section .panel-heading a:hover { color: #337ab7; }
+    .plottrellis-section .plottrellis-section .panel-heading a { font-size: 17px; }
+    .plottrellis-section .panel-heading a:hover { color: var(--pt-link); }
     .plottrellis-section > .panel-body { padding: 12px 18px; }
     hr { margin-top: 10px; margin-bottom: 10px; }
     #topbar-actions {
@@ -726,14 +777,22 @@ ui <- navbarPage(
 
     // -- Loading overlay --
     // Injected into <body> directly so position:fixed works as a true viewport overlay
-    // (navbarPage wraps non-tabPanel children as <li> items which breaks fixed positioning)
+    // (children of the navbar would sit inside the page layout, which breaks fixed positioning)
     $(document).ready(function() {
       $('body').append(
         '<div id=\"loading-overlay\" style=\"display:none;\">' +
         '<div class=\"plottrellis-spinner\"></div>' +
-        '<p style=\"margin-top:12px;font-size:14px;color:#555;\">Rendering\\u2026</p>' +
+        '<p style=\"margin-top:12px;font-size:14px;font-weight:600;color:var(--pt-text);\">Rendering\\u2026</p>' +
+        '<button type=\"button\" id=\"cancel_render_btn\" class=\"btn btn-default\">Cancel</button>' +
         '</div>'
       );
+      // Cancel stops the render in the background R process; the server then hides the overlay.
+      $('#cancel_render_btn').on('click', function() {
+        if (!plottrellisRendering) return;
+        this.disabled = true;
+        this.textContent = 'Cancelling\\u2026';
+        Shiny.setInputValue('cancel_render', Date.now(), {priority: 'event'});
+      });
     });
 
     var plottrellisRendering = false;
@@ -743,6 +802,8 @@ ui <- navbarPage(
 
     function showSpinner() {
       plottrellisRendering = true;
+      var cancel = document.getElementById('cancel_render_btn');
+      if (cancel) { cancel.disabled = false; cancel.textContent = 'Cancel'; }
       document.getElementById('loading-overlay').style.display = 'block';
       ZOOM_BTN_IDS.forEach(function(id) {
         var el = document.getElementById(id);
@@ -803,8 +864,9 @@ ui <- navbarPage(
     // server()).
     Shiny.addCustomMessageHandler('condition_lock', function(x) { setConditionGateLocked(x.locked); });
 
-    // Safety net: any uncaught Shiny error also dismisses the spinner
-    $(document).on('shiny:error', function() { hideSpinner(); });
+    // Safety net: an output's error also dismisses the spinner. Not a silent one (a req()
+    // that is not met yet sends an empty message): outputs re-run while a figure draws.
+    $(document).on('shiny:error', function(e) { if (e.error && e.error.message) hideSpinner(); });
 
     // Show output section, expand it, scroll to it after first render.
     Shiny.addCustomMessageHandler('show_output', function(x) {
@@ -817,13 +879,19 @@ ui <- navbarPage(
     });
 
     // Keep collapse arrow in sync with open/close state
-    $(document).on('hide.bs.collapse', '.plottrellis-section .collapse', function() {
-      $(this).closest('.plottrellis-section').find('.collapse-arrow').text('\\u25B8');
-      $(this).closest('.plottrellis-section').addClass('collapsed-panel');
+    // A section nested in another (Figure settings in Compose) fires these on the outer
+    // section's body too as the event bubbles: act only on the section that toggled, and
+    // only on its own arrow.
+    function setSectionCollapsed(body, collapsed) {
+      var $section = $(body).closest('.plottrellis-section');
+      $section.children('.panel-heading').find('.collapse-arrow').text(collapsed ? '\\u25B8' : '\\u25BE');
+      $section.toggleClass('collapsed-panel', collapsed);
+    }
+    $(document).on('hide.bs.collapse', '.plottrellis-section .collapse', function(e) {
+      if (e.target === this) setSectionCollapsed(this, true);
     });
-    $(document).on('show.bs.collapse', '.plottrellis-section .collapse', function() {
-      $(this).closest('.plottrellis-section').find('.collapse-arrow').text('\\u25BE');
-      $(this).closest('.plottrellis-section').removeClass('collapsed-panel');
+    $(document).on('show.bs.collapse', '.plottrellis-section .collapse', function(e) {
+      if (e.target === this) setSectionCollapsed(this, false);
     });
 
     // Coord text inputs: only fire Shiny update on blur or Enter (not every keystroke)
@@ -842,22 +910,18 @@ ui <- navbarPage(
         }
       });
     });
-  ")))),
+  "))))),
 
   tabPanel("",
 
-    # Edit settings / clear caches / reset / close buttons, fixed to the top-right
-    # navbar area via CSS. Reset is its own button: it is a separate, more
-    # destructive action than editing settings.
+    # Edit settings / close buttons, fixed to the top-right navbar area via CSS. Clear all
+    # caches and Reset project configuration are in the Edit project settings dialog's
+    # collapsed Advanced section.
     div(id = "topbar-actions",
       actionButton("open_settings", "Edit project settings \u25B8",
-                   class = "btn-default btn-sm"),
-      actionButton("clear_caches_btn", "Clear all caches...",
-                   class = "btn-warning btn-sm"),
-      actionButton("reset_project_btn", "Reset project configuration...",
-                   class = "btn-danger btn-sm"),
+                   class = "btn-default btn-sm pt-once"),
       actionButton("close_app_btn", "Close app",
-                   class = "btn-default btn-sm")
+                   class = "btn-default btn-sm pt-once")
     ),
 
     # ── Compose: one 3-way mode radio ─────────────────────────────────────────────
@@ -955,13 +1019,16 @@ ui <- navbarPage(
           h4("Track assignment"),
 
           div(id = "tracks-block", `data-available-id` = "available_tracks",
+            uiOutput("tracks_hint"),  # what to pick first, while the lists are empty
             div(class = "track-filters",
               tags$button("All",         class = "btn btn-lg btn-default filter-btn active", `data-filter` = "all"),
               # One button per filter group the modules declare (info_<key>()'s `filter`).
               # "Comparisons" shows in Two-sample mode only: one-sample has none, and
               # track-compose's pool (COMPOSE_AVAILABLE_KEYS) excludes every comparison
               # item outright, so there is nothing for it to select there either.
-              .pt_filter_buttons()
+              # Only the types this project has tracks of: an empty filter would show nothing.
+              .pt_filter_buttons(Filter(function(info) info$key %in% vapply(TRACK_ITEMS, `[[`, "", "type"),
+                                        .pt_viz_infos()))
             ),
 
             bucket_list(
@@ -969,7 +1036,7 @@ ui <- navbarPage(
               group_name  = "tracks",
               orientation = "horizontal",
               add_rank_list(
-                text     = "Available tracks (drag \u2192 to figure)",
+                text     = "Available tracks (double-click)",
                 labels   = track_labels(COMPOSE_AVAILABLE_KEYS),
                 input_id = "available_tracks"
               ),
@@ -991,8 +1058,8 @@ ui <- navbarPage(
         uiOutput("display_settings_ui"),
         tags$div(style = "margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
           uiOutput("apply_settings_ui", inline = TRUE),
-          actionButton("save_settings", "Save as project default", class = "btn-default"),
-          actionButton("revert_settings", "Revert to saved", class = "btn-default"),
+          actionButton("save_settings", "Save as project default", class = "btn-default pt-once"),
+          actionButton("revert_settings", "Revert to saved", class = "btn-default pt-once"),
           uiOutput("settings_dirty_ui", inline = TRUE)
         )
       ),
@@ -1013,11 +1080,11 @@ ui <- navbarPage(
       uiOutput("zoom_ui"),
       uiOutput("svg_display_ui"),
       tags$div(style = "margin-top:10px;",
-        downloadButton("dl_svg", "Download SVG", class = "btn-lg"),
+        downloadButton("dl_svg", "Download SVG", class = "btn-lg pt-once"),
         tags$span(style = "margin-left:6px;",
           `data-toggle` = "tooltip", `data-placement` = "top",
           title = "The exact R script used to produce this figure. Run it in a clean R session to reproduce identically.",
-          downloadButton("dl_rcode", "Download R script", class = "btn-lg")
+          downloadButton("dl_rcode", "Download R script", class = "btn-lg pt-once")
         )
       ),
       .pt_gene_info_ui(collapsible_panel),
@@ -1035,6 +1102,17 @@ ui <- navbarPage(
 
 # ── Server ─────────────────────────────────────────────────────────────────────
 server <- function(input, output, session) {
+  .pt_once_server(input, session)  # repeat-click gate for the "pt-once" buttons (R/once_gate.R)
+
+  # This session's background render process (R/render_worker.R), from RENDER_POOL (the
+  # launcher's, .pt_render_pool()) when there is one. shiny::testServer()'s mock session
+  # renders in-process instead, so its tests see the figure as soon as they click.
+  render_worker <- if (!inherits(session, "MockShinySession"))
+    if (is.null(RENDER_POOL)) .pt_render_worker() else RENDER_POOL$take()
+  session$onSessionEnded(function() {
+    if (is.null(render_worker)) return()
+    if (is.null(RENDER_POOL)) render_worker$close() else RENDER_POOL$give_back(render_worker)
+  })
 
   # selected= is always passed explicitly, as "" rather than character(0) --
   # server-mode selectize defaults to ALL_GENES's first alphabetical entry if
@@ -1142,12 +1220,21 @@ server <- function(input, output, session) {
   # (run_plottrellis()'s loop), since everything here is built from the settings
   # the wizard edits -- confirm first so this isn't a silent surprise
   # mid-session, rather than restarting immediately on click.
+  # The dialog also shows the project folder (everything PlotTrellis writes is in it) and, in a
+  # collapsed Advanced section, Clear all caches and Reset project configuration.
   observeEvent(input$open_settings, {
     showModal(modalDialog(
       title = "Edit project settings?", easyClose = FALSE,
       p("This restarts the app into the setup wizard, pre-filled with your current settings. Any in-progress figure/selection in this session will be lost."),
       unsaved_settings_note(),
-      footer = tagList(modalButton("Cancel"), actionButton("confirm_edit_settings", "Continue", class = "btn-primary"))
+      p("Project folder: ", tags$code(PROJECT_DIR)),
+      tags$details(id = "settings_advanced",
+        tags$summary("Advanced"),
+        p("Everything this project keeps (settings and caches) is in its project folder. Your data files are never changed."),
+        actionButton("clear_caches_btn", "Clear all caches...", class = "btn-warning btn-sm pt-once"),
+        actionButton("reset_project_btn", "Reset project configuration...", class = "btn-danger btn-sm pt-once")
+      ),
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_edit_settings", "Continue", class = "btn-primary pt-once"))
     ))
   })
 
@@ -1168,12 +1255,26 @@ server <- function(input, output, session) {
     showModal(modalDialog(
       title = "Reset project configuration?", easyClose = FALSE,
       p("This deletes project_settings.json and restarts the app into first-time setup, which offers to restore it from project_samples.txt (kept). Your own samples.txt is not touched."),
-      footer = tagList(modalButton("Cancel"), actionButton("confirm_reset_project", "Delete and restart", class = "btn-danger"))
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_reset_project", "Delete and restart", class = "btn-danger pt-once"))
     ))
   })
 
   observeEvent(input$confirm_reset_project, {
-    if (file.exists(SETTINGS_JSON)) file.remove(SETTINGS_JSON)
+    why <- NULL  # file.remove() gives its reason ("Permission denied") only as a warning
+    if (file.exists(SETTINGS_JSON))
+      withCallingHandlers(file.remove(SETTINGS_JSON), warning = function(w) {
+        why <<- sub("^cannot remove file .*, reason '(.*)'$", "\\1", conditionMessage(w))
+        invokeRestart("muffleWarning")
+      })
+    # A folder that can't be written keeps the file: say so, and don't restart into it.
+    if (file.exists(SETTINGS_JSON)) {
+      showModal(modalDialog(
+        title = "Nothing was reset", easyClose = TRUE, footer = modalButton("Close"),
+        p("Couldn't delete ", SETTINGS_JSON, if (!is.null(why)) paste0(" (", why, ")"), ". ",
+          "Check that you can write to ", dirname(SETTINGS_JSON), ", then try again.")
+      ))
+      return()
+    }
     showModal(modalDialog(
       title = "Project configuration reset", easyClose = FALSE, footer = NULL,
       p("project_settings.json has been deleted."),
@@ -1196,7 +1297,7 @@ server <- function(input, output, session) {
       title = "Close app?", easyClose = FALSE,
       p("This stops the R process running this app. You'll need to relaunch it to use PlotTrellis again."),
       unsaved_settings_note(),
-      footer = tagList(modalButton("Cancel"), actionButton("confirm_close_app", "Close app", class = "btn-primary"))
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_close_app", "Close app", class = "btn-primary pt-once"))
     ))
   })
 
@@ -1209,38 +1310,47 @@ server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 
   # ── Clear all caches ─────────────────────────────────────────────────────────
-  # The disk caches the dialog lists (the chromosome-sizes file is kept);
-  # project_settings.json is left alone, so the restart goes straight back into the
-  # composer, and each cache rebuilds on next use.
+  # Deletes the project's cache/ folder and nothing else (never files beside the GTF or in
+  # data folders); project_settings.json is left alone, so the restart goes straight back
+  # into the composer, and each cache rebuilds on next use.
   observeEvent(input$clear_caches_btn, {
     showModal(modalDialog(
       title = "Clear all caches?", easyClose = FALSE,
-      p("This deletes every cached derived file this app writes:"),
+      p("This deletes this project's cache folder, ", tags$code(CACHE_DIR), ":"),
       tags$ul(
-        tags$li("Genome TxDb / transcript-name / transcript-meta lookups"),
-        tags$li("Named-transcript display cache"),
-        tags$li("UniProt canonical-isoform cache"),
-        tags$li("Protein-domain annotation cache (all genes)")
+        tags$li("Genome files built from your GTF (rebuilding takes 1-3 minutes for a full annotation)"),
+        tags$li("Chromosome lengths (fetched again from UCSC, which needs an internet connection)"),
+        tags$li("Transcripts shown per gene, UniProt canonical isoforms, protein domains")
       ),
-      p("project_settings.json and samples.txt are not touched. Everything above rebuilds automatically (one-time cost) the next time it's needed."),
+      p("Project settings, your samples.txt and your data files are not touched. Everything above rebuilds automatically the next time it's needed."),
       unsaved_settings_note(),
-      footer = tagList(modalButton("Cancel"), actionButton("confirm_clear_caches", "Delete and restart", class = "btn-warning"))
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_clear_caches", "Delete and restart", class = "btn-warning pt-once"))
     ))
   })
 
   observeEvent(input$confirm_clear_caches, {
-    cache_root <- .pt_cache_root(RENDER_CFG$cache_dir)
-    cache_files <- c(GENOME$txdb_path, GENOME$tx_name_lookup_path, GENOME$tx_meta_lookup_path,
-                      file.path(cache_root, "gene_display_transcripts_cache.rds"),
-                      file.path(cache_root, "uniprot_canonical_cache.rds"))
-    for (f in cache_files) if (!is.null(f) && file.exists(f)) file.remove(f)
-    pd_dir <- file.path(cache_root, "protein_domains")
-    if (dir.exists(pd_dir)) unlink(pd_dir, recursive = TRUE)
+    # Close the open genome databases first: on a network drive a deleted file still open
+    # stays behind as a .nfs file.
+    .pt_close_txdbs()
+    unlink(CACHE_DIR, recursive = TRUE)
+    # unlink() doesn't say what it left. A .nfs file is a network drive's stand-in for a file
+    # still open in this R session, and goes when R exits: not a failure.
+    left <- if (dir.exists(CACHE_DIR))
+      list.files(CACHE_DIR, recursive = TRUE, all.files = TRUE, no.. = TRUE, include.dirs = TRUE) else character(0)
+    left <- left[!grepl("(^|/)\\.nfs", left)]
+    left <- left[!vapply(file.path(CACHE_DIR, left), function(f) {
+      isTRUE(file.info(f)$isdir) && length(list.files(f, all.files = TRUE, no.. = TRUE, recursive = TRUE)) > 0 &&
+        all(grepl("(^|/)\\.nfs", list.files(f, all.files = TRUE, no.. = TRUE, recursive = TRUE)))
+    }, logical(1))]
 
     showModal(modalDialog(
-      title = "Caches cleared", easyClose = FALSE, footer = NULL,
-      p("All caches have been deleted."),
-      p("Restarting with your current project settings."),
+      title = if (length(left)) "Caches partly cleared" else "Caches cleared", easyClose = FALSE, footer = NULL,
+      if (length(left))
+        p(length(left), " item", if (length(left) > 1) "s", " in ", CACHE_DIR, " could not be deleted (",
+          paste(utils::head(left, 3), collapse = ", "), if (length(left) > 3) ", ...", "); ",
+          "check you can write to that folder, or delete ", if (length(left) > 1) "them" else "it", " by hand.")
+      else p("All caches have been deleted."),
+      p("Restarting with your current project settings. Rebuilding the genome files can take 1-3 minutes for a full annotation."),
       p(strong("You can close this tab now."), " The app reopens in a new tab from RStudio in a few seconds. ",
         "If nothing opens, go back to RStudio: the app's address is in the Console.")
     ))
@@ -1348,10 +1458,20 @@ server <- function(input, output, session) {
   observe({
     sym <- trimws(input$gene_name %||% "")
     # Read first, so the echo run below still depends on it.
-    pct <- (input$s_gene_flank_pct %||% saved_cfg()$gene_flank_pct) / 100
+    # A non-numeric box or saved value (e.g. a hand-edited project file) falls back to the
+    # default, rather than an NA flank erroring here and ending the session.
+    pct <- Find(function(x) length(x) == 1 && is.finite(x),
+                lapply(list(input$s_gene_flank_pct, saved_cfg()$gene_flank_pct),
+                       function(x) suppressWarnings(as.numeric(x))),
+                nomatch = .pt_default_settings()$gene_flank_pct) / 100
     if (identical(sym, gene_echo)) { gene_echo <<- NULL; return() }
     gene_echo <<- NULL
-    if (nchar(sym) == 0) { state$gene_symbol <- NULL; gene_query <<- NULL; return() }
+    if (nchar(sym) == 0) {
+      # An empty box is no gene: clear the whole lookup, so Generate has no region to draw.
+      state$gene_symbol <- NULL; state$gene_region <- NULL; state$gene_error <- NULL; state$gene_note <- NULL
+      gene_query <<- NULL
+      return()
+    }
     q <- if (!is.null(gene_query) && identical(sym, isolate(state$gene_symbol))) gene_query else sym
     gene_query <<- q
     res <- resolve_gene_region(q, txdb, pct)
@@ -1366,8 +1486,6 @@ server <- function(input, output, session) {
       updateSelectizeInput(session, "gene_name", choices = ALL_GENES, server = TRUE, selected = res$symbol)
     }
   })
-
-  observeEvent(input$region_mode, { state$gene_error <- NULL })
 
   output$gene_result_ui <- renderUI({
     if (!is.null(state$gene_error))
@@ -1470,6 +1588,18 @@ server <- function(input, output, session) {
     update_rank_list("figure_tracks",    labels = split$figure,    session = session)
   })
 
+  # Until the sample(s) are picked both track lists are empty: the Available list
+  # says what to pick first. The text goes in a CSS variable, set only before the pick, that
+  # plottrellis.css shows in an empty Available list.
+  output$tracks_hint <- renderUI({
+    if (has_conditions_ready()) return(NULL)
+    msg <- switch(input$view_mode %||% "",
+                  single = "Pick a condition above to see its tracks.",
+                  two    = "Pick a reference and a comparison above to see their tracks.",
+                  "Pick the number of samples above to start.")
+    tags$style(sprintf('#tracks-block { --pt-tracks-hint: "%s"; }', msg))
+  })
+
   # ── Region resolution: identical across all 3 sample-count modes ───────────
   # Coordinates is selectable in every mode, so which region resolves depends
   # only on region_mode -- never on view_mode. gene_name is only meaningful in
@@ -1548,40 +1678,57 @@ server <- function(input, output, session) {
         strong("Remove or fix before generating: "), names_str)
   })
 
-  # Render helper: render_all() straight to an svglite device, in-process (Generate, zoom and Apply to figure); the displayed/downloadable R script is assemble_download_script() on the same entries/region_params/settings.
+  # Render helper (Generate, zoom and Apply to figure): .pt_render_svg() draws the figure in
+  # the background render process and the page updates when it is done; the
+  # displayed/downloadable R script is assemble_download_script() on the same
+  # entries/region_params/settings.
   do_render <- function(region_params, entries, settings_base, title_str = "", labels = NULL) {
-    state$rendering <- TRUE
-    on.exit({
-      state$rendering <- FALSE
-      session$sendCustomMessage("hide_spinner", list())
-    }, add = TRUE)
     settings <- c(settings_base, list(
       title       = title_str,
       output_path = tempfile(fileext = ".svg")
     ))
-    state$plot_error <- NULL
-    tryCatch({
-      dev_before <- dev.cur()
-      # .pt_quiet(): plotgardener prints a "text[text2]"-style line per grob, hundreds per figure.
-      .pt_quiet(render_all(entries, region_params, settings,
-                 device_fn = function(w, h) svglite(settings$output_path, width = w, height = h)))
-      if (dev.cur() != dev_before) dev.off()
-      .pt_tidy_svg(settings$output_path, unlock_text = FALSE)
-      if (!is.null(state$svg_path) && file.exists(state$svg_path))
-        unlink(state$svg_path)
-      state$svg_path         <- settings$output_path
-      state$rcode             <- assemble_download_script(entries, region_params, settings)
-      state$last_region      <- region_params
-      state$last_labels      <- labels
-      state$last_title       <- title_str
-      state$rendered_gene    <- region_params$gene  # Gene / protein info follows the figure
+    # The previous figure's error, if any, stays until this one is drawn: clearing it now
+    # would end the error output in a silent req() failure, which the page would take for
+    # an error and hide the loading overlay (and its Cancel button) mid-render.
+    state$rendering <- TRUE
+    # Called from the app's event loop when the background render ends, outside any
+    # reactive context: isolate() lets it read state.
+    done <- function(err) isolate({
+      state$rendering <- FALSE
+      if (is.null(err)) err <- tryCatch({
+        rcode <- assemble_download_script(entries, region_params, settings)
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (is.null(err)) {
+        if (!is.null(state$svg_path) && file.exists(state$svg_path))
+          unlink(state$svg_path)
+        state$plot_error       <- NULL
+        state$svg_path         <- settings$output_path
+        state$rcode             <- rcode
+        state$last_region      <- region_params
+        state$last_labels      <- labels
+        state$last_title       <- title_str
+        state$rendered_gene    <- region_params$gene  # Gene / protein info follows the figure
+      } else {
+        unlink(settings$output_path)
+        state$plot_error <- err
+      }
       session$sendCustomMessage("show_output", list())
-    }, error = function(e) {
-      if (dev.cur() != dev_before) try(dev.off(), silent = TRUE)
-      state$plot_error <- conditionMessage(e)
-      session$sendCustomMessage("show_output", list())
+      session$sendCustomMessage("hide_spinner", list())
     })
+    if (is.null(render_worker)) done(.pt_render_svg(entries, region_params, settings))
+    else render_worker$render(entries, region_params, settings, done)
   }
+
+  # Cancel (the loading overlay's button): stop the render, keep the previous figure.
+  observeEvent(input$cancel_render, {
+    if (isTRUE(state$rendering) && !is.null(render_worker)) {
+      render_worker$cancel()
+      state$rendering <- FALSE
+      showNotification("Rendering cancelled. The figure shown, if any, is the previous one.", type = "warning")
+    }
+    session$sendCustomMessage("hide_spinner", list())
+  })
 
   # Shared by Generate, zoom and Apply to figure: build_entries() + settings_base + do_render(), from a region/labels/gene-name/title already resolved by the caller.
   render_from_selection <- function(rgn, labels, gene_name, title_str) {
@@ -1666,7 +1813,7 @@ server <- function(input, output, session) {
         actionButton("zoom_in_10x", "10\u00D7",  class = "btn-default")
       ),
       tags$div(
-        style = "width:1px; background:#ddd; align-self:stretch; margin-top:22px;"
+        style = "width:1px; background:var(--pt-border); align-self:stretch; margin-top:22px;"
       ),
       tags$div(
         style = "text-align:center;",

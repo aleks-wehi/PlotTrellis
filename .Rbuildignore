@@ -5,3 +5,4 @@
 ^PlotTrellis\.BiocCheck$
 ^tests/testthat/_snaps_gz/(?!example-data$)[^/]+$
 ^tests/testthat/_snaps$
+^CONTRIBUTING\.md$

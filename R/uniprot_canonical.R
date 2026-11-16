@@ -185,7 +185,10 @@ uniprot_canonical_match <- function(gene_symbol, tx_ids, cds_by_tx, tx_ccds_id =
   tx_stripped <- sub("\\.[0-9]+$", "", tx_ids)
 
   ens_hit  <- .uniprot_tier_lookup(tx_stripped, entry$ensembl, entry$canonical_isoform)
-  ccds_hit <- .uniprot_tier_lookup(tx_ccds_id, entry$ccds, entry$canonical_isoform)
+  # UniProt and GENCODE CCDS ids carry a version ("CCDS12345.1"), Ensembl's do not.
+  ccds_xref <- entry$ccds
+  ccds_xref$id <- strip_version(ccds_xref$id)
+  ccds_hit <- .uniprot_tier_lookup(strip_version(tx_ccds_id), ccds_xref, entry$canonical_isoform)
 
   tx_aa_len <- vapply(tx_ids, function(t) {
     if (!t %in% names(cds_by_tx)) return(NA_real_)

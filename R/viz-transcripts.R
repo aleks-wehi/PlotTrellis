@@ -31,7 +31,7 @@ settings_transcripts <- function(dict, entry, settings, track_w, region_params) 
   kept <- kept[order(kept$transcript_name), ]
   entry$data$kept <- kept
   entry$data$n_excluded <- nrow(tx_all) - nrow(kept)
-  entry$data$colours <- transcript_colours(kept$transcript_name)
+  dict <- .pt_add_tx_names(dict, kept$transcript_name, first = TRUE)
   if (is.null(entry$height)) entry$height <- .pt_tx_height(nrow(kept), settings$fontsize)
   list(dict = dict, entry = entry)
 }
@@ -62,7 +62,7 @@ render_transcripts <- function(entry, dict, ctx) {
   row_h <- .pt_tx_row_h(ctx$fontsize)
   row_y <- ctx$y + header_h + (seq_len(n_rows) - 1) * row_h
   label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches", valueOnly = TRUE)
-  colours <- entry$data$colours
+  colours <- .pt_tx_colours(dict)
 
   for (j in seq_len(n_rows)) {
     plotTranscripts(params = ctx$region, transcriptFilter = kept$transcript_id[j], labels = NULL,

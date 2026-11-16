@@ -28,32 +28,25 @@ test_that("out-of-bounds region: hic draws its empty track instead of crashing (
     warning = function(w) if (grepl("No data found in region", conditionMessage(w), fixed = TRUE)) invokeRestart("muffleWarning"))
 })
 
-test_that("sparse in-range region: hic draws its empty track with no -Inf warning (human)", {
+test_that("sparse in-range region: hic says why it has nothing to draw, with no -Inf warning (human)", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   # The PTPRC window on the GM12878 ChIA-PET .hic is on the chromosome and
-  # in range, but auto resolution picks 1000 bp and `straw` returns a few rows whose counts are all
-  # NaN, so there is no colour palette for the legend. Not the 0-row out-of-bounds case above.
+  # in range, but auto resolution picks 1000 bp and `straw` returns rows whose counts are all
+  # NaN (no KR values at that bin size). Not the 0-row out-of-bounds case above: the track
+  # names the normalisation and what to change instead of drawing an empty panel.
   region <- list(chrom = "chr1", start = 143800000, end = 144200000, gene = "PTPRC")
   spec   <- single_track("hic", test_rows("human")[["GM12878"]])
-  # Guard: still rows, all without a usable count (else this would silently become the 0-row case).
-  m <- load_hic(spec, region, test_settings("human"))$data$matrix
-  expect_gt(nrow(m), 0)
-  expect_true(all(is.na(m$counts)))
+  expect_error(load_hic(spec, region, test_settings("human")), "no KR values at 1,000 bp bins in this view", fixed = TRUE)
   tmp <- tempfile(fileext = ".svg")
   on.exit(unlink(tmp), add = TRUE)
-  # plotgardener's own "No data found in region." warning is expected here and muffled; the point is that
-  # settings_hic() adds no "returning -Inf" warning of its own for an all-NaN matrix.
-  expect_no_warning(
-    withCallingHandlers(
-      render_all(list(spec), region, test_settings("human"),
-                 device_fn = function(w, h) svglite::svglite(tmp, width = w, height = h)),
-      warning = function(w) if (grepl("No data found in region", conditionMessage(w), fixed = TRUE)) invokeRestart("muffleWarning")))
+  # settings_hic() adds no "returning -Inf" warning of its own for the failed track.
+  expect_no_warning(suppressMessages(
+    render_all(list(spec), region, test_settings("human"),
+               device_fn = function(w, h) svglite::svglite(tmp, width = w, height = h))))
   grDevices::dev.off()
   svg <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
-  # The heading as usual, no colour legend (no counts anywhere), no message.
-  expect_match(svg, ">hic</text>", fixed = TRUE)
+  expect_match(svg, "hic (GM12878) track failed: no KR values at 1,000 bp bins in this view", fixed = TRUE)
   expect_false(grepl("No data", svg, fixed = TRUE))
-  expect_false(grepl("track failed", svg, fixed = TRUE))
 })
 
 test_that("empty GRanges: junctions draws its empty track instead of crashing (mouse)", {

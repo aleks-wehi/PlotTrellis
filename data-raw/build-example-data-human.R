@@ -57,7 +57,7 @@ tx_keep <- unique(sub('.*transcript_id "([^"]+)".*', "\\1",
 cat(sprintf("GTF: %d genes, %d transcripts, %d lines\n", length(keep_genes), length(tx_keep), length(gtf_keep)))
 
 # ---- Chromosome lengths cache (so ensure_genome_ready() never needs the network) --
-# Named exactly as .genome_cache_path("annotation.gtf.gz", "_chrom_sizes.rds") derives.
+# Named as .pt_shipped_chrom_sizes() looks for it (GTF name + "_chrom_sizes.rds").
 file.copy(SIZES_IN, file.path(OUT, "annotation_chrom_sizes.rds"))
 sizes <- readRDS(SIZES_IN)
 

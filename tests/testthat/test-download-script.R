@@ -239,7 +239,8 @@ test_that("the bundled example's script runs alone with Rscript and draws pt_sav
   # A coverage track first (it draws the scale bar) and two Transcript expression tracks (they
   # fold into one panel): both come from the track types' declarations, which the script
   # must carry.
-  fig <- pt_figure(proj, "Elf5", c("atac@Basal", "genes", "transcript_expression@Basal", "transcript_expression@LP"))
+  fig <- pt_figure(proj, "Elf5", c("atac", "genes", "transcript_expression", "transcript_expression"),
+                   samples = c("Basal", NA, "Basal", "LP"))
   api_svg <- tempfile(fileext = ".svg")
   pt_save(fig, api_svg)
 

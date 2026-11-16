@@ -16,14 +16,30 @@
 TX_PALETTE      <- c("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948")
 TX_OTHER_COLOUR <- "grey70"
 
-transcript_colours <- function(transcript_names, palette = TX_PALETTE) {
-  levels <- sort(unique(transcript_names))
+# `first` (alphabetical) take the first palette slots, then the other names (alphabetical); the
+# palette repeats past its length.
+transcript_colours <- function(transcript_names, palette = TX_PALETTE, first = character(0)) {
+  first <- sort(intersect(first, transcript_names))
+  levels <- c(first, sort(setdiff(unique(transcript_names), first)))
   setNames(palette[((seq_along(levels) - 1) %% length(palette)) + 1], levels)
 }
 
+# One colour per transcript across a figure: each track that colours transcripts adds the names it
+# shows to dict[["tx_names"]] in its settings_<key>() call, and draws with .pt_tx_colours(dict),
+# built from every such track's names. The filtered tracks (Transcripts (filtered), Transcripts
+# annotated, Transcript expression) pass first = TRUE: their transcripts take the first palette
+# slots, so a long all-transcripts track in the same figure can't make their colours repeat.
+.pt_add_tx_names <- function(dict, transcript_names, first = FALSE) {
+  dict[["tx_names"]] <- union(dict[["tx_names"]], transcript_names)
+  if (first) dict[["tx_names_first"]] <- union(dict[["tx_names_first"]], transcript_names)
+  dict
+}
+
+.pt_tx_colours <- function(dict) transcript_colours(dict[["tx_names"]], first = dict[["tx_names_first"]] %||% character(0))
+
 strip_version <- function(x) sub("\\.[0-9]+$", "", x)
 
-# Resolves `chrom` against the file's own observed values (`vocab`), trying only the two-way "chr"-prefix toggle (a file may say "18" where the query says "chr18"); falls back to the original chrom unresolved, rather than erroring, if neither form matches.
+# Resolves `chrom` against the file's own observed values (`vocab`), trying the two-way "chr"-prefix toggle (a file may say "18" where the query says "chr18"), then resolve_chrom()'s aliases ("chrM" for "MT"); falls back to the original chrom unresolved, rather than erroring, if none matches.
 resolve_chrom_against_vocab <- function(chrom, vocab) {
   if (chrom %in% vocab) return(chrom)
   toggled <- if (grepl("^chr", chrom, ignore.case = TRUE)) {
@@ -31,7 +47,7 @@ resolve_chrom_against_vocab <- function(chrom, vocab) {
   } else {
     paste0("chr", chrom)
   }
-  if (toggled %in% vocab) toggled else chrom
+  if (toggled %in% vocab) toggled else resolve_chrom(chrom, vocab) %||% chrom
 }
 
 # TRUE when `first_line` is a HiCCUPS loop file's column-name header ("#chr1 x1 x2 chr2 y1 y2
@@ -84,6 +100,41 @@ bedpe_arcs_in_window <- function(j, chrom, start, end) {
   j[, c("intron_start", "intron_end", "nSupport")]
 }
 
+# What a paired-end file holds, by read_junction_file()'s own tests (the column count of its first
+# line, a strand in column 6 of a 6-column file): "junctions" (BED12 or junction BED6: read
+# counts), "loops" (HiCCUPS, a BEDPE with a score column, or a 7-column BEDPE whose 7th column is a
+# number) or "unscored" (any other BEDPE: every arc the same height).
+# NA when the file can't be read or isn't a format read_junction_file() reads. Remembered per file
+# (path, size, modification time): track detection asks once per pair of samples.
+.pt_arc_kind_memo <- new.env(parent = emptyenv())
+.pt_arc_file_kind <- function(path) {
+  info <- suppressWarnings(file.info(path, extra_cols = FALSE))
+  if (is.na(info$size)) return(NA_character_)
+  key <- paste(path, info$size, as.numeric(info$mtime), sep = "\r")
+  hit <- .pt_arc_kind_memo[[key]]
+  if (!is.null(hit)) return(hit)
+  .pt_arc_kind_memo[[key]] <- .pt_arc_file_kind_read(path)
+}
+.pt_arc_file_kind_read <- function(path) {
+  lines <- tryCatch(suppressWarnings(readLines(path, n = 50, warn = FALSE)), error = function(e) NULL)
+  if (length(lines) == 0) return(NA_character_)
+  if (is_hiccups_header(lines[1])) return("loops")
+  n_cols <- length(strsplit(lines[1], "\t")[[1]])
+  if (n_cols == 12) return("junctions")
+  if (n_cols < 6 || n_cols > 10) return(NA_character_)
+  if (n_cols >= 8) return("loops")
+  data <- lines[nzchar(trimws(lines)) & !startsWith(lines, "#")]
+  if (length(data) == 0) return(NA_character_)
+  if (n_cols == 7) {
+    # read_junction_file() heights a 7-column BEDPE by its 7th column when that is a number on
+    # every row (checked here on the rows read).
+    col7 <- trimws(vapply(strsplit(data, "\t"), `[`, "", 7))
+    return(if (all(is.finite(suppressWarnings(as.numeric(col7))))) "loops" else "unscored")
+  }
+  col6 <- trimws(strsplit(data[1], "\t")[[1]][6])
+  if (col6 %in% c("+", "-", "*", ".")) "junctions" else if (grepl("^[0-9]+$", col6)) "unscored" else NA_character_
+}
+
 # Dispatches on format: a HiCCUPS header line is a HiCCUPS loop file, otherwise exactly 12
 # columns is BED12, 6 with text (a strand) in column 6 is a junction BED6, and 6-10 is BEDPE; intron_start/intron_end is the gap between the two anchors, not either anchor's own span.
 read_junction_file <- function(path, chrom, start, end) {
@@ -119,7 +170,11 @@ read_junction_file <- function(path, chrom, start, end) {
       j <- data.frame(chrom1 = j[[1]], start1 = j[[2]], end1 = j[[2]],
                       chrom2 = j[[1]], start2 = j[[3]], end2 = j[[3]], nSupport = j[[5]])
     }
-    if (!"nSupport" %in% names(j)) j$nSupport <- 1L  # no score column: every pair counts once
+    # No score column: a 7-column BEDPE whose 7th column ("name") is a number on every row (ENCODE
+    # ChIA-PET loops keep their count there) takes its height from it; otherwise (any text or NA,
+    # which would drop that arc) every pair counts once.
+    if (!"nSupport" %in% names(j))
+      j$nSupport <- if (n_cols == 7 && is.numeric(j$name) && all(is.finite(j$name))) j$name else 1L
     bedpe_arcs_in_window(j, chrom, start, end)
   } else {
     stop("Unrecognised junction/arc file (", n_cols, " columns): ", path,
@@ -247,6 +302,15 @@ join_truncated_transcripts <- function(named_list, max_segments = length(TX_PALE
   sort(union_names)
 }
 
+# Which genome a per-gene result was computed from: the name of the genome cache folder its
+# lookup file sits in (<cache>/genome/<GTF hash>/, see .genome_cache_path()). A GTF edited or
+# replaced in place gets a new folder, so results from the old one are never served for it; and
+# a session still holding the old genome keeps writing under the old folder, never under the
+# new one. "" for a lookup path with no folder (a unit test's placeholder annotation).
+.pt_genome_id <- function(lookup_path) {
+  if (is.null(lookup_path) || !nzchar(lookup_path) || dirname(lookup_path) == ".") "" else basename(dirname(lookup_path))
+}
+
 .gene_display_transcripts_cache_load <- function(path) {
   if (file.exists(path)) readRDS(path) else list()
 }
@@ -261,11 +325,12 @@ gene_display_transcripts <- function(gene, anno, samples, data_dir, min_display_
   # is all a cache key needs (no cryptographic strength required). Two
   # different projects (or a project whose samples[] changes via the
   # wizard) querying the same gene symbol can't share a cache entry. gtf_path
-  # is included so a project that switches GTF doesn't get the other GTF's
+  # and the loaded genome's id (.pt_genome_id()) are included so a project that
+  # switches GTF, or edits or replaces it in place, doesn't get the other GTF's
   # transcript structure for an already-cached gene, and min_display_tpm so
   # a changed min TPM setting applies to genes already in the cache.
-  cache_key <- sprintf("%s|%s|%.6f|%d|%s|%s|%.10g", gene, anno$gtf_path, other_budget, max_segments,
-                        paste(deparse(samples), collapse = ""), data_dir, min_display_tpm)
+  cache_key <- sprintf("%s|%s|%s|%.6f|%d|%s|%s|%.10g", gene, anno$gtf_path, .pt_genome_id(anno$tx_name_lookup_path),
+                        other_budget, max_segments, paste(deparse(samples), collapse = ""), data_dir, min_display_tpm)
   cache <- .gene_display_transcripts_cache_load(cache_path)
   if (!is.null(cache[[cache_key]])) return(cache[[cache_key]])
 
@@ -274,28 +339,40 @@ gene_display_transcripts <- function(gene, anno, samples, data_dir, min_display_
   pool <- load_samples_from_settings(samples, data_dir)
   pool <- Filter(function(s) !is.na(sample_data_path(s, "quantdir")), pool)
 
-  corrupt <- FALSE
-  named <- if (length(pool) == 0) {
+  # With no quant data to rank by, the first transcripts by GENCODE suffix.
+  by_ordinal <- function() {
     ord <- order(tx_ordinal_suffix(tx$transcript_name), na.last = TRUE)
     head(tx$transcript_name[ord], max_segments)
-  } else {
+  }
+  corrupt <- FALSE
+  skipped <- character(0)
+  named <- if (length(pool) == 0) by_ordinal() else {
     per_condition <- lapply(pool, function(row) {
       samples <- list(list(sample_id = row$display, quant_path = sample_data_path(row, "quantdir")))
-      # Every sample's quant file is read, whichever sample's track this is: a file that is
-      # missing or can't be read says whose (the gene's annotation was read above, so an error
-      # here is this sample's).
-      ft   <- tryCatch(filtered_transcripts(gene, samples, anno),
-                       error = function(e) stop("sample ", row$display, ": ", conditionMessage(e), call. = FALSE))
+      # Every readable sample's quant file is pooled, whichever sample's track this is. A file
+      # that is missing or can't be read leaves just that sample out of the pool: its own
+      # expression row reads the same file and fails there, naming it, while the other
+      # samples' rows and the transcript tracks still draw.
+      ft <- tryCatch(filtered_transcripts(gene, samples, anno),
+                     error = function(e) { skipped[row$display] <<- conditionMessage(e); NULL })
+      if (is.null(ft)) return(NULL)
       if (length(attr(ft, "tpm_not_numeric"))) corrupt <<- TRUE
       kept <- ft[ft$mean_tpm >= min_display_tpm, ]
       truncate_by_proportion(kept, attr(ft, "total_tpm") - sum(kept$mean_tpm), attr(ft, "total_tpm"),
                               other_budget, max_segments)$named
     })
-    join_truncated_transcripts(per_condition, max_segments)
+    per_condition <- Filter(Negate(is.null), per_condition)
+    # Said once per lookup, since a figure without an expression track has no row to say it on.
+    if (length(skipped))
+      message("PlotTrellis: ", gene, "'s named transcripts leave out ",
+              paste0(names(skipped), " (", skipped, ")", collapse = ", "))
+    if (length(per_condition) == 0) by_ordinal() else join_truncated_transcripts(per_condition, max_segments)
   }
 
   result <- list(named = named, tx = tx)
-  if (corrupt) return(result)  # not cached: the key can't tell when the file is fixed
+  # Not cached while a file is unreadable or unreadable as numbers: the key can't tell when
+  # the file is fixed, and the named set may change once that sample is back in the pool.
+  if (corrupt || length(skipped)) return(result)
   cache[[cache_key]] <- result
   .gene_display_transcripts_cache_save(cache, cache_path)
   result

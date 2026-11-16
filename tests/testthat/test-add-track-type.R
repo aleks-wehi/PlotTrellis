@@ -150,8 +150,9 @@ test_that("a new track type is offered, named, built into an entry and filed und
   expect_identical(tab$track[tab$key == "bed_density_peaks_A"], "peaks_bed_density")
   expect_identical(tab$track[tab$key == "bw_ratio_atac_A_vs_B"], "atac_ratio")
   expect_false(anyDuplicated(paste(tab$track, tab$sample)) > 0)
-  expect_identical(.pt_resolve_tracks(tab, c("peaks_bed_density@A", "atac_ratio@B vs A"), NULL),
-                   c("bed_density_peaks_A", "bw_ratio_atac_A_vs_B"))
+  expect_message(keys <- .pt_resolve_tracks(tab, c("peaks_bed_density", "atac_ratio"), c("A", "B"),
+                                            comparison = c("A", "B")), "no 'peaks_bed_density' for B")
+  expect_identical(keys, c("bed_density_peaks_A", "bw_ratio_atac_A_vs_B"))
 
   # Entries with the sample, colour and paths.
   entries <- .pt_build_entries(c("bed_density_peaks_A", "bw_ratio_atac_A_vs_B"), items, c(A = "#E41A1C"),

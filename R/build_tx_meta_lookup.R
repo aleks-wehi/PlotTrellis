@@ -1,4 +1,4 @@
-# transcript_id -> transcript_type, tag and ccdsid, from a GENCODE-style GTF's "transcript"
+# transcript_id -> transcript_type, tag and ccdsid, from a GENCODE- or Ensembl-style GTF's "transcript"
 # lines. `tag` can appear several times per transcript ("Ensembl_canonical",
 # "appris_principal_1", "CCDS"), so every one is kept, comma-joined; `ccdsid` (e.g.
 # "CCDS37873.1") names the CCDS record the "CCDS" tag only says exists. Built by
@@ -34,8 +34,12 @@ build_tx_meta_lookup <- function(gtf_path, out_path) {
     paste(sub('tag "([^"]+)"', "\\1", x), collapse = ",")
   }, character(1))
 
-  ccds_id <- sub('.*ccdsid "([^"]+)".*', "\\1", attrs)
-  ccds_id[!grepl('ccdsid "', attrs)] <- NA_character_
+  # GENCODE spells the attribute "ccdsid", Ensembl GTFs "ccds_id".
+  ccds_id <- ifelse(grepl('ccdsid "', attrs),
+    sub('.*ccdsid "([^"]+)".*', "\\1", attrs),
+    ifelse(grepl('ccds_id "', attrs),
+      sub('.*ccds_id "([^"]+)".*', "\\1", attrs),
+      NA_character_))
 
   meta <- data.frame(transcript_type = transcript_type, tag = tag, ccds_id = ccds_id,
                       stringsAsFactors = FALSE, row.names = tx_id_stripped)

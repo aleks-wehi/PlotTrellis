@@ -49,7 +49,7 @@ render_transcripts_annotated <- function(entry, dict, ctx) {
     grid::convertHeight(grid::grobHeight(grid::textGrob(label, gp = grid::gpar(fontsize = fontsize, fontfamily = fontfamily, fontface = fontface))), "inches", valueOnly = TRUE)
   }
 
-  colours <- entry$data$colours
+  colours <- .pt_tx_colours(dict)
   for (j in seq_len(n_rows)) {
     plotTranscripts(params = ctx$region, transcriptFilter = kept$transcript_id[j], labels = NULL,
                      x = ctx$track_x, y = row_y[j], width = ctx$track_w, height = row_h,

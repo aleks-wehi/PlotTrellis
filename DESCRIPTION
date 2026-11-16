@@ -13,13 +13,13 @@ BugReports: https://github.com/aleks-wehi/PlotTrellis/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends:
-    R (>= 4.3)
+    R (>= 4.5.0)
 Imports:
     BiocManager,
     shiny,
     sortable,
     jsonlite,
-    plotgardener,
+    plotgardener (>= 1.16.0),
     rtracklayer,
     GenomicFeatures,
     GenomicRanges,
@@ -41,7 +41,8 @@ Imports:
     data.table,
     R.utils,
     RSQLite,
-    later
+    later,
+    callr
 Suggests:
     testthat (>= 3.1.7),
     vdiffr,
@@ -50,7 +51,8 @@ Suggests:
     rmarkdown,
     BiocStyle,
     org.Mm.eg.db,
-    org.Hs.eg.db
+    org.Hs.eg.db,
+    pkgload
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0

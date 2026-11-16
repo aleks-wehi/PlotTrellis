@@ -91,6 +91,22 @@ clean_optional_numeric <- function(v) {
   diff_shared_alpha = cfg$diff_shared_alpha
 )
 
+# Why a region can't be drawn (its end not after its start, or a missing coordinate), or NULL
+# when it can. Shared by pt_figure(), the gene lookup and render_all().
+.pt_region_error <- function(start, end) {
+  start <- suppressWarnings(as.numeric(start))
+  end <- suppressWarnings(as.numeric(end))
+  if (length(start) != 1 || length(end) != 1 || !is.finite(start) || !is.finite(end))
+    return("The region needs a start and an end position.")
+  if (max(start, end) > .Machine$integer.max)
+    return(sprintf("The region's positions must be below %s.", format(.Machine$integer.max, big.mark = ",")))
+  if (end <= start)
+    return(sprintf("The region's end (%s) must be after its start (%s).",
+                   format(end, big.mark = ",", scientific = FALSE),
+                   format(start, big.mark = ",", scientific = FALSE)))
+  NULL
+}
+
 # Gene query (symbol in any case, or Ensembl gene ID; see resolve_gene_query()) -> coords,
 # the canonical symbol every track/panel keys on, and a user-facing error.
 .pt_resolve_gene_region <- function(query, txdb, flank_pct, orgdb_pkg, all_genes, genome_label) {
@@ -101,6 +117,11 @@ clean_optional_numeric <- function(v) {
     list(region = NULL, symbol = NA_character_,
          error = q$error %||% paste0("'", query, "' not found in ", genome_label,
                                      ": enter a gene symbol (e.g. Pax5) or an Ensembl gene ID"))
+  else if (!is.null(.pt_region_error(result$start, result$end)))
+    # A flank of about -50% or less cuts the gene away from both sides.
+    list(region = NULL, symbol = q$symbol,
+         error = sprintf("A gene flank of %s%% leaves nothing of %s to show: use a larger flank.",
+                         format(flank_pct * 100), q$symbol))
   else
     list(region = result, symbol = q$symbol, error = NULL,
          note = if (length(q$also)) paste0(q$ensembl, " is also named ", paste(q$also, collapse = ", ")))

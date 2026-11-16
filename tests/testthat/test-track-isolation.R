@@ -31,7 +31,7 @@ test_that("a render_ error fails only its own track, with the reason shown", {
   expect_message(svg <- render_svg_text(items, test_region("mouse"), test_settings("mouse")),
                  "bw \\(.*\\) track failed: boom in render")
   expect_match(svg, "track failed: boom in render", fixed = TRUE)
-  expect_match(svg, "Ba (max_h=0 reads)", fixed = TRUE)  # the junctions track (no junctions here) still drew
+  expect_match(svg, "Ba (max_h=0)", fixed = TRUE)  # the junctions track (loops, none here) still drew
 })
 
 test_that("the error label survives a message with invalid bytes, and covers partial drawing", {
@@ -58,6 +58,6 @@ test_that("junctions heading accepts a non-integer junction score", {
   local_mocked_bindings(load_junctions = function(...)
     data.frame(intron_start = mid - 5000L, intron_end = mid + 5000L, nSupport = 3.457920544))
   svg <- render_svg_text(list(single_track("junctions", rows[["Ba"]])), region, test_settings("mouse"))
-  expect_match(svg, "max_h=3.46 reads", fixed = TRUE)
+  expect_match(svg, "max_h=3.46)", fixed = TRUE)   # a loop file's score, so no "reads"
   expect_false(grepl("track failed", svg, fixed = TRUE))
 })

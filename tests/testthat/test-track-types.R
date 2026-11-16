@@ -224,14 +224,16 @@ test_that("the test datasets offer the same tracks, in the same order", {
     "junctions_mirrored_diff_Junctions_K562_vs_GM12878", "junctions_mirrored_diff_tpm_scaled_Junctions_K562_vs_GM12878"))
 })
 
-# pt_tracks() of a project, the pinned types' rows only.
+# A project's track table (one row per track and sample, as pt_figure() resolves names
+# against it; pt_tracks() shows one row per name), the pinned types' rows only.
 pinned_tracks <- function(proj) {
-  tab <- pt_tracks(proj)[vapply(proj$tracks$key, function(k) proj$items[[k]]$type, "") %in% EXISTING, ]
+  tab <- proj$tracks[vapply(proj$tracks$key, function(k) proj$items[[k]]$type, "") %in% EXISTING,
+                     c("track", "sample", "kind", "label")]
   rownames(tab) <- NULL
   tab
 }
 
-test_that("pt_tracks() of both bundled examples is the same", {
+test_that("the track table of both bundled examples is the same", {
   skip_if_not_installed("org.Mm.eg.db")
   skip_if_not_installed("org.Hs.eg.db")
   mammary <- pinned_tracks(suppressWarnings(pt_project(file.path(tempdir(), "pt-test-script-mammary"),

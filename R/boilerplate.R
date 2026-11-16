@@ -30,6 +30,11 @@ format_bp_generic <- function(n, digits = 2, space_before_bp = FALSE) {
 # builds the whole-transcriptome CDS index on first call and returns the same one after.
 .pt_annotation <- function(settings) {
   path <- settings$txdb_path
+  # Deleted under an open project (Clear all caches, or the cache folder removed by hand).
+  if (!file.exists(path))
+    stop("This project's genome files are gone (", path, "), e.g. after Clear all caches. ",
+         "Run pt_project() on the project again to rebuild them (a downloaded script works again ",
+         "after that).", call. = FALSE)
   m <- .pt_txdb_memo[[path]]
   if (is.null(m) || !identical(m$mtime, file.mtime(path))) {
     m <- new.env(parent = emptyenv())
@@ -46,6 +51,15 @@ format_bp_generic <- function(n, digits = 2, space_before_bp = FALSE) {
          if (is.null(m$cds)) m$cds <- GenomicFeatures::cdsBy(m$txdb, by = "tx", use.names = TRUE)
          m$cds
        })
+}
+
+# Disconnects every TxDb .pt_annotation() opened and forgets them, before their files are
+# deleted (Clear all caches): the next .pt_annotation() call opens the file afresh.
+.pt_close_txdbs <- function() {
+  for (path in ls(.pt_txdb_memo)) {
+    try(AnnotationDbi::dbFileDisconnect(AnnotationDbi::dbconn(.pt_txdb_memo[[path]]$txdb)), silent = TRUE)
+    rm(list = path, envir = .pt_txdb_memo)
+  }
 }
 
 mixed_text <- function(segments, x, y, fontsize, fontfamily) {

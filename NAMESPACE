@@ -12,6 +12,7 @@ export(pt_example)
 export(pt_figure)
 export(pt_preload)
 export(pt_project)
+export(pt_samples)
 export(pt_save)
 export(pt_script)
 export(pt_tracks)
@@ -59,7 +60,6 @@ importFrom(stats,
   setNames
 )
 importFrom(svglite,svglite)
-importFrom(tools,R_user_dir)
 importFrom(utils,
   head,
   modifyList,

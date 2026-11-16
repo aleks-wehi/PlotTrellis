@@ -7,8 +7,12 @@ test_that("pt_figure() resolves repeated Gene annotations in place", {
   tab <- data.frame(track = c("genes", "atac", "atac"), sample = c(NA, "A", "B"),
                     kind = c("fixed", "sample", "sample"), label = "",
                     key = c("genes", "atac_A", "atac_B"), stringsAsFactors = FALSE)
-  expect_equal(.pt_resolve_tracks(tab, c("genes", "atac@A", "genes", "atac@B", "genes"), NULL),
+  expect_equal(.pt_resolve_tracks(tab, c("genes", "atac", "genes", "atac", "genes"), c("A", "B"),
+                                  samples = c(NA, "A", NA, "B", NA)),
                c("genes", "atac_A", "genes", "atac_B", "genes"))
+  # Repeated over every sample, each Gene annotation stays where it is written.
+  expect_equal(.pt_resolve_tracks(tab, c("genes", "atac", "genes"), c("A", "B"), order = "sample"),
+               c("genes", "atac_A", "atac_B", "genes"))
 })
 
 test_that("a Multi start view keeps repeated Gene annotations and their order", {
@@ -30,7 +34,7 @@ repeat_project <- function() suppressWarnings(pt_project(REPEAT_DIR, pt_example(
 
 test_that("several Gene annotations reach the entries, the script and the start view", {
   proj <- repeat_project()
-  fig <- pt_figure(proj, "Elf5", c("genes", "atac@Basal", "genes", "atac@LP", "genes"))
+  fig <- pt_figure(proj, "Elf5", c("genes", "atac", "genes", "atac", "genes"), samples = c(NA, "Basal", NA, "LP", NA))
   expect_equal(fig$keys, c("genes", "bw_atac_Basal", "genes", "bw_atac_LP", "genes"))
   expect_equal(vapply(fig$entries, `[[`, character(1), "viz"), c("genes", "bw", "genes", "bw", "genes"))
   script <- readLines(pt_script(fig, tempfile(fileext = ".R")))
@@ -75,15 +79,15 @@ test_that("a start view with several Gene annotations restores them, Available k
   json <- file.path(proj$dir, "project_settings.json")
   before <- readLines(json)
   on.exit(writeLines(before, json), add = TRUE)
-  pt_preload(proj, pt_figure(proj, "Elf5", c("genes", "atac@Basal", "genes", "atac@LP", "genes")))
+  pt_preload(proj, pt_figure(proj, "Elf5", c("genes", "atac", "genes", "atac", "genes"), samples = c(NA, "Basal", NA, "LP", NA)))
   l <- composer_lists(json, list(view_mode = "two", sel_reference = "Basal", sel_comparison = "LP"))
   expect_equal(l$figure_tracks, c("genes", "bw_atac_Basal", "genes", "bw_atac_LP", "genes"))
   expect_equal(sum(l$available_tracks == "genes"), 1)
   expect_false(any(c("bw_atac_Basal", "bw_atac_LP") %in% l$available_tracks))
   # Only Gene annotation repeats: any other track repeated in the start view (a
   # pt_figure() can repeat one) is restored once.
-  pt_preload(proj, pt_figure(proj, "Elf5", c("genes", "atac", "atac@Basal", "genes", "protein_domains",
-                                             "protein_domains"), parallel = TRUE))
+  pt_preload(proj, pt_figure(proj, "Elf5", c("genes", "atac", "atac", "atac", "genes", "protein_domains", "protein_domains"),
+                             samples = c(NA, "Basal", "LP", "Basal", NA, NA, NA)))
   l <- composer_lists(json, list(view_mode = "two", sel_reference = "Basal", sel_comparison = "LP"))
   expect_equal(l$figure_tracks, c("genes", "bw_atac_Basal", "bw_atac_LP", "genes", "protein_domains"))
   expect_false(any(c("bw_atac_Basal", "protein_domains") %in% l$available_tracks))

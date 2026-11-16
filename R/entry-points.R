@@ -61,6 +61,7 @@ parse_samples_txt <- function(samples_txt,
   res <- import_samples_txt(samples_txt, defaults = defaults)
   if (length(res$errors) > 0)
     stop("Can't import '", samples_txt, "':\n", paste0("- ", res$errors, collapse = "\n"), call. = FALSE)
+  for (msg in res$layout_warning) warning(msg, call. = FALSE)
 
   coerced <- .pt_coerce_auto_overrides(res$overrides, defaults)
   for (msg in coerced$ignored) warning(msg, call. = FALSE)
@@ -84,15 +85,24 @@ parse_samples_txt <- function(samples_txt,
     stop("Can't create project settings from '", samples_txt, "':\n",
          paste0("- ", problems, collapse = "\n"), call. = FALSE)
 
+  # The project's own copy as the source (the rebuild the unreadable-settings error suggests):
+  # the start lines it carries stay in it, so a later import from it still gives the view.
+  copy <- file.path(project_dir, "project_samples.txt")
+  start_lines <- if (file.exists(copy) && normalizePath(copy) == normalizePath(samples_txt))
+    grep("^# start_", readLines(samples_txt, warn = FALSE), value = TRUE) else character(0)
   dir.create(project_dir, recursive = TRUE, showWarnings = FALSE)
   # Same toJSON() call as the wizard's Save (null = "null", see its comment).
-  writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE, null = "null"), settings_json)
+  writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), settings_json)
   # Refresh the wizard Save's project_samples.txt copy too: Reset and the
   # broken-settings error both point at it, so a stale one would restore the old samples.
   # As in Save, a failure here doesn't block.
-  tryCatch(writeLines(export_samples_txt(c(list(data_root = settings$data_dir), settings[names(settings) != "data_dir"]),
-                                         defaults = defaults),
-                      file.path(project_dir, "project_samples.txt")),
+  tryCatch({
+    txt <- export_samples_txt(c(list(data_root = settings$data_dir), settings[names(settings) != "data_dir"]),
+                              defaults = defaults)
+    # After the other "# key:" lines, as .pt_write_samples_copy() puts them.
+    txt <- append(txt, start_lines, after = match(FALSE, startsWith(txt, "#"), nomatch = length(txt) + 1) - 1)
+    writeLines(txt, copy)
+  },
            error = function(e) warning("Couldn't write project_samples.txt: ", conditionMessage(e), call. = FALSE))
   # After the write, so "Saved" is true when it's shown.
   if (length(res$warnings) > 0)
@@ -149,8 +159,12 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...) {
     stop("No project_settings.json in '", project_dir, "'. Create one with ",
          "parse_samples_txt(\"path/to/samples.txt\", project_dir = ...) or plottrellis_wizard(), ",
          "or launch with run_plottrellis(), which opens the wizard first when needed.", call. = FALSE)
+  # The background R process figures are drawn in, started now: it loads its packages while
+  # the project and the app are set up.
+  pool <- .pt_render_pool()
+  on.exit(pool$close(), add = TRUE)
   p <- .pt_project(project_dir)
-  invisible(shiny::runApp(.pt_composer_app(p$settings_json, p$cfg), ...))
+  invisible(shiny::runApp(.pt_composer_app(p$settings_json, p$cfg, pool), ...))
 }
 
 #' Launch PlotTrellis
@@ -189,7 +203,13 @@ run_plottrellis <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
   # wizard decides by itself whether to start blank or pre-filled (settings file present or
   # not). Each pass calls the exported launchers, so the standalone and looped paths are the
   # same code.
-  edit_settings <- FALSE
+  # A saved project with a blank genome label (hand-edited; the wizard's Save refuses one)
+  # opens in the wizard first, which shows what to fill in, instead of stopping with the
+  # composer's error. Only the first pass: a wizard closed unchanged goes on to the composer,
+  # which then gives that error, not an endless wizard.
+  edit_settings <- .pt_blank_genome_label(project_dir)
+  if (edit_settings)
+    message("PlotTrellis: this project's genome label is blank; opening the setup wizard so you can fill it in.")
   repeat {
     result <- if (!file.exists(file.path(project_dir, "project_settings.json")) || edit_settings) {
       plottrellis_wizard(project_dir, ...)
@@ -199,6 +219,15 @@ run_plottrellis <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
     if (!identical(result, "restart") && !identical(result, "edit_settings")) return(invisible(result))
     edit_settings <- identical(result, "edit_settings")
   }
+}
+
+# TRUE when project_dir has a project_settings.json whose genome label is blank (see
+# .pt_require_genome_label(), which makes the composer and pt_project() stop on it).
+.pt_blank_genome_label <- function(project_dir) {
+  json <- file.path(project_dir, "project_settings.json")
+  # Warnings (a bad display setting) are left to the read the wizard or composer does next.
+  file.exists(json) &&
+    is.null(wiz_clean_optional_text(suppressWarnings(.pt_read_settings(json, .pt_default_settings()))$genome_label))
 }
 
 #' @rdname run_plottrellis

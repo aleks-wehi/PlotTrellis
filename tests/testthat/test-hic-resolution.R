@@ -167,3 +167,110 @@ test_that("hic_resolution is a NULL-default number that the samples.txt importer
   expect_identical(coerced$overrides$hic_res_mode, "fixed")
 })
 
+
+# A view whose bins all lack a value under the normalisation (the human ChIA-PET fixture has no KR
+# values at its finest, 1,000 bp, bins, which auto picks for an 800 kb view) says so in the
+# track instead of drawing an empty panel.
+test_that("an all-NaN Hi-C view names the normalisation and what to change; NONE draws (human dataset)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  region <- list(chrom = "chr1", start = 198300000, end = 199100000, gene = NA_character_)
+  settings <- test_settings("human")
+  spec <- single_track("hic", test_rows("human")[["GM12878"]], settings = settings)
+  msg <- "no KR values at 1,000 bp bins in this view: set Hi-C normalisation to NONE, or Resolution mode Fixed with a 5,000 bp bin size."
+  expect_error(load_hic(spec, region, settings), msg, fixed = TRUE)
+  none <- load_hic(spec, region, test_settings("human", list(hic_norm = "NONE")))
+  expect_true(any(is.finite(none$data$matrix$counts)))
+  # Over 1,000 bins across the view, plotgardener draws a coarser bin size, which has values: no error.
+  wide <- list(chrom = "chr1", start = 198300000, end = 199500000, gene = NA_character_)
+  expect_identical(load_hic(spec, wide, settings)$data$resolution, 1000)
+
+  tmp <- tempfile(fileext = ".svg")
+  on.exit(unlink(tmp), add = TRUE)
+  rows <- test_rows("human")
+  specs <- list(spec, single_track("bw", rows[["GM12878"]], settings = settings))
+  suppressMessages(suppressWarnings(
+    render_all(specs, region, settings, device_fn = function(w, h) svglite::svglite(tmp, width = w, height = h))))
+  grDevices::dev.off()
+  svg <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
+  # The whole message, not cut in the middle (render_all() cuts one over 140 characters).
+  expect_match(svg, paste("track failed:", gsub("&", "&amp;", msg, fixed = TRUE)), fixed = TRUE)
+  expect_identical(lengths(regmatches(svg, gregexpr("track failed", svg, fixed = TRUE))), 1L)
+})
+
+# The figure's SVG, drawn with render_all(), as one string.
+hic_svg <- function(specs, region, settings) {
+  tmp <- tempfile(fileext = ".svg")
+  on.exit(unlink(tmp), add = TRUE)
+  suppressMessages(suppressWarnings(
+    render_all(specs, region, settings, device_fn = function(w, h) svglite::svglite(tmp, width = w, height = h))))
+  grDevices::dev.off()
+  paste(readLines(tmp, warn = FALSE), collapse = "\n")
+}
+
+test_that("a Hi-C view whose maximum is below 0.00005 draws instead of failing (mouse dataset)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  region <- test_region("mouse")
+  settings <- test_settings("mouse")
+  spec <- single_track("hic", test_rows("mouse")[["Ba"]], settings = settings)
+  # The same view with every count scaled down so the maximum is about 0.00001: 4-decimal
+  # rounding used to give a colour range of c(0, 0), which plotgardener can't draw.
+  real_load <- load_hic
+  local_mocked_bindings(load_hic = function(entry, region_params, settings) {
+    entry <- real_load(entry, region_params, settings)
+    m <- entry$data$matrix
+    entry$data$matrix$counts <- m$counts / max(m$counts, na.rm = TRUE) * 1e-5
+    entry
+  })
+  svg <- hic_svg(list(spec), region, settings)
+  expect_false(grepl("track failed", svg, fixed = TRUE))
+  expect_match(svg, ">0.00001<", fixed = TRUE)   # the colour legend's top
+})
+
+test_that("a Hi-C track that fails keeps its usual height (mouse dataset)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  region <- test_region("mouse")
+  row <- test_rows("mouse")[["Ba"]]
+  height <- function(size) {
+    settings <- hic_fixed_settings("mouse", size)
+    svg <- hic_svg(list(single_track("hic", row, settings = settings)), region, settings)
+    list(failed = grepl("track failed", svg, fixed = TRUE),
+         height = regmatches(svg, regexpr("height='[0-9.]+pt'", svg)))
+  }
+  ok <- height(10000)
+  failed <- height(12345)   # this file has no 12,345 bp bins
+  expect_false(ok$failed)
+  expect_true(failed$failed)
+  expect_identical(failed$height, ok$height)
+})
+
+# A real .cool from the test data (1 Mb bins, hg38, chromosomes named "1", "2", ..., 455 contigs,
+# the last 25 without contacts).
+cool_spec <- function(settings) {
+  spec <- single_track("hic", test_rows("human")[["GM12878"]], settings = settings)
+  spec$path <- file.path(DATA_ROOT, "hic_test", "hg38_LEUK_HEK_1Mb.cool")
+  spec
+}
+
+test_that("a .cool contig without contacts at the end of the file's list says so in the track (human dataset)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(file.exists(file.path(DATA_ROOT, "hic_test", "hg38_LEUK_HEK_1Mb.cool")))
+  settings <- test_settings("human", list(hic_norm = "NONE"))
+  region <- list(chrom = "UN_KI270394V1", start = 1L, end = 970L, gene = NA_character_)
+  expect_error(load_hic(cool_spec(settings), region, settings), "this file has no contacts on UN_KI270394V1.", fixed = TRUE)
+})
+
+test_that("a Hi-C colour cap of 0 says so in the track, keeping its height (mouse dataset)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  region <- test_region("mouse")
+  row <- test_rows("mouse")[["Ba"]]
+  draw <- function(zrange) {
+    settings <- test_settings("mouse", list(zrange = zrange))
+    hic_svg(list(single_track("hic", row, settings = settings)), region, settings)
+  }
+  ok <- draw(c(0, 100))
+  zero <- draw(c(0, 0))
+  expect_false(grepl("track failed", ok, fixed = TRUE))
+  expect_match(zero, "hic (Ba) track failed: the Hi-C colour cap must be above 0 (it is 0).", fixed = TRUE)
+  height <- function(svg) regmatches(svg, regexpr("height='[0-9.]+pt'", svg))
+  expect_identical(height(zero), height(ok))
+})

@@ -19,11 +19,14 @@ preloaded).}
 Makes \code{fig} the starting view of \code{proj}'s app: the next \code{\link[=run_plottrellis]{run_plottrellis()}} on this
 project opens with the same gene, sample(s) and tracks already picked, so Generate
 figure is the only click. Use it to hand a ready-to-go project to someone who doesn't
-code. Saving new project settings in the app's wizard clears it.
+code. Saving the app's wizard keeps it while the GTF, the OrgDb and the samples and
+tracks it shows (by name) are all still there, and clears it otherwise. An Import in
+the wizard replaces it by the imported samples.txt's start lines (none: no view); the
+project_samples.txt copy beside the settings carries it as such lines.
 }
 \examples{
 proj <- pt_project(file.path(tempdir(), "pt-example-human"), pt_example("human"))
-pt_preload(proj, pt_figure(proj, "PSME2", c("genes", "atac", "junctions"), parallel = TRUE))
+pt_preload(proj, pt_figure(proj, "PSME2", c("genes", "atac", "junctions")))
 \dontrun{
 run_plottrellis(proj)
 }

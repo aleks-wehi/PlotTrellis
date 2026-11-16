@@ -3,11 +3,15 @@ info_junctions_mirrored_diff_tpm_scaled <- function() list(
   api = "{name}_diff_tpm", filter = c(comparison = "Comparisons"), needs_gene = TRUE
 )
 
-# Offered only when both samples have a quantification, whose paths its items carry.
+# Offered only when both samples have a quantification, whose paths its items carry, and only for
+# splice junctions: gene-TPM scaling means nothing for loops (BEDPE). A file that can't be read
+# yet keeps the track, which then shows the read error.
 enrich_junctions_mirrored_diff_tpm_scaled <- function(items, control_row, treatment_row) {
   ctrl_quant  <- sample_data_path(control_row, "quantdir")
   treat_quant <- sample_data_path(treatment_row, "quantdir")
   if (is.na(ctrl_quant) || is.na(treat_quant)) return(list())
+  junctions <- function(path) .pt_arc_file_kind(path) %in% c("junctions", NA)
+  items <- Filter(function(it) junctions(it$control_path) && junctions(it$treatment_path), items)
   lapply(items, function(it) modifyList(it, list(control_quant = ctrl_quant, treatment_quant = treat_quant)))
 }
 
@@ -18,6 +22,8 @@ enrich_junctions_mirrored_diff_tpm_scaled <- function(items, control_row, treatm
 settings_junctions_mirrored_diff_tpm_scaled <- function(dict, entry, settings, track_w, region_params) {
   gene    <- region_params$gene
   no_gene <- .pt_no_gene(gene)
+  if (is.null(entry$height)) entry$height <- JUNCTION_HEADING_H + 2 * settings$junction_height
+  .pt_check_opacity_cap(settings$junction_opacity_cap, entry$height)
 
   raw_ctrl  <- load_junctions(entry$control_path,   region_params)
   raw_treat <- load_junctions(entry$treatment_path, region_params)
@@ -39,7 +45,6 @@ settings_junctions_mirrored_diff_tpm_scaled <- function(dict, entry, settings, t
     entry$data <- list(no_gene = FALSE, raw_ctrl = raw_ctrl, raw_treat = raw_treat, height_scale_treat = height_scale_treat)
   }
 
-  if (is.null(entry$height)) entry$height <- JUNCTION_HEADING_H + 2 * settings$junction_height
   list(dict = dict, entry = entry)
 }
 

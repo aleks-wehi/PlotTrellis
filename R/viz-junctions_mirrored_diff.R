@@ -7,6 +7,7 @@ info_junctions_mirrored_diff <- function() list(
 # mirrored below it, each half junction_height tall under the heading band.
 settings_junctions_mirrored_diff <- function(dict, entry, settings, track_w, region_params) {
   if (is.null(entry$height)) entry$height <- JUNCTION_HEADING_H + 2 * settings$junction_height
+  .pt_check_opacity_cap(settings$junction_opacity_cap, entry$height)
   list(dict = dict, entry = entry)
 }
 

@@ -17,7 +17,6 @@
 #' @importFrom jsonlite fromJSON toJSON
 #' @importFrom svglite svglite
 #' @importFrom sortable rank_list bucket_list add_rank_list update_rank_list
-#' @importFrom tools R_user_dir
 #' @importFrom BiocManager install
 #' @importFrom R.utils isGzipped
 #' @importFrom grDevices dev.cur dev.off
@@ -26,13 +25,16 @@
 #' @importFrom utils head modifyList read.delim tail
 "_PACKAGE"
 
-# Where the gene-level caches (protein domains, UniProt canonical isoforms, the
-# transcripts shown per gene) live: the open project's cache/ folder, carried as
-# settings$cache_dir, or the per-user cache folder when there is no project
-# (cache_dir NULL). Computed per call: the downloaded R script gets the project's
-# folder from its settings, and the per-user folder of the machine that wrote it is
-# never baked in.
-.pt_cache_root <- function(cache_dir) cache_dir %||% tools::R_user_dir("PlotTrellis", which = "cache")
+# Where every cache lives (genome files, protein domains, UniProt canonical isoforms, the
+# transcripts shown per gene): the open project's cache/ folder, carried as
+# settings$cache_dir. There is no per-user fallback, so deleting the project folder removes
+# everything PlotTrellis wrote.
+.pt_cache_root <- function(cache_dir) {
+  if (is.null(cache_dir) || !nzchar(cache_dir))
+    stop("PlotTrellis keeps its caches in the project folder, and none was given ",
+         "(open a project with pt_project() or run_plottrellis()).", call. = FALSE)
+  cache_dir
+}
 
 # Writes one cache file, through a temporary file renamed into place so a reader never
 # sees half a file. A cache only saves time: one that can't be written (a folder that

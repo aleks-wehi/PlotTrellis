@@ -52,7 +52,7 @@ tx_ids <- unique(sub('.*transcript_id "([^"]+)".*', "\\1", grep("\ttranscript\t"
 cat(sprintf("GTF: %d genes, %d transcripts, %d lines\n", length(genes), length(tx_ids), length(kept)))
 
 # ---- Chromosome sizes: what ensure_genome_ready() would otherwise fetch -----
-# from UCSC at first launch, under the name it looks for next to the GTF.
+# from UCSC at first launch, under the name .pt_shipped_chrom_sizes() looks for next to the GTF.
 source(file.path(pkg, "R", "build_chrom_sizes.R"))
 build_chrom_sizes("mm10", file.path(out, "gencode.vM25.example_chrom_sizes.rds"))
 

@@ -12,9 +12,9 @@ test_that("old junction keys map to the new ones, and nothing else changes", {
 test_that("a track name with the old _sashimi suffix still resolves", {
   tab <- data.frame(track = c("rnaseq", "rnaseq_junctions"), sample = c("A", "A"), kind = "sample",
                     label = "", key = c("bw_rnaseq_A", "junctions_rnaseq_A"), stringsAsFactors = FALSE)
-  expect_equal(.pt_resolve_tracks(tab, c("rnaseq@A", "rnaseq_sashimi@A", "rnaseq_junctions@A"), NULL),
+  expect_equal(.pt_resolve_tracks(tab, c("rnaseq", "rnaseq_sashimi", "rnaseq_junctions"), "A"),
                c("bw_rnaseq_A", "junctions_rnaseq_A", "junctions_rnaseq_A"))
-  expect_error(.pt_resolve_tracks(tab, "atac_sashimi@A", NULL), "Unknown track 'atac_sashimi'")
+  expect_error(.pt_resolve_tracks(tab, "atac_sashimi", "A"), "Unknown track 'atac_sashimi'")
 })
 
 test_that("a start view saved with old junction keys opens with the junction tracks picked", {
@@ -40,7 +40,7 @@ test_that("a start view saved with old junction keys opens with the junction tra
 test_that("a pt_figure saved with the old viz key renders and exports as the new one", {
   skip_if_not_installed("org.Hs.eg.db")
   proj <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-renamed-key"), pt_example("human")))
-  fig <- pt_figure(proj, "PSME2", c("genes", "junctions@GM12878"))
+  fig <- pt_figure(proj, "PSME2", c("genes", "junctions"), samples = "GM12878")
   expect_equal(fig$entries[[2]]$viz, "junctions")
   old <- fig
   old$entries[[2]]$viz <- "sashimi"
@@ -67,14 +67,14 @@ test_that("a pt_project kept from before the rename draws its junction tracks, a
   old <- old_project(proj)
   expect_true("sashimi_junctions_GM12878" %in% names(old$items))
   region <- "chr14:24,140,000-24,150,000"
-  fig <- pt_figure(proj, region = region, tracks = "junctions@GM12878")
-  old_fig <- pt_figure(old, region = region, tracks = "junctions@GM12878")
+  fig <- pt_figure(proj, region = region, tracks = "junctions", samples = "GM12878")
+  old_fig <- pt_figure(old, region = region, tracks = "junctions", samples = "GM12878")
   expect_identical(old_fig$entries, fig$entries)
   expect_false(is.null(old_fig$entries[[1]]$path))
   expect_identical(old_fig$keys, fig$keys)
 
   # A figure whose keys are the old ones starts the app in One-sample mode on its sample.
-  gene_fig <- pt_figure(proj, "PSME2", "junctions@GM12878")
+  gene_fig <- pt_figure(proj, "PSME2", "junctions", samples = "GM12878")
   gene_fig$keys <- sub("^junctions_", "sashimi_", gene_fig$keys)
   pt_preload(proj, gene_fig)
   view <- jsonlite::read_json(file.path(proj$dir, "project_settings.json"))$start_view

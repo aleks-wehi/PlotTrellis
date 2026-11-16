@@ -8,6 +8,7 @@
 
 gi_composer <- function() {
   proj <- tempfile("pt-gene-info-"); dir.create(proj)
+  seed_project_genome(proj)
   json <- file.path(proj, "project_settings.json")
   jsonlite::write_json(list(data_dir = FIXTURES$mouse$data_dir, samples = FIXTURES$mouse$samples,
                             gtf_path = GENOMES$mouse$gtf_path, orgdb = GENOMES$mouse$orgdb,
@@ -34,7 +35,7 @@ local_fake_uniprot <- function(env = parent.frame()) {
       else c("ID   TEST_MOUSE              Reviewed;          99 AA.",
              "SQ   SEQUENCE   99 AA;  11111 MW;  0000000000000000 CRC64;")
     },
-    .pt_gi_pd_cached = function(gene, genome_label, pd_dir) {
+    .pt_gi_pd_cached = function(gene, genome_label, tx_meta_lookup_path, pd_dir) {
       mem$pd_dir <- pd_dir
       gene %in% mem$pd_genes
     },
@@ -95,6 +96,29 @@ test_that("the panel follows the rendered figure's gene, not a later Compose cha
     expect_identical(output$gene_info_gene, "")
     expect_null(output$gr_extras_ui)
     expect_null(output$gr_protein_ui)
+  })
+})
+
+test_that("transcript rows are marked so the page can keep open ones open when UniProt fills in (bug 175)", {
+  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  local_fake_uniprot()
+  cp <- gi_composer()
+  on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
+  # The keep-open script: on the table's next value it reopens the rows open before (by name).
+  # Its timing (rows opened while the server is busy fetching) is checked in a browser, see
+  # solutions/review/B175/; here, that the page has it and the rows carry their names.
+  ui <- as.character(.pt_gene_info_ui(function(id, title, ..., collapsed) tags$div(...)))
+  expect_match(ui, "$(document).on('shiny:value'", fixed = TRUE)
+  expect_match(ui, "e.name !== 'gr_extras_ui'", fixed = TRUE)
+  shiny::testServer(cp$app, {
+    do.call(session$setInputs, gene_figure("Elf5"))
+    session$setInputs(generate = 1)
+    html <- as.character(output$gr_extras_ui$html)
+    rows <- regmatches(html, gregexpr("<details[^>]*>", html))[[1]]
+    names_in_rows <- sub('.*data-tx="([^"]*)".*', "\\1", rows)
+    expect_true(all(grepl('data-tx="', rows, fixed = TRUE)))
+    expect_true(all(c("Elf5-201", "Elf5-207") %in% names_in_rows))
+    expect_identical(anyDuplicated(names_in_rows), 0L)
   })
 })
 

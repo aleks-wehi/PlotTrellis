@@ -31,7 +31,24 @@
                    uiOutput("gr_extras_ui", container = function(...) tags$div(...,
                      tags$div(class = "text-muted", style = "font-style:italic;", "Loading transcript annotations...")))),
           tabPanel("Canonical protein annotation", uiOutput("gr_protein_ui"))
-        )
+        ),
+        # Keeps the transcript rows the user opened open when the table re-renders (e.g. when
+        # the UniProt lookup finishes): just before Shiny swaps in the new table, note the open
+        # rows' names (data-tx), then reopen those rows in it. All in the page: the server is
+        # busy fetching while the user clicks, so it can't be told in time.
+        tags$script(HTML(paste0(
+          "$(document).on('shiny:value', function (e) {",
+          "  if (e.name !== 'gr_extras_ui') return;",
+          "  var open = Array.prototype.map.call(",
+          "    document.querySelectorAll('#gr_extras_ui details[data-tx][open]'),",
+          "    function (d) { return d.getAttribute('data-tx'); });",
+          "  if (!open.length) return;",
+          "  setTimeout(function () {",
+          "    document.querySelectorAll('#gr_extras_ui details[data-tx]').forEach(function (d) {",
+          "      if (open.indexOf(d.getAttribute('data-tx')) >= 0) d.open = true;",
+          "    });",
+          "  }, 0);",
+          "});")))
       )
     )
   )
@@ -46,9 +63,9 @@
 }
 
 # Whether gene_protein_domains() has this gene on disk in the protein-domain cache
-# folder pd_dir (same path as its cache_file).
-.pt_gi_pd_cached <- function(gene, genome_label, pd_dir) {
-  file.exists(file.path(pd_dir, genome_label, paste0(gene, ".rds")))
+# folder pd_dir (same path as its cache_file, .pd_cache_file()).
+.pt_gi_pd_cached <- function(gene, genome_label, tx_meta_lookup_path, pd_dir) {
+  file.exists(.pd_cache_file(pd_dir, genome_label, tx_meta_lookup_path, gene))
 }
 
 # genome: list(orgdb_pkg, tx_name_lookup_path, tx_meta_lookup_path, genome_label,
@@ -217,6 +234,7 @@
 
             tags$details(
               style = "border-bottom: 1px solid #eee; padding: 3px 0;",
+              `data-tx` = ann$transcript_name[i],  # kept open across re-renders, see .pt_gene_info_ui()
               tags$summary(
                 style = "display:flex; gap:10px;",
                 tags$span(style = "flex:0 0 90px; font-weight:600;", ann$transcript_name[i]),
@@ -252,12 +270,12 @@
 
     hit <- stored(pd_store, gene)
     pd <- if (!is.null(hit)) hit$value
-          else if (.pt_gi_pd_cached(gene, genome$genome_label, pd_dir)) pd_fetch(gene)
+          else if (.pt_gi_pd_cached(gene, genome$genome_label, genome$tx_meta_lookup_path, pd_dir)) pd_fetch(gene)
           else NULL
     if (is.null(pd)) {
       if (is_open("gr_protein_ui"))
         defer(pd_store, "pd", gene, function() pd_fetch(gene),
-              function() .pt_gi_pd_cached(gene, genome$genome_label, pd_dir))
+              function() .pt_gi_pd_cached(gene, genome$genome_label, genome$tx_meta_lookup_path, pd_dir))
       return(tags$div(class = "text-muted gene-info-uniprot-loading", style = "font-style:italic;",
                       .PT_GI_UNIPROT_LOADING))
     }

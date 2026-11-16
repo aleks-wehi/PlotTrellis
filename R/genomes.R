@@ -23,17 +23,36 @@ GENOME_PRESETS <- list(
   )
 )
 
-# Derived cache path for a GTF, used when a caller has no path yet; strips ".gtf"/".gtf.gz" (not just the last extension) so "foo.gtf.gz" -> "foo", not "foo.gtf".
-# A cache already next to the GTF (built by an older version, or shipped, like
-# the example's chrom sizes) is reused read-only; new ones go to the project's
-# cache folder's genome/ (cache_dir), or next to the GTF when there is no project.
-.genome_cache_path <- function(gtf_path, suffix, cache_dir = NULL) {
+# A genome cache file for a GTF, in the project's cache folder (cache_dir):
+# <cache_dir>/genome/<hash>/<GTF name without .gtf/.gtf.gz><suffix>. The hash is of the GTF's
+# full path, size and modification time, so a replaced or edited GTF gets fresh caches and two
+# GTFs with the same name never share them. Nothing is read from or written beside the GTF.
+.genome_cache_path <- function(gtf_path, suffix, cache_dir) {
   base <- sub("\\.gtf(\\.gz)?$", "", basename(gtf_path))
-  beside_gtf <- file.path(dirname(gtf_path), paste0(base, suffix))
-  if (is.null(cache_dir) || file.exists(beside_gtf)) return(beside_gtf)
-  genome_dir <- file.path(cache_dir, "genome")
+  genome_dir <- file.path(.pt_cache_root(cache_dir), "genome", .pt_gtf_hash(gtf_path))
   dir.create(genome_dir, recursive = TRUE, showWarnings = FALSE)
   file.path(genome_dir, paste0(base, suffix))
+}
+
+# First 12 hex digits of the md5 of the GTF's full path, size and modification time (to the
+# millisecond, written with sprintf() so options(digits)/OutDec can't change the key).
+.pt_gtf_hash <- function(gtf_path) {
+  info <- file.info(gtf_path)
+  key <- tempfile(tmpdir = tempdir(check = TRUE))
+  on.exit(unlink(key))
+  writeLines(sprintf("%s %.0f %.3f", normalizePath(gtf_path, winslash = "/"), info$size,
+                     as.numeric(info$mtime)), key)
+  substr(unname(tools::md5sum(key)), 1, 12)
+}
+
+# A chromosome-sizes file shipped beside a GTF inside the PlotTrellis package (the examples',
+# data-raw/build-example-data*.R), so an example works offline; NULL for any other GTF.
+.pt_shipped_chrom_sizes <- function(gtf_path) {
+  pkg <- normalizePath(system.file(package = "PlotTrellis"), winslash = "/", mustWork = FALSE)
+  dir <- normalizePath(dirname(gtf_path), winslash = "/", mustWork = FALSE)
+  if (!nzchar(pkg) || !startsWith(dir, paste0(pkg, "/"))) return(NULL)
+  shipped <- file.path(dir, paste0(sub("\\.gtf(\\.gz)?$", "", basename(gtf_path)), "_chrom_sizes.rds"))
+  if (file.exists(shipped)) shipped
 }
 
 # The console line for a first-time TxDb build. A full genome annotation took 71 s (GENCODE vM25,
@@ -46,11 +65,72 @@ GENOME_PRESETS <- list(
   paste0("Building TxDb from ", gtf_path, " (", note, ")...")
 }
 
-# The genome's caches (TxDb, transcript name and meta lookups, chromosome sizes), at paths
-# derived from gtf_path (.genome_cache_path()): a file already there is reused, a missing one
-# is built from gtf_path. Returns those paths with gtf_path/orgdb/genome_label, and `rebuilt`
-# (whether anything was just built).
-ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir = NULL) {
+# An Ensembl GTF names chromosomes "1", "X", "MT"; the data files, chromosome lengths and
+# region box use UCSC names ("chr1", "chrX", "chrM"). The TxDb's names are rewritten in its
+# SQLite file (`txdb_path`), not with seqlevelsStyle<-: saveDb() does not keep that renaming,
+# and select() and genes(filter =), which plotgardener's gene tracks use, ignore it anyway.
+# A name with no UCSC equivalent (an unplaced scaffold, "JH584299.1") is kept, and so are
+# all of them when none has one. A TxDb with any "chr" name (GENCODE) is left as it is.
+# Several R processes may open the same project at once (a first open after a build, batch
+# jobs): the rename takes the write lock first and looks again, so whichever process is first
+# renames and the others find it done; a process kept waiting longer than `busy_ms` gets one
+# warning, as does a file that can't be written (a project shared read-only), never an error.
+# Returns (invisibly) "renamed", "done elsewhere", "unchanged" or "failed".
+.pt_txdb_ucsc_chroms <- function(txdb_path, busy_ms = 10000) {
+  # synchronous = NULL: RSQLite's connect-time PRAGMA would fail with its own "database is
+  # locked" warning while another process is committing (the busy handler comes after connect).
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), txdb_path, synchronous = NULL)
+  on.exit(RSQLite::dbDisconnect(con))
+  RSQLite::sqliteSetBusyHandler(con, busy_ms)
+  chroms <- function() RSQLite::dbGetQuery(con, "SELECT chrom FROM chrominfo")$chrom
+  ucsc <- function(old) tryCatch({
+    si <- GenomeInfoDb::Seqinfo(old)
+    GenomeInfoDb::seqlevelsStyle(si) <- "UCSC"
+    GenomeInfoDb::seqnames(si)
+  }, error = function(e) old)
+  old <- chroms()
+  if (length(old) == 0 || any(startsWith(old, "chr")) || !any(ucsc(old) != old)) return(invisible("unchanged"))
+  result <- tryCatch({
+    # Room for the whole rename (about a million rows on a full annotation) in memory, so
+    # SQLite rewrites the file in one burst at the commit instead of part-way through: other
+    # processes wait less, and AnnotationDbi's lock-free readers see the old or the new file.
+    RSQLite::dbExecute(con, "PRAGMA cache_size = -200000")
+    RSQLite::dbExecute(con, "BEGIN IMMEDIATE")   # the write lock; waits for another renamer
+    old <- chroms()                              # looked at again under the lock
+    if (length(old) == 0 || any(startsWith(old, "chr")) || !any(ucsc(old) != old)) {
+      RSQLite::dbExecute(con, "ROLLBACK")
+      "done elsewhere"
+    } else {
+      new <- ucsc(old)
+      changed <- new != old
+      for (sql in c("UPDATE chrominfo SET chrom = ? WHERE chrom = ?",
+                    "UPDATE transcript SET tx_chrom = ? WHERE tx_chrom = ?",
+                    "UPDATE exon SET exon_chrom = ? WHERE exon_chrom = ?",
+                    "UPDATE cds SET cds_chrom = ? WHERE cds_chrom = ?"))
+        RSQLite::dbExecute(con, sql, params = list(new[changed], old[changed]))
+      RSQLite::dbExecute(con, "COMMIT")
+      "renamed"
+    }
+  }, error = function(e) {
+    try(RSQLite::dbExecute(con, "ROLLBACK"), silent = TRUE)
+    msg <- conditionMessage(e)
+    why <- if (grepl("locked|busy", msg, ignore.case = TRUE))
+      "another R process is renaming them right now; open the project again in a moment"
+    else if (grepl("readonly|read-only|permission", msg, ignore.case = TRUE))
+      "the file is read-only; open the project once as a user who can write it"
+    else msg
+    warning("PlotTrellis could not give the chromosomes in ", txdb_path, " their UCSC names (",
+            why, "), so genes may not show in region mode.", call. = FALSE)
+    "failed"
+  })
+  invisible(result)
+}
+
+# The genome's caches (TxDb, transcript name and meta lookups, chromosome sizes), in the
+# project's cache folder `cache_dir` at paths derived from gtf_path (.genome_cache_path()): a
+# file already there is reused, a missing one is built from gtf_path. Returns those paths with
+# gtf_path/orgdb/genome_label, and `rebuilt` (whether anything was just built).
+ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir) {
   if (is.null(gtf_path) || !nchar(gtf_path) || !file.exists(gtf_path))
     stop("Genome GTF not found: ", if (is.null(gtf_path)) "(not set)" else gtf_path, call. = FALSE)
   if (is.null(orgdb) || !nchar(orgdb))
@@ -72,11 +152,6 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir = NULL)
   if (!file.exists(txdb_path)) {
     message(.pt_txdb_build_message(gtf_path))
     txdb <- suppressMessages(txdbmaker::makeTxDbFromGFF(gtf_path, format = "gtf"))
-    # GENCODE/Ensembl-style GTFs use bare chrom names ("1", "2", "X"); this
-    # app's bigWig/Hi-C fixtures use UCSC-style ("chr1", "chr2", "chrX") --
-    # must match, or gene lookups resolve to a seqname that isn't in the
-    # data.
-    GenomeInfoDb::seqlevelsStyle(txdb) <- "UCSC"
     AnnotationDbi::saveDb(txdb, txdb_path)
     rebuilt <- TRUE
   }
@@ -88,7 +163,10 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir = NULL)
   # deletes the cache file: gene search must stay wholly derived from the
   # GTF, not from residual cached data that can drift out of sync with what
   # the current code would produce.
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), txdb_path)
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), txdb_path, synchronous = NULL)
+  # Another process may be renaming the chromosomes (.pt_txdb_ucsc_chroms()) or stripping
+  # versions right now: wait for it rather than fail.
+  RSQLite::sqliteSetBusyHandler(con, 10000)
   # GENCODE/Ensembl gene_ids carry a version (e.g. "ENSMUSG00000027186.7"); the OrgDb's
   # ENSEMBL keys, which every gene lookup joins on, don't. Strip it in the saved SQLite
   # file (a TxDb has no API to rewrite its table); the GTF itself is never touched.
@@ -116,6 +194,7 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir = NULL)
       "supported yet. Offending file: ", gtf_path, call. = FALSE
     )
   }
+  .pt_txdb_ucsc_chroms(txdb_path)
 
   tx_name_lookup_path <- .genome_cache_path(gtf_path, "_tx_names.rds", cache_dir)
   if (!file.exists(tx_name_lookup_path)) {
@@ -137,7 +216,9 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir = NULL)
   # lengths on its next launch with no manual cache-clearing needed.
   chrom_sizes_path <- .genome_cache_path(gtf_path, "_chrom_sizes.rds", cache_dir)
   if (!file.exists(chrom_sizes_path)) {
-    build_chrom_sizes(genome_label, chrom_sizes_path)
+    shipped <- .pt_shipped_chrom_sizes(gtf_path)
+    if (is.null(shipped)) build_chrom_sizes(genome_label, chrom_sizes_path)
+    else file.copy(shipped, chrom_sizes_path, copy.mode = FALSE)
     rebuilt <- TRUE
   }
 

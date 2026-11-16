@@ -10,10 +10,11 @@ pt_tracks(proj)
 \item{proj}{A \code{\link[=pt_project]{pt_project()}}.}
 }
 \value{
-A data frame with one row per available track: \code{track} (the name to use in
-\code{\link[=pt_figure]{pt_figure()}}), \code{sample} (\code{NA} for tracks that need no sample; \code{"B vs A"} for
-comparisons, B compared against reference A), \code{kind} (\code{"fixed"}, \code{"sample"} or
-\code{"comparison"}) and \code{label} (the app's label for it).
+A data frame with one row per track: \code{id} (its number, usable in
+\code{\link[=pt_figure]{pt_figure()}}'s \code{tracks} instead of the name), \code{track} (the name), \code{kind} (\code{"fixed"}:
+needs no sample; \code{"sample"}: drawn per sample; \code{"comparison"}: compares 2 samples),
+\code{label} (the app's label for it) and \code{samples} (the samples that have it; \code{"B vs A"}
+pairs for comparisons, B compared against reference A).
 }
 \description{
 List a project's tracks

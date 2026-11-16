@@ -21,6 +21,7 @@ NOT_RENDER_SETTINGS <- c("gene_flank_pct", "uniprot_reviewed_only")
 # A fresh project (json + its folder) and the composer built for it.
 new_composer <- function(extra = list()) {
   proj <- tempfile("pt-composer-"); dir.create(proj)
+  seed_project_genome(proj)
   json <- file.path(proj, "project_settings.json")
   jsonlite::write_json(c(list(data_dir = FIXTURES$mouse$data_dir, samples = FIXTURES$mouse$samples,
                               gtf_path = GENOMES$mouse$gtf_path, orgdb = GENOMES$mouse$orgdb,

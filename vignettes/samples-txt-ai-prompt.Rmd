@@ -1,0 +1,56 @@
+---
+title: "samples.txt with an AI assistant"
+output:
+  BiocStyle::html_document:
+    toc: false
+vignette: >
+  %\VignetteIndexEntry{samples.txt with an AI assistant}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+A PlotTrellis project starts from a `samples.txt`: a table of your samples and their data
+files (see the main vignette, `vignette("PlotTrellis")`, "Your own data in code"). A chat AI
+(ChatGPT, Claude, Copilot or another) can write it with you.
+
+1. Open a new chat and paste the prompt below (the Copy button copies all of it).
+2. Give it what you have when it asks: a list of your files (for example the output of
+   `ls -R` in your data folder), a screenshot of a folder, or a sample sheet.
+3. Answer its questions. It checks each file against what PlotTrellis reads, suggests how to
+   convert files it can't, and confirms the samples and columns with you before writing.
+4. Save what it gives you as `samples.txt` (plain text, not a Word file), or run the R command
+   it also gives, which writes the file with its tabs intact. Then:
+   `run_plottrellis(project_dir = "my-project", samples_txt = "samples.txt")`.
+
+The AI can still make mistakes; PlotTrellis checks the file when it opens it and says what is
+wrong. Paste that message back into the chat to fix it.
+
+```{r ai-prompt, echo=FALSE, comment=""}
+cat(readLines(system.file("samples_txt_ai_prompt.md", package = "PlotTrellis", mustWork = TRUE)), sep = "\n")
+```
+
+<style>
+.code-box { position: relative; margin: 0 150px 0.5em 0; }
+@media screen and (max-width: 991px) { .code-box { margin-right: 0; } }
+.code-box pre { margin: 0; }
+.copy-code { position: absolute; top: 4px; right: 4px; font-size: 12px; }
+</style>
+<script>
+if (navigator.clipboard) document.querySelectorAll("pre").forEach(function (pre) {
+  var button = document.createElement("button");
+  button.className = "copy-code";
+  button.textContent = "Copy";
+  var code = pre.querySelector("code") || pre;
+  var box = document.createElement("div");
+  box.className = "code-box";
+  pre.parentNode.insertBefore(box, pre);
+  box.appendChild(pre);
+  button.onclick = function () {
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = "Copy"; }, 1500);
+    });
+  };
+  box.appendChild(button);
+});
+</script>

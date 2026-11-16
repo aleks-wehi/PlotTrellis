@@ -1,0 +1,31 @@
+/* Help popovers (R/help_popover.R, plottrellis-help.js). Colours are plottrellis.css's --pt-*
+   tokens, so a second colour scheme only redefines those. */
+.pt-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; margin-left: 6px; padding: 0; vertical-align: text-bottom;
+  border: 1.5px solid var(--pt-primary); border-radius: 50%;
+  background: var(--pt-surface); color: var(--pt-primary);
+  font: 700 12px/1 var(--pt-font-display); font-style: italic; cursor: help; user-select: none;
+  transition: background-color 0.12s, color 0.12s;
+}
+/* :focus-visible, not :focus: a mouse click leaves the button focused, and it must not look
+   pinned once its popover is closed. */
+.pt-help:focus { outline: none; }
+.pt-help:hover, .pt-help:focus-visible, .pt-help.pt-help-pinned {
+  background: var(--pt-primary); color: var(--pt-on-primary);
+}
+.pt-help:focus-visible { box-shadow: 0 0 0 3px var(--pt-focus-ring); }
+/* Inside a checkbox or radio label the icon sits on the text's baseline. */
+.checkbox .pt-help, .radio .pt-help { vertical-align: middle; }
+
+.popover.pt-help-popover {
+  max-width: 400px; padding: 0; border: 0; border-radius: 10px;
+  background: var(--pt-tip-bg); color: var(--pt-tip-text);
+  box-shadow: 0 6px 24px rgba(31, 42, 36, 0.22);
+  font-family: var(--pt-font); font-size: 14.5px; line-height: 1.5;
+}
+.popover.pt-help-popover .popover-content { padding: 12px 15px; color: var(--pt-tip-text); }
+.popover.pt-help-popover.top > .arrow, .popover.pt-help-popover.top > .arrow:after { border-top-color: var(--pt-tip-bg); }
+.popover.pt-help-popover.bottom > .arrow, .popover.pt-help-popover.bottom > .arrow:after { border-bottom-color: var(--pt-tip-bg); }
+.popover.pt-help-popover.left > .arrow, .popover.pt-help-popover.left > .arrow:after { border-left-color: var(--pt-tip-bg); }
+.popover.pt-help-popover.right > .arrow, .popover.pt-help-popover.right > .arrow:after { border-right-color: var(--pt-tip-bg); }

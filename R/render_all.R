@@ -240,6 +240,20 @@ NULL
   }
 }
 
+# Stops a track's settings_<viz>() with `msg` as its in-figure message (render_all()'s handler
+# below), its slot kept at `height`.
+.pt_track_stop <- function(msg, height = NULL)
+  stop(structure(class = c("simpleError", "error", "condition"),
+                 list(message = msg, call = NULL, pt_height = height)))
+
+# A comparison track's junction opacity cap: the log2FC at which an arc is fully opaque, so above 0
+# (at 0 or below every arc was drawn fully opaque, with a "0.00 log2FC" legend).
+.pt_check_opacity_cap <- function(cap, height) {
+  if (!is.null(cap) && !(is.numeric(cap) && length(cap) == 1 && is.finite(cap) && cap > 0))
+    .pt_track_stop(paste0("the junction opacity cap must be a number above 0 (it is ",
+                          paste(format(cap), collapse = ", "), ")."), height)
+}
+
 # Per-track error isolation: an error in one track's settings_/render_ call
 # becomes an in-figure message naming the track and the reason, so the rest
 # of the figure still renders. Also echoed to the console via message().
@@ -307,6 +321,8 @@ NULL
 }
 
 render_all <- function(items, region_params, settings, device_fn = NULL) {
+  err <- .pt_region_error(region_params$start, region_params$end)
+  if (!is.null(err)) stop(err, call. = FALSE)
   settings <- .pt_fill_settings(settings)
   page_w  <- settings$page_w
   track_x <- 0.8
@@ -337,7 +353,8 @@ render_all <- function(items, region_params, settings, device_fn = NULL) {
     res <- tryCatch(settings_fn(dict, items[[i]], settings, track_w, region_params), error = function(e) {
       entry <- items[[i]]
       entry$track_error <- .pt_track_error_label(entry, e)
-      entry$height <- entry$height %||% 0.4
+      # A module can give the height it would have drawn at (`pt_height` on the error).
+      entry$height <- entry$height %||% e$pt_height %||% 0.4
       list(dict = dict, entry = entry)
     })
     dict <- res$dict

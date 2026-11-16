@@ -1,4 +1,4 @@
-# Cache-correctness contracts for the caches under the R_user_dir() cache root.
+# Cache-correctness contracts for the caches under a project's cache folder.
 
 test_that("protein_domains never persists an error-status cache entry", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")

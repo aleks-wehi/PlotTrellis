@@ -124,7 +124,7 @@ test_that("a project, a figure and a saved figure attach nothing and leave nothi
     "attached <- search()",
     "objects <- ls(globalenv(), all.names = TRUE)",
     "proj <- pt_project(file.path(getwd(), 'proj'), pt_example('mammary'))",
-    "fig <- pt_figure(proj, 'Elf5', c('genes', 'transcripts', 'atac@Basal', 'transcript_expression@Basal'))",
+    "fig <- pt_figure(proj, 'Elf5', c('genes', 'transcripts', 'atac', 'transcript_expression'), samples = 'Basal')",
     "pt_save(fig, 'figure.svg')",
     "cat('ATTACHED:', setdiff(search(), attached), '\n')",
     "cat('OBJECTS:', setdiff(ls(globalenv(), all.names = TRUE), c(objects, 'objects', 'proj', 'fig', '.Random.seed')), '\n')"
@@ -169,7 +169,8 @@ test_that("two projects in one session keep their own caches, and a figure's scr
   suppressMessages(pt_save(fig, file.path(root, "A.svg")))
   expect_setequal(b_files(), b_before)
   expect_true(file.exists(file.path(a_dir, "cache", "gene_display_transcripts_cache.rds")))
-  expect_true(file.exists(file.path(a_dir, "cache", "protein_domains", A$genome$genome_label, "PSME2.rds")))
+  expect_true(file.exists(file.path(a_dir, "cache", "protein_domains", A$genome$genome_label,
+                                    basename(dirname(A$genome$tx_meta_lookup_path)), "PSME2.rds")))
   pt_script(fig, file.path(root, "A.R"))
   script <- paste(readLines(file.path(root, "A.R")), collapse = "\n")
   expect_true(grepl(file.path(a_dir, "cache"), script, fixed = TRUE))

@@ -152,6 +152,17 @@ PD_TYPE_COLOURS           <- c(DOMAIN = "#4C72B0", REGION = "#DD8452", MOTIF = "
   do.call(c, segs_list)
 }
 
+# Where a gene's protein-domain result is cached: <cache_dir>/<genome_label>/<genome id>/<gene>.rds,
+# the genome id being the loaded genome's cache folder name (.pt_genome_id() of the tx meta
+# lookup path), so a GTF edited or replaced in place is never served results resolved against the
+# old one. No id folder when the lookup path has no folder (unit tests). The gene info panel
+# reads the same path.
+.pd_cache_file <- function(cache_dir, genome_label, tx_meta_lookup_path, gene_symbol) {
+  id <- .pt_genome_id(tx_meta_lookup_path)
+  if (nzchar(id)) file.path(cache_dir, genome_label, id, paste0(gene_symbol, ".rds"))
+  else file.path(cache_dir, genome_label, paste0(gene_symbol, ".rds"))
+}
+
 # `orgdb` (e.g. "org.Hs.eg.db") is required, not defaulted -- a silent mouse default here would resolve every human gene against the wrong species' UniProt record.
 # `cache_dir` is the protein-domain cache folder (<cache root>/protein_domains, see .pt_cache_root()).
 gene_protein_domains <- function(gene_symbol, txdb, tx_meta_lookup_path, orgdb, genome_label,
@@ -165,11 +176,15 @@ gene_protein_domains <- function(gene_symbol, txdb, tx_meta_lookup_path, orgdb, 
   # same case-sensitive gene_symbol string is not guaranteed unique across
   # species either (gene-symbol casing conventions differ by species but
   # aren't enforced) -- mixing species OR builds under one cache key would
-  # serve one genome's cached domains for another's gene.
-  cache_file <- file.path(cache_dir, genome_label, paste0(gene_symbol, ".rds"))
+  # serve one genome's cached domains for another's gene. The genome id folder
+  # keeps results from different GTFs at the same path apart (.pd_cache_file()).
+  cache_file <- .pd_cache_file(cache_dir, genome_label, tx_meta_lookup_path, gene_symbol)
   if (file.exists(cache_file)) return(readRDS(cache_file))
 
-  result <- tryCatch({
+  # The lookup is its own function so that its early return()s hand the status to `result`
+  # below (a return() straight inside tryCatch() would leave gene_protein_domains() itself,
+  # skipping the cache write) and the deterministic statuses get cached like "ok".
+  lookup <- function() {
     acc <- uniprot_search_by_gene(gene_symbol, organism_id = organism_id)
     if (is.na(acc)) return(list(status = "no_uniprot_entry", gene = gene_symbol))
     txt <- .pd_fetch_uniprot_record(acc)
@@ -191,7 +206,9 @@ gene_protein_domains <- function(gene_symbol, txdb, tx_meta_lookup_path, orgdb, 
     list(status = "ok", gene = gene_symbol, acc = acc, canonical_tx = resolved$transcript_id,
          method = resolved$method, canonical_isoform_name = resolved$canonical_isoform$name,
          domains = domain_df)
-  }, uniprot_unreachable = function(e) list(status = "uniprot_unreachable", gene = gene_symbol, message = conditionMessage(e)),
+  }
+  result <- tryCatch(lookup(),
+     uniprot_unreachable = function(e) list(status = "uniprot_unreachable", gene = gene_symbol, message = conditionMessage(e)),
      error = function(e) list(status = "error", gene = gene_symbol, message = conditionMessage(e)))
 
   if (result$status %in% c("ok", "no_uniprot_entry", "no_domains", "no_canonical_transcript"))

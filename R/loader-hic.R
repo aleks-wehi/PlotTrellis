@@ -50,11 +50,31 @@ load_hic <- function(entry, region_params, settings) {
   } else {
     strawr::straw(norm, entry$path, locus, locus, "BP", res)
   }, error = function(e) {
+    # A .cool contig with no contacts at the end of its chromosome list: readCool() runs past the
+    # end of the file's index. Said in the track (render_all()'s error handler), not a read error.
+    if (is_cool && grepl("index exceeds HDF5-array dimension", conditionMessage(e), fixed = TRUE))
+      stop("this file has no contacts on ", chrom, ".", call. = FALSE)
     if (!grepl("doesn't have the given chr_chr map", conditionMessage(e), fixed = TRUE)) .pt_read_error(entry$path, e)
     no_contacts <<- TRUE
     data.frame(x = integer(0), y = integer(0), counts = numeric(0))
   })
   colnames(m) <- c("x", "y", "counts")
+  # Contacts in view but none with a value: the normalisation has no vectors at this bin size
+  # (a sparse file's finest bins, say), which would draw an empty panel with no explanation.
+  # The track error handler in render_all() shows this as the track's message instead. Only when
+  # this bin size is the one drawn: over 1,000 bins across the view, plotgardener's hic_limit()
+  # re-reads the file at a coarser size, which can have values.
+  drawn_at_res <- (region_params$end - region_params$start) / res <= 1000
+  if (!no_contacts && drawn_at_res && nrow(m) > 0 && !any(is.finite(m$counts))) {
+    bp <- function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
+    normalised <- !identical(toupper(norm), "NONE")
+    coarser <- avail[avail > res]
+    # Kept under the 140 characters render_all() shows without cutting.
+    fixes <- c(if (normalised) "set Hi-C normalisation to NONE",
+               if (length(coarser)) paste0("Resolution mode Fixed with a ", bp(coarser[1]), " bp bin size"))
+    stop("no ", if (normalised) paste(norm, "values") else "contacts", " at ", bp(res), " bp bins in this view",
+         if (length(fixes)) paste0(": ", paste(fixes, collapse = ", or ")), ".", call. = FALSE)
+  }
 
   entry$data <- list(matrix = m, chrom = chrom, resolution = res, no_contacts = no_contacts)
   entry

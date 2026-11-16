@@ -1,0 +1,192 @@
+/* PlotTrellis look, shared by the composer and the setup wizard (.pt_theme_css()). Colours come
+   from the logo; every one is a --pt-* token below, so a second scheme only redefines the tokens. */
+:root {
+  --pt-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --pt-font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  --pt-bg: #F5F1E8; --pt-surface: #FFFFFF; --pt-surface-2: #EDF0E8; --pt-tray: #F1F3EC;
+  --pt-border: #D9DDD0; --pt-border-strong: #B9C2B4; --pt-input-border: #8A9588;
+  --pt-text: #1F2A24; --pt-muted: #5C6A61; --pt-heading: #1F3A2E;
+  --pt-nav-bg: #1F3A2E; --pt-nav-text: #F4EFE3; --pt-nav-line: rgba(244, 239, 227, 0.45); --pt-nav-hover: rgba(244, 239, 227, 0.14);
+  --pt-nav-warn: #F2C879; --pt-nav-danger: #F5A492;
+  --pt-primary: #2F6B4A; --pt-primary-hover: #28593E; --pt-primary-edge: #1E4630; --pt-on-primary: #FFFFFF; --pt-primary-soft: #DCEBD9;
+  --pt-accent: #E07A4F; --pt-accent-strong: #B4532B;
+  --pt-link: #2F6B4A; --pt-link-hover: #1E4630;
+  --pt-focus: #2F6B4A; --pt-focus-ring: rgba(141, 191, 106, 0.35);
+  --pt-input-bg: #FFFFFF; --pt-hover: #E9F2E2;
+  --pt-warn: #E9B04F; --pt-on-warn: #2A1E05; --pt-warn-edge: #B9832A;
+  --pt-danger-btn: #B5412F; --pt-on-danger: #FFFFFF; --pt-danger-edge: #8A2E20;
+  --pt-danger: #C4503C; --pt-danger-soft: #FBE9E5;
+  --pt-code-bg: #F3F1EA; --pt-code-text: #1F2A24;
+  --pt-overlay: rgba(245, 241, 232, 0.84);
+  --pt-shadow: 0 1px 2px rgba(31, 58, 46, 0.06), 0 4px 14px rgba(31, 58, 46, 0.07);
+  --pt-tip-bg: #1F3A2E; --pt-tip-text: #F4EFE3;
+}
+
+body { background: var(--pt-bg); color: var(--pt-text); font-family: var(--pt-font); }
+a { color: var(--pt-link); }
+a:hover, a:focus { color: var(--pt-link-hover); }
+h1, h2, h3 { font-family: var(--pt-font-display); color: var(--pt-heading); }
+hr { border-top-color: var(--pt-border); }
+label { color: var(--pt-text); font-weight: 600; }
+.text-muted, .help-block { color: var(--pt-muted); }
+input[type='radio'], input[type='checkbox'] { accent-color: var(--pt-primary); }
+
+/* Title bar: stays at the top of the window, so the buttons fixed to it always sit on it. */
+.navbar.navbar-default {
+  background: var(--pt-nav-bg); border: 0; border-bottom: 3px solid var(--pt-accent);
+  border-radius: 0; margin-bottom: 18px; position: sticky; top: 0; z-index: 1000;
+}
+.navbar-default .navbar-brand, .navbar-default .navbar-brand:hover, .navbar-default .navbar-brand:focus {
+  color: var(--pt-nav-text); font-family: var(--pt-font-display); font-size: 23px; letter-spacing: 0.01em;
+}
+#topbar-actions .btn, #topbar-actions .btn:focus {
+  background: transparent; color: var(--pt-nav-text); border: 1px solid var(--pt-nav-line); box-shadow: none;
+}
+#topbar-actions .btn:hover, #topbar-actions .btn:active, #topbar-actions .btn:active:hover {
+  background: var(--pt-nav-hover); color: var(--pt-nav-text); border-color: var(--pt-nav-text);
+}
+#topbar-actions .btn:focus-visible, #topbar-actions .btn:active:focus-visible { outline-color: var(--pt-nav-text); }
+#topbar-actions .btn.btn-warning, #topbar-actions .btn.btn-warning:focus { color: var(--pt-nav-warn); border-color: var(--pt-nav-warn); }
+#topbar-actions .btn.btn-danger, #topbar-actions .btn.btn-danger:focus { color: var(--pt-nav-danger); border-color: var(--pt-nav-danger); }
+
+/* Buttons */
+.btn { border-radius: 8px; font-weight: 600; transition: background-color 0.12s, transform 0.06s, box-shadow 0.06s; }
+.btn:focus-visible, .btn:active:focus-visible { outline: 2px solid var(--pt-focus); outline-offset: 2px; }
+.btn.btn-default, .btn.btn-default:focus, .btn.btn-default[disabled], .btn.btn-default[disabled]:hover, .btn.btn-default.disabled:hover {
+  background: var(--pt-surface); color: var(--pt-text); border-color: var(--pt-border-strong);
+}
+.btn.btn-default:hover, .btn.btn-default:active, .btn.btn-default:active:hover, .btn.btn-default:active:focus {
+  background: var(--pt-hover); color: var(--pt-text); border-color: var(--pt-border-strong);
+}
+.btn.btn-primary, .btn.btn-primary:focus, .btn.btn-primary[disabled], .btn.btn-primary[disabled]:hover, .btn.btn-primary.disabled:hover,
+.btn.btn-success, .btn.btn-success:focus, .btn.btn-success[disabled], .btn.btn-success[disabled]:hover, .btn.btn-success.disabled:hover {
+  background: var(--pt-primary); color: var(--pt-on-primary); border-color: var(--pt-primary-edge);
+}
+.btn.btn-primary:hover, .btn.btn-primary:active, .btn.btn-primary:active:hover, .btn.btn-primary:active:focus,
+.btn.btn-success:hover, .btn.btn-success:active, .btn.btn-success:active:hover, .btn.btn-success:active:focus {
+  background: var(--pt-primary-hover); color: var(--pt-on-primary); border-color: var(--pt-primary-edge);
+}
+.btn.btn-warning, .btn.btn-warning:focus, .btn.btn-warning:hover, .btn.btn-warning:active, .btn.btn-warning:active:hover {
+  background: var(--pt-warn); color: var(--pt-on-warn); border-color: var(--pt-warn-edge);
+}
+.btn.btn-danger, .btn.btn-danger:focus, .btn.btn-danger:hover, .btn.btn-danger:active, .btn.btn-danger:active:hover {
+  background: var(--pt-danger-btn); color: var(--pt-on-danger); border-color: var(--pt-danger-edge);
+}
+
+/* Inputs */
+.form-control, .selectize-input, .selectize-input.full, .selectize-control.single .selectize-input,
+.selectize-control.single .selectize-input.input-active {
+  background: var(--pt-input-bg); color: var(--pt-text); border: 1px solid var(--pt-input-border);
+  border-radius: 6px; box-shadow: none;
+}
+.form-control[disabled], .selectize-control .selectize-input.disabled { background: var(--pt-surface-2); }
+.form-control:focus, .selectize-input.focus, .selectize-control.single .selectize-input.focus,
+.selectize-control.single .selectize-input.input-active.focus {
+  border-color: var(--pt-focus); box-shadow: 0 0 0 3px var(--pt-focus-ring);
+}
+.selectize-input input, .selectize-input > .item { color: var(--pt-text); }
+.selectize-input input::placeholder, .form-control::placeholder { color: var(--pt-muted); opacity: 1; }
+.selectize-dropdown { background: var(--pt-surface); color: var(--pt-text); border: 1px solid var(--pt-border-strong); border-radius: 0 0 6px 6px; }
+.selectize-dropdown .active, .selectize-dropdown .active:not(.selected) { background: var(--pt-hover); color: var(--pt-text); }
+.selectize-dropdown .create, .selectize-dropdown .option { color: var(--pt-text); }
+.selectize-dropdown .selected, .selectize-dropdown .selected.active { background: var(--pt-primary); color: var(--pt-on-primary); }
+.shiny-input-container .irs--shiny .irs-line { background: var(--pt-surface-2); border-color: var(--pt-border); }
+.shiny-input-container .irs--shiny .irs-bar { background: var(--pt-primary); border-color: var(--pt-primary-edge); }
+.shiny-input-container .irs--shiny .irs-from, .shiny-input-container .irs--shiny .irs-to, .shiny-input-container .irs--shiny .irs-single { background: var(--pt-primary); color: var(--pt-on-primary); }
+.shiny-input-container .irs--shiny .irs-min, .shiny-input-container .irs--shiny .irs-max { background: var(--pt-surface-2); color: var(--pt-muted); }
+.shiny-input-container .irs--shiny .irs-grid-text { color: var(--pt-muted); }
+.shiny-input-container .irs--shiny .irs-handle { background: var(--pt-surface); border-color: var(--pt-primary); }
+
+/* Sections */
+.panel.plottrellis-section {
+  background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; box-shadow: var(--pt-shadow);
+}
+.plottrellis-section .plottrellis-section { box-shadow: none; }
+.plottrellis-section .collapse-arrow { color: var(--pt-accent-strong); }
+.panel-body h4:not(.panel-title) {
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--pt-muted);
+}
+.well { background: var(--pt-surface-2); border-color: var(--pt-border); border-radius: 10px; box-shadow: none; }
+pre { background: var(--pt-code-bg); color: var(--pt-code-text); border-color: var(--pt-border); border-radius: 8px; }
+/* The figure is drawn on white, whatever the page colour. */
+#svg_display_ui:not(:empty) { background: #fff; border: 1px solid var(--pt-border); border-radius: 10px; padding: 10px; }
+
+/* Track picker */
+#tracks-block .rank-list-container { background: var(--pt-tray); border: 1px solid var(--pt-border); border-radius: 10px; }
+#tracks-block .rank-list-title { color: var(--pt-heading); font-weight: 600; }
+#tracks-block .rank-list { background: transparent; }
+#tracks-block .rank-list.rank-list-empty { border: 2px dashed var(--pt-border-strong); border-radius: 8px; }
+/* The hint in the empty Available list before a sample is picked: text from the server's
+   --pt-tracks-hint, set only until the pick. */
+#tracks-block #available_tracks:empty::before {
+  content: var(--pt-tracks-hint, none); display: block; padding: 16px 12px; color: var(--pt-muted); text-align: center;
+}
+/* The lock dims the list (.rank-list-locked); an empty one holds only the hint, kept readable. */
+#tracks-block #available_tracks.rank-list-locked:empty { opacity: 1; }
+#tracks-block .rank-list-item {
+  background: var(--pt-surface); color: var(--pt-text); border: 1px solid var(--pt-border-strong); border-radius: 8px;
+}
+#tracks-block .rank-list-item:hover:not(.disabled) { background: var(--pt-hover); }
+#tracks-block .rank-list-item.sortable-chosen, #tracks-block .rank-list-item.sortable-drag,
+#tracks-block .rank-list-item.sortable-ghost.sortable-chosen {
+  background: var(--pt-primary-soft); border-color: var(--pt-primary);
+}
+
+/* Loading, dialogs, hints */
+.modal-content { background: var(--pt-surface); color: var(--pt-text); border: 1px solid var(--pt-border); border-radius: 12px; }
+.modal-header { background: var(--pt-surface-2); border-bottom-color: var(--pt-border); border-radius: 11px 11px 0 0; }
+.modal-title { font-family: var(--pt-font-display); color: var(--pt-heading); font-size: 20px; }
+.modal-footer { border-top-color: var(--pt-border); }
+.close { color: var(--pt-text); text-shadow: none; }
+.tooltip-inner { background: var(--pt-tip-bg); color: var(--pt-tip-text); }
+.tooltip.top .tooltip-arrow { border-top-color: var(--pt-tip-bg); }
+.tooltip.bottom .tooltip-arrow { border-bottom-color: var(--pt-tip-bg); }
+.tooltip.left .tooltip-arrow { border-left-color: var(--pt-tip-bg); }
+.tooltip.right .tooltip-arrow { border-right-color: var(--pt-tip-bg); }
+.shiny-notification { border-radius: 10px; }
+.nav-pills > li > a { color: var(--pt-link); border-radius: 8px; }
+.nav-pills > li > a:hover { background: var(--pt-hover); }
+.nav-pills > li.active > a, .nav-pills > li.active > a:hover, .nav-pills > li.active > a:focus { background: var(--pt-primary); color: var(--pt-on-primary); }
+
+/* Pressable buttons: a solid lower edge that sinks on click. The chosen track filter stays down. */
+.btn { --pt-edge: var(--pt-border-strong); box-shadow: 0 3px 0 var(--pt-edge); margin-bottom: 3px; }
+.btn.btn-primary, .btn.btn-success, .btn.filter-btn.active { --pt-edge: var(--pt-primary-edge); }
+.btn.btn-warning { --pt-edge: var(--pt-warn-edge); }
+.btn.btn-danger { --pt-edge: var(--pt-danger-edge); }
+.btn:active:not([disabled]), .btn.filter-btn.active, .btn.filter-btn.active:focus {
+  transform: translateY(2px); box-shadow: 0 1px 0 var(--pt-edge);
+}
+#topbar-actions .btn, #tracks-block .track-list-action { margin-bottom: 0; }
+#topbar-actions .btn:active { transform: none; box-shadow: none; }
+#topbar-actions .btn:hover { filter: none; }
+.btn.btn-warning:hover, .btn.btn-danger:hover { filter: brightness(0.93); }
+
+/* Tracks as slots: a framed card with a grip, lifted on hover, a dashed outline where it will drop.
+   Padding and margin keep a slot's pitch at the 43.4px the plain list had, so the same number of
+   tracks fits before a list scrolls. */
+#tracks-block .rank-list-container { box-shadow: inset 0 2px 5px rgba(31, 58, 46, 0.07); }
+#tracks-block .rank-list-item {
+  position: relative; padding: 8px 15px 7px 36px; border-width: 2px; margin-bottom: 3px;
+  box-shadow: 0 2px 0 var(--pt-border-strong);
+  transition: transform 0.08s, box-shadow 0.08s, border-color 0.08s;
+}
+#tracks-block .rank-list-item::before {
+  content: ''; position: absolute; left: 13px; top: 50%; width: 10px; height: 16px; margin-top: -8px;
+  background: radial-gradient(circle, var(--pt-border-strong) 1.6px, transparent 2px) 0 0 / 5px 5.34px;
+}
+#tracks-block .rank-list-item:hover:not(.disabled) {
+  transform: translateY(-1px); border-color: var(--pt-primary); box-shadow: 0 3px 0 var(--pt-primary);
+}
+#tracks-block .rank-list-item.sortable-chosen, #tracks-block .rank-list-item.sortable-drag {
+  box-shadow: 0 0 0 3px var(--pt-focus-ring);
+}
+#tracks-block .rank-list-item.sortable-ghost, #tracks-block .rank-list-item.sortable-ghost.sortable-chosen {
+  background: transparent; border: 2px dashed var(--pt-primary); box-shadow: none;
+}
+#tracks-block .rank-list-item.sortable-ghost::before { display: none; }
+#tracks-block .rank-list-item.track-gene-required, #tracks-block .rank-list-item.track-broken,
+#tracks-block .rank-list-item.track-gene-required:hover, #tracks-block .rank-list-item.track-broken:hover {
+  transform: none; box-shadow: none;
+}
+#tracks-block .rank-list.rank-list-empty { min-height: 52px; }
+#tracks-block .rank-list-locked .rank-list-item:hover { transform: none; border-color: var(--pt-border-strong); box-shadow: 0 2px 0 var(--pt-border-strong); }

@@ -37,32 +37,36 @@ test_that("import_samples_txt() resolves relative data_root/gtf_path against the
 })
 
 test_that("wiz_save_problems() returns the wizard Save's exact messages, in order", {
+  label_msg <- "Genome label is required: the UCSC name of the genome build, e.g. mm39, mm10 or hg38."
   expect_identical(
     wiz_save_problems(NULL, list(), "", NULL),
     c("Data root is required.", "Add at least one sample before saving.",
-      "GTF path is required.", "OrgDb package is required."))
+      "GTF path is required.", "OrgDb package is required.", label_msg))
   expect_identical(
-    wiz_save_problems(file.path(tempdir(), "no-such-dir"), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db"),
+    wiz_save_problems(file.path(tempdir(), "no-such-dir"), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db", "mm10"),
     "Data root directory does not exist.")
   expect_identical(
-    wiz_save_problems(tempdir(), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db"),
+    wiz_save_problems(tempdir(), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db", "mm10"),
     character(0))
-  # A genome label chromosome sizes can't be looked up by is a problem; blank is allowed.
+  # A blank genome label stops the first launch of a new GTF, so it is a problem, as is
+  # one chromosome sizes can't be looked up by.
   ok <- function(label) wiz_save_problems(tempdir(), list(list(condition = "A")), "g.gtf", "org.Mm.eg.db", label)
   expect_identical(ok("mm10"), character(0))
-  expect_identical(ok(""), character(0))
+  expect_identical(ok(""), label_msg)
+  expect_identical(ok("  "), label_msg)
+  expect_identical(ok(NULL), label_msg)
   expect_identical(ok("m10"), "Genome label 'm10' isn't a known genome build id (e.g. mm10, mm39, hg38).")
 })
 
 test_that("wiz_save_problems() and parse_samples_txt() catch an OrgDb package that isn't installed", {
   samples <- list(list(condition = "A"))
   msg <- "OrgDb package 'org.Xx.eg.db' is not installed. Install it first, e.g. BiocManager::install('org.Xx.eg.db')."
-  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "org.Xx.eg.db"), msg)
-  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "  org.Xx.eg.db "), msg)
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "org.Xx.eg.db", "mm10"), msg)
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "  org.Xx.eg.db ", "mm10"), msg)
   # A blank field keeps its own message, with no install hint; an installed one adds nothing.
-  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", ""), "OrgDb package is required.")
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "", "mm10"), "OrgDb package is required.")
   expect_true(requireNamespace("org.Mm.eg.db", quietly = TRUE))
-  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "org.Mm.eg.db"), character(0))
+  expect_identical(wiz_save_problems(tempdir(), samples, "g.gtf", "org.Mm.eg.db", "mm10"), character(0))
 
   p <- make_samples_project(c("# data_root: data", "# gtf_path: genes.gtf", "# orgdb: org.Xx.eg.db"))
   out_dir <- tempfile("pt-out-")
@@ -74,6 +78,13 @@ test_that("parse_samples_txt() rejects a genome label that isn't a genome build 
   p <- make_samples_project(c("# data_root: data", "# gtf_path: genes.gtf", "# orgdb: org.Mm.eg.db", "# genome_label: m10"))
   out_dir <- tempfile("pt-out-")
   expect_error(parse_samples_txt(p$txt, project_dir = out_dir), "Genome label 'm10'", fixed = TRUE)
+  expect_false(file.exists(file.path(out_dir, "project_settings.json")))
+})
+
+test_that("parse_samples_txt() rejects a blank genome label, naming the field", {
+  p <- make_samples_project(c("# data_root: data", "# gtf_path: genes.gtf", "# orgdb: org.Mm.eg.db", "# genome_label: "))
+  out_dir <- tempfile("pt-out-")
+  expect_error(parse_samples_txt(p$txt, project_dir = out_dir), "Genome label is required", fixed = TRUE)
   expect_false(file.exists(file.path(out_dir, "project_settings.json")))
 })
 
@@ -111,6 +122,27 @@ test_that("run_plottrellis() goes wizard -> composer on a first run with no manu
     composer_steps = list(function(d) "closed"))
   expect_identical(out$calls, c("wizard", "composer"))
   expect_identical(out$result, "closed")
+})
+
+test_that("run_plottrellis() opens the wizard first on a project with a blank genome label, then the composer", {
+  dir <- tempfile("pt-loop-")
+  dir.create(dir)
+  json <- file.path(dir, "project_settings.json")
+  writeLines('{"genome_label": ""}', json)
+  expect_message(
+    out <- run_loop_with_mocks(
+      dir,
+      wizard_steps   = list(function(d) "restart"),   # closed unchanged: no endless wizard
+      composer_steps = list(function(d) "closed")),
+    "genome label is blank")
+  expect_identical(out$calls, c("wizard", "composer"))
+  expect_identical(out$result, "closed")
+
+  # A project with a label goes straight to the composer, with no message.
+  writeLines('{"genome_label": "mm10"}', json)
+  expect_no_message(out <- run_loop_with_mocks(
+    dir, wizard_steps = list(), composer_steps = list(function(d) "closed")))
+  expect_identical(out$calls, "composer")
 })
 
 test_that("run_plottrellis() reopens the wizard after Edit project settings, then the composer", {

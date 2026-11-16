@@ -4,11 +4,22 @@ info_hic <- function() list(
 )
 
 settings_hic <- function(dict, entry, settings, track_w, region_params) {
-  entry <- load_hic(entry, region_params, settings)
   if (is.null(entry$height)) {
     sty <- entry$hic_style %||% "rectangle"
     entry$height <- settings$hic_height %||% (if (sty == "square") track_w else round(track_w / 2, 2))
   }
+  # A colour range with no width (a colour cap of 0) can't be drawn.
+  ov <- settings$zrange
+  if (!is.null(ov) && length(ov) == 2 && !anyNA(ov) && !(ov[2] > ov[1]))
+    .pt_track_stop(if (ov[1] == 0) sprintf("the Hi-C colour cap must be above 0 (it is %s).", format(ov[2]))
+                   else sprintf("the Hi-C colour range must go up (it is %s to %s).", format(ov[1]), format(ov[2])),
+                   entry$height)
+  # A track that fails to load keeps its height (render_all() reads `pt_height` off the error),
+  # so the figure's layout doesn't change when it fails.
+  entry <- tryCatch(load_hic(entry, region_params, settings), error = function(e) {
+    e$pt_height <- entry$height
+    stop(e)
+  })
 
   key <- .pt_shared_range_key("hic_zrange_", entry)
   ov <- settings$zrange
@@ -34,7 +45,12 @@ render_hic <- function(entry, dict, ctx) {
   raw    <- dict[[key]]
   # NULL (plotgardener's own default) when there's no positive finite max,
   # not c(0, 0) -- a degenerate zrange makes plotHicRectangle() error out.
-  zrange <- if (is.list(raw)) raw$override else if (is.finite(raw %||% 0) && (raw %||% 0) > 0) c(0, round(raw, 4)) else NULL
+  # The top is rounded to 4 decimals, or to 4 significant digits for a maximum so small (below
+  # about 0.00005) that 4 decimals would round it to 0.
+  zrange <- if (is.list(raw)) raw$override else if (is.finite(raw %||% 0) && (raw %||% 0) > 0) {
+    top <- round(raw, 4)
+    c(0, if (top > 0) top else signif(raw, 4))
+  } else NULL
   sty    <- entry$hic_style %||% "rectangle"
 
   # plotHicRectangle/Square/Triangle do eval(match.call()[[1]]) internally, so

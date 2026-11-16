@@ -34,6 +34,7 @@ settings_tpm_usage <- function(dict, entry, settings, track_w, region_params) {
     # The gene's transcripts not shown by name are one "Other" segment.
     other <- if (n_other > 0) sprintf("Other (n=%d)", n_other)
     entry$data$keys <- c(named, other)
+    dict <- .pt_add_tx_names(dict, named, first = TRUE)
   }
   entry$height <- transcript_counts_layout(length(entry$rows), entry$data$keys, track_w, settings$fontsize,
                                            label_samples = vapply(entry$figure_rows, `[[`, "", "sample"))$height
@@ -86,7 +87,7 @@ render_tpm_usage <- function(entry, dict, ctx) {
   rows <- entry$rows
   named <- entry$data$named
   keys <- entry$data$keys
-  colours <- unname(transcript_colours(named)[named])
+  colours <- unname(.pt_tx_colours(dict)[named])
   if (length(keys) > length(named)) colours <- c(colours, TX_OTHER_COLOUR)
 
   # A row with an error has no TPMs: zeros keep its place, its message is drawn instead.

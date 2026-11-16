@@ -217,19 +217,21 @@ test_that("a missing quant file is named in the error (no fixture data)", {
                "^file not found: w59-not-there\\.sf")
 })
 
-test_that("a sample's missing quant.sf fails Transcript expression with the sample and file named (bundled example)", {
+test_that("a sample's missing quant.sf leaves the other samples' Transcript expression untouched (bundled example)", {
   skip_if_not_installed("org.Mm.eg.db")
   skip_on_cran()  # builds the example's TxDb
-  txt <- plottrellis_example()
+  txt <- example_copy("mammary")
+  local_offline_chrom_sizes()
   file.rename(file.path(dirname(txt), "quant", "LP_rep1", "quant.sf"), file.path(dirname(txt), "quant", "LP_rep1", "moved.sf"))
   proj <- suppressWarnings(suppressMessages(pt_project(tempfile("w59-project-"), txt)))
   svg <- tempfile(fileext = ".svg")
-  suppressWarnings(suppressMessages(pt_save(pt_figure(proj, "Elf5", c("transcript_counts@Basal", "genes")), svg)))
+  suppressWarnings(suppressMessages(pt_save(pt_figure(proj, "Elf5", c("transcript_counts", "genes"), samples = "Basal"), svg)))
   text <- paste(readLines(svg), collapse = "\n")
-  # Basal's track fails on LP's file (the transcripts shown are picked from every sample), so the
-  # reason names the sample; the folder's end survives a long temp dir.
-  expect_match(text, "tpm_usage (Basal) track failed: sample LP: file not found: quant.sf (in ", fixed = TRUE)
-  expect_match(text, "LP_rep1)", fixed = TRUE)
+  # The transcripts shown are picked from the readable samples, so a figure of Basal alone
+  # draws with no failure; LP's own row names the file (test-missing-quant.R).
+  expect_false(grepl("track failed", text, fixed = TRUE))
+  expect_false(grepl("quant.sf", text, fixed = TRUE))
+  expect_match(text, "Transcript expression", fixed = TRUE)
   expect_false(grepl("cannot open the connection", text, fixed = TRUE))
 })
 
@@ -264,6 +266,28 @@ test_that("signal that is never above 0 is drawn inside its track, not mistaken 
   empty <- render_view(list(sample_track("bw", "atac", bw_file())))
   expect_length(polygon_ys(empty), 0)
   expect_true(has_text(empty, "0.8"))
+})
+
+test_that("a view whose signal is tiny (maximum below 0.00005) draws, on its own axis (bug 160, no fixture data)", {
+  skip_no_synth()
+  tiny <- tempfile("b160-", fileext = ".bw")
+  gr <- GenomicRanges::GRanges("chr1", IRanges::IRanges(c(2001, 5001), c(3000, 6000)), score = c(1e-6, 3e-6))
+  GenomeInfoDb::seqlengths(gr) <- c(chr1 = 100000)
+  rtracklayer::export(gr, tiny)
+  svg <- render_view(list(sample_track("bw", "atac", tiny)))
+  expect_false(grepl("track failed", svg, fixed = TRUE))
+  ys <- polygon_ys(svg)
+  expect_gt(length(ys), 0)
+  slot <- first_slot_pt()
+  for (y in ys) expect_true(all(y >= slot[1] - 0.5 & y <= slot[2] + 0.5))
+  expect_gt(max(vapply(ys, function(y) diff(range(y)), 0)), 5)  # the signal has height
+  expect_false(has_text(svg, "0.8"))                             # not the empty view's 0-1 scale
+  # Just above that, 4 decimals put the axis top below the signal (0.00013 -> 0.0001): not cut off.
+  clip <- tempfile("b160-", fileext = ".bw")
+  gr$score <- c(1e-5, 1.3e-4)
+  rtracklayer::export(gr, clip)
+  for (y in polygon_ys(render_view(list(sample_track("bw", "atac", clip)))))
+    expect_true(all(y >= slot[1] - 0.5 & y <= slot[2] + 0.5))
 })
 
 test_that("a view of explicit zeros is an empty view: the 0-1 axis is drawn (no fixture data)", {

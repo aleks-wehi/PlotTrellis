@@ -33,23 +33,51 @@ DATA_ROOT <- Sys.getenv("PT_TEST_DATA_DIR")
 if (!nzchar(DATA_ROOT)) DATA_ROOT <- testthat::test_path("..", "..", "data")
 PT_TEST_DATA_AVAILABLE <- dir.exists(DATA_ROOT)
 
+# Gene-level caches (transcripts shown per gene, UniProt, protein domains) of the fixture
+# renders: a fresh folder per test session, so a code change never passes on stale entries.
+TEST_CACHE_DIR <- file.path(tempdir(), "pt-test-cache")
+
 # ---- Genome fixtures --------------------------------------------------------
-# Real annotation caches (data/annotations/gencode.vM25*/gencode.v46*).
-# ensure_genome_ready() is idempotent (genomes.R) -- whatever caches are
-# missing get built here, once, the first time this helper runs.
+# The fixture genomes' caches (TxDb, lookups, chromosome sizes for data/annotations/
+# gencode.vM25 and gencode.v46) live in one test project cache, data/test-genome-cache by
+# default (PT_TEST_GENOME_CACHE overrides), kept between runs: a full TxDb build takes minutes.
+# ensure_genome_ready() is idempotent (genomes.R) -- whatever caches are missing get built
+# there, once. Caches an older version left beside the fixture GTFs seed it (hard-linked
+# where possible, so a write to a test genome file would change the original too), so the first run neither rebuilds nor fetches chromosome sizes. With no seeds,
+# the first run builds them; run that once before a sharded run.
+TEST_GENOME_CACHE <- Sys.getenv("PT_TEST_GENOME_CACHE", file.path(DATA_ROOT, "test-genome-cache"))
+test_genome <- function(gtf_name, orgdb, genome_label) {
+  gtf_path <- file.path(DATA_ROOT, "annotations", gtf_name)
+  for (suffix in c("_txdb.sqlite", "_tx_names.rds", "_tx_meta.rds", "_chrom_sizes.rds")) {
+    seed <- file.path(dirname(gtf_path), paste0(sub("\\.gtf(\\.gz)?$", "", gtf_name), suffix))
+    dest <- .genome_cache_path(gtf_path, suffix, TEST_GENOME_CACHE)
+    if (file.exists(seed) && !file.exists(dest)) {
+      # Hard-linked (no extra disk; copied where links can't be made), then renamed into
+      # place, so concurrent test shards never see half a file.
+      tmp <- tempfile(tmpdir = dirname(dest))
+      if (suppressWarnings(file.link(seed, tmp)) || file.copy(seed, tmp)) file.rename(tmp, dest) else unlink(tmp)
+    }
+  }
+  ensure_genome_ready(gtf_path = gtf_path, orgdb = orgdb, genome_label = genome_label,
+                      cache_dir = TEST_GENOME_CACHE)
+}
 if (PT_TEST_DATA_AVAILABLE) {
   GENOMES <- list(
-    mouse = ensure_genome_ready(
-      gtf_path     = file.path(DATA_ROOT, "annotations", "gencode.vM25.annotation.gtf.gz"),
-      orgdb        = "org.Mm.eg.db",
-      genome_label = "mm10"
-    ),
-    human = ensure_genome_ready(
-      gtf_path     = file.path(DATA_ROOT, "annotations", "gencode.v46.annotation.gtf.gz"),
-      orgdb        = "org.Hs.eg.db",
-      genome_label = "hg38"
-    )
+    mouse = test_genome("gencode.vM25.annotation.gtf.gz", "org.Mm.eg.db", "mm10"),
+    human = test_genome("gencode.v46.annotation.gtf.gz", "org.Hs.eg.db", "hg38")
   )
+  # Gives a new project on a fixture genome its genome caches without a rebuild: links the
+  # test genome cache's files into the project's own cache folder, where the app looks.
+  seed_project_genome <- function(project_dir, genome = GENOMES$mouse) {
+    suffixes <- c(txdb_path = "_txdb.sqlite", tx_name_lookup_path = "_tx_names.rds",
+                  tx_meta_lookup_path = "_tx_meta.rds", chrom_sizes_path = "_chrom_sizes.rds")
+    for (k in names(suffixes)) {
+      dest <- .genome_cache_path(genome$gtf_path, suffixes[[k]], file.path(project_dir, "cache"))
+      src <- normalizePath(genome[[k]])  # a relative link target would dangle
+      if (!file.exists(dest) && !file.symlink(src, dest)) file.copy(src, dest)
+    }
+    invisible(project_dir)
+  }
   TXDBS <- list(
     mouse = AnnotationDbi::loadDb(GENOMES$mouse$txdb_path),
     human = AnnotationDbi::loadDb(GENOMES$human$txdb_path)
@@ -171,7 +199,8 @@ test_settings <- function(dataset, overrides = list()) {
     hic_norm = "KR", hic_max_bins_per_view = 500, zrange = NULL,
     atac_height = 0.85, hic_style = "rectangle", hic_res_mode = "auto",
     diff_colour_lo = "#0033CC", diff_colour_hi = "#CC0000",
-    junction_opacity_cap = 2, arc_clip_partial = FALSE, show_track_axes = TRUE
+    junction_opacity_cap = 2, arc_clip_partial = FALSE, show_track_axes = TRUE,
+    cache_dir = TEST_CACHE_DIR
   )
   modifyList(base, overrides)
 }

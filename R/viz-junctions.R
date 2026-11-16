@@ -60,9 +60,13 @@ render_junctions <- function(entry, dict, ctx) {
     .pt_arc_baseline(ctx$track_x, arcs_y + arcs_h, ctx$track_w)
   }
 
-  # %s, not %d: a BEDPE source's score column can be non-integer (e.g. FitHiChIP).
+  # %s, not %d: a BEDPE source's score column can be non-integer (e.g. FitHiChIP). Read counts for
+  # splice junctions; a loop file's score isn't reads, and a BEDPE without one has no height to show.
   max_h <- if (nrow(filtered) > 0) max(filtered$nSupport) else 0
-  label <- sprintf(" \u00B7 %s (max_h=%s reads)", entry$sample, format(max_h, digits = 3, scientific = FALSE))
+  kind  <- .pt_arc_file_kind(entry$path)
+  label <- if (identical(kind, "unscored")) sprintf(" \u00B7 %s", entry$sample) else
+    sprintf(" \u00B7 %s (max_h=%s%s)", entry$sample, format(max_h, digits = 3, scientific = FALSE),
+            if (identical(kind, "loops")) "" else " reads")
   .pt_heading(ctx, entry, detail = label)
 
   if (isTRUE(ctx$show_track_axes)) {

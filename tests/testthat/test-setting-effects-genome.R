@@ -29,7 +29,8 @@ ready <- function(gtf_path, genome_label = "synthetic") {
     saveRDS(c(chr1 = 100000L), out_path)
   })
   suppressMessages(suppressWarnings(utils::capture.output(
-    out <- ensure_genome_ready(gtf_path = gtf_path, orgdb = "org.Mm.eg.db", genome_label = genome_label)
+    out <- ensure_genome_ready(gtf_path = gtf_path, orgdb = "org.Mm.eg.db", genome_label = genome_label,
+                               cache_dir = tempfile("pt-cache-"))
   )))
   out$chrom_sizes_label <- labels
   out

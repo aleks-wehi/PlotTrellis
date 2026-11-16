@@ -7,11 +7,11 @@
 plottrellis_example()
 }
 \value{
-The path of the copied \code{samples.txt}.
+The path of the example's \code{samples.txt}.
 }
 \description{
-Copies PlotTrellis's small example project into a new folder and returns the path of its
-\code{samples.txt}, ready for \code{\link[=parse_samples_txt]{parse_samples_txt()}}. The data is mouse mammary basal cells and
+The path of PlotTrellis's small example project's \code{samples.txt}, ready for
+\code{\link[=parse_samples_txt]{parse_samples_txt()}}; the same file as \code{pt_example("mammary")}. The data is mouse mammary basal cells and
 luminal progenitors (Milevskiy et al. 2023, \emph{Cell Genomics}, GEO GSE227750): ATAC-seq
 coverage and Salmon transcript quantification for each, over the Ehf, Elf5 and Cat genes
 (mm10, GENCODE vM25). Search for Elf5 in the composer: it is almost silent in basal cells
@@ -22,10 +22,9 @@ The example needs the mouse OrgDb package, \code{org.Mm.eg.db}, which PlotTrelli
 install for you: \code{BiocManager::install("org.Mm.eg.db")}. For your own data, install your
 species' package instead (e.g. \code{org.Hs.eg.db} for human).
 
-Each call makes a fresh copy (in a new folder under \code{\link[=tempdir]{tempdir()}}, so it is deleted when R
-exits) because PlotTrellis writes genome caches next to the GTF on first use, and the
-installed package folder may not be writable. Open the returned \code{samples.txt} to see how a
-project is described; it is a good starting point for your own.
+Its data is read where it is installed: a project keeps everything it writes (settings,
+caches) in its own folder. Open the returned \code{samples.txt} to see how a project is
+described; a copy of it is a good starting point for your own.
 }
 \examples{
 samples_txt <- plottrellis_example()
