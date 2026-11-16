@@ -19,8 +19,10 @@ test_that("opening a project with a blank genome label stops with 'Genome label 
     expect_error(.pt_composer_app(json, .pt_read_settings(json, .pt_default_settings())),
                  "Genome label is required", fixed = TRUE)
   }
-  # The message says where to fix it.
-  expect_error(pt_project(proj), json, fixed = TRUE)
+  # The message says where to fix it. Matched on the project folder's name, not the full path:
+  # the message prints the normalised path, which differs from tempfile()'s where the temp dir
+  # is a symlink (macOS /var -> /private/var).
+  expect_error(pt_project(proj), file.path(basename(proj), "project_settings.json"), fixed = TRUE)
 
   # The unedited project still opens.
   writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, null = "null", digits = NA), json)
