@@ -25,10 +25,11 @@ suppressMessages({
 # Real fixture data (genome caches, ATAC/HiC/junction/quant files) lives in a
 # gitignored data/ folder (the package root by default; in the monorepo, its
 # root data/ via PT_TEST_DATA_DIR), not shipped with the package
-# (far too large, and licensed test data) -- every test_that() below starts
-# with skip_if_not(PT_TEST_DATA_AVAILABLE, ...) so `R CMD check` on a machine
-# without this data (e.g. R-universe's build farm) reports these as skipped,
-# not failed. PT_TEST_DATA_DIR overrides the location.
+# (far too large, and licensed test data) -- every test_that() that uses it
+# starts with skip_if_not(PT_TEST_DATA_AVAILABLE, ...) or
+# skip_if_not(PT_TEST_MOUSE_AVAILABLE, ...) (see below), so `R CMD check` on a
+# machine without this data (e.g. R-universe's build farm) reports these as
+# skipped, not failed. PT_TEST_DATA_DIR overrides the location.
 DATA_ROOT <- Sys.getenv("PT_TEST_DATA_DIR")
 if (!nzchar(DATA_ROOT)) DATA_ROOT <- testthat::test_path("..", "..", "data")
 PT_TEST_DATA_AVAILABLE <- dir.exists(DATA_ROOT)
@@ -36,6 +37,27 @@ PT_TEST_DATA_AVAILABLE <- dir.exists(DATA_ROOT)
 # Gene-level caches (transcripts shown per gene, UniProt, protein domains) of the fixture
 # renders: a fresh folder per test session, so a code change never passes on stale entries.
 TEST_CACHE_DIR <- file.path(tempdir(), "pt-test-cache")
+
+# Without the full data, the mouse tests run on fixtures/mini/: the same mouse
+# files cut down to the Elf5 region (no Hi-C), committed with the package and
+# rebuilt by data-raw/build-test-fixtures.R. Copied to a temporary folder
+# first (its genome caches then go in a fresh test-genome-cache there too). Tests that need
+# only the mouse data skip on PT_TEST_MOUSE_AVAILABLE; the rest (Hi-C, human,
+# genome-wide gene search) keep skipping on PT_TEST_DATA_AVAILABLE.
+# Only when NOT_CRAN is "true" (devtools::test(), the node script): a plain
+# `R CMD check`, as on R-universe, keeps skipping all of them as before. Source
+# tree only: fixtures/ is in .Rbuildignore, like the golden images it is
+# checked against, so a check of the built tarball never turns this on.
+PT_TEST_MOUSE_AVAILABLE <- PT_TEST_DATA_AVAILABLE ||
+  (identical(Sys.getenv("NOT_CRAN"), "true") &&
+     dir.exists(testthat::test_path("fixtures", "mini")) &&
+     requireNamespace("org.Mm.eg.db", quietly = TRUE) &&
+     requireNamespace("vdiffr", quietly = TRUE))
+if (!PT_TEST_DATA_AVAILABLE && PT_TEST_MOUSE_AVAILABLE) {
+  DATA_ROOT <- tempfile("pt-mini-data-")
+  dir.create(DATA_ROOT)
+  file.copy(list.files(testthat::test_path("fixtures", "mini"), full.names = TRUE), DATA_ROOT, recursive = TRUE)
+}
 
 # ---- Genome fixtures --------------------------------------------------------
 # The fixture genomes' caches (TxDb, lookups, chromosome sizes for data/annotations/
@@ -61,27 +83,36 @@ test_genome <- function(gtf_name, orgdb, genome_label) {
   ensure_genome_ready(gtf_path = gtf_path, orgdb = orgdb, genome_label = genome_label,
                       cache_dir = TEST_GENOME_CACHE)
 }
+# Gives a new project on a fixture genome its genome caches without a rebuild: links the
+# test genome cache's files into the project's own cache folder, where the app looks.
+seed_project_genome <- function(project_dir, genome = GENOMES$mouse) {
+  suffixes <- c(txdb_path = "_txdb.sqlite", tx_name_lookup_path = "_tx_names.rds",
+                tx_meta_lookup_path = "_tx_meta.rds", chrom_sizes_path = "_chrom_sizes.rds")
+  for (k in names(suffixes)) {
+    dest <- .genome_cache_path(genome$gtf_path, suffixes[[k]], file.path(project_dir, "cache"))
+    src <- normalizePath(genome[[k]])  # a relative link target would dangle
+    if (!file.exists(dest) && !file.symlink(src, dest)) file.copy(src, dest)
+  }
+  invisible(project_dir)
+}
 if (PT_TEST_DATA_AVAILABLE) {
   GENOMES <- list(
     mouse = test_genome("gencode.vM25.annotation.gtf.gz", "org.Mm.eg.db", "mm10"),
     human = test_genome("gencode.v46.annotation.gtf.gz", "org.Hs.eg.db", "hg38")
   )
-  # Gives a new project on a fixture genome its genome caches without a rebuild: links the
-  # test genome cache's files into the project's own cache folder, where the app looks.
-  seed_project_genome <- function(project_dir, genome = GENOMES$mouse) {
-    suffixes <- c(txdb_path = "_txdb.sqlite", tx_name_lookup_path = "_tx_names.rds",
-                  tx_meta_lookup_path = "_tx_meta.rds", chrom_sizes_path = "_chrom_sizes.rds")
-    for (k in names(suffixes)) {
-      dest <- .genome_cache_path(genome$gtf_path, suffixes[[k]], file.path(project_dir, "cache"))
-      src <- normalizePath(genome[[k]])  # a relative link target would dangle
-      if (!file.exists(dest) && !file.symlink(src, dest)) file.copy(src, dest)
-    }
-    invisible(project_dir)
-  }
   TXDBS <- list(
     mouse = AnnotationDbi::loadDb(GENOMES$mouse$txdb_path),
     human = AnnotationDbi::loadDb(GENOMES$human$txdb_path)
   )
+} else if (PT_TEST_MOUSE_AVAILABLE) {
+  # The mini fixtures: txdbmaker's two notices for any GENCODE GTF, as in test-example-data.R.
+  GENOMES <- list(mouse = withCallingHandlers(
+    test_genome("gencode.vM25.annotation.gtf.gz", "org.Mm.eg.db", "mm10"),
+    warning = function(w) {
+      if (grepl("\"phase\" metadata column|genome version information", conditionMessage(w)))
+        invokeRestart("muffleWarning")
+    }))
+  TXDBS <- list(mouse = AnnotationDbi::loadDb(GENOMES$mouse$txdb_path))
 } else {
   GENOMES <- NULL
   TXDBS <- NULL
@@ -102,7 +133,7 @@ if (PT_TEST_DATA_AVAILABLE) {
 #   - Human junctions/*.bed are real BED12 splice-junction files (STAR/
 #     TopHat convention) -- the human side exercises read_junction_file()'s
 #     BED12 path, mouse's BEDPE loops exercise the other.
-FIXTURES <- if (!PT_TEST_DATA_AVAILABLE) NULL else list(
+FIXTURES <- if (!PT_TEST_MOUSE_AVAILABLE) NULL else list(
   mouse = list(
     data_dir = file.path(DATA_ROOT, "mouse_mammary_test"),
     gene     = "Elf5",
@@ -155,6 +186,40 @@ FIXTURES <- if (!PT_TEST_DATA_AVAILABLE) NULL else list(
     )
   )
 )
+# The mini fixtures have no human data and no Hi-C: the mouse rows keep their
+# hic entries (paths that don't exist there), so only tests that skip on
+# PT_TEST_DATA_AVAILABLE may use them.
+if (!PT_TEST_DATA_AVAILABLE) FIXTURES$human <- NULL
+
+# Whether a test drawing `type` from `dataset` can run here: the mini fixtures
+# cover the mouse dataset except Hi-C. For loops over datasets and track types.
+fixture_available <- function(dataset, type) {
+  PT_TEST_DATA_AVAILABLE || (PT_TEST_MOUSE_AVAILABLE && dataset == "mouse" && type != "hic")
+}
+
+# The protein_domains track fetches UniProt on a cold cache. The node has
+# network; a machine running on the mini fixtures may not, so there it skips
+# instead of failing its golden image. Checked once per run, 5 s timeout.
+.uniprot_reachable <- local({
+  ok <- NULL
+  function() {
+    if (is.null(ok)) {
+      old <- options(timeout = 5)
+      on.exit(options(old))
+      ok <<- tryCatch({
+        con <- url("https://rest.uniprot.org/uniprotkb/search?query=Elf5&size=1&fields=accession")
+        open(con, "rb")
+        close(con)
+        TRUE
+      }, error = function(e) FALSE, warning = function(w) FALSE)
+    }
+    ok
+  }
+})
+skip_if_mini_offline <- function() {
+  if (!PT_TEST_DATA_AVAILABLE && !.uniprot_reachable())
+    testthat::skip("UniProt not reachable (the protein_domains track fetches it)")
+}
 
 # sample_row list (display-based, absolute paths) for a dataset -- what the
 # entry builders below actually consume. Built via the app's own
@@ -337,7 +402,9 @@ record_perf <- function(fixture, module, seconds) {
   PERF_TIMES$records[[length(PERF_TIMES$records) + 1]] <- list(
     fixture = fixture, module = module, seconds = seconds
   )
-  if (!is.null(PERF_BASELINE)) {
+  # Timed against the full data on the compute node only: the mini fixtures
+  # draw less and run on any machine, where a 2x ceiling means nothing.
+  if (!is.null(PERF_BASELINE) && PT_TEST_DATA_AVAILABLE) {
     row <- PERF_BASELINE[PERF_BASELINE$fixture == fixture, ]
     if (nrow(row) == 1) {
       testthat::expect_true(

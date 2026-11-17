@@ -26,7 +26,6 @@ importFrom(AnnotationDbi,
   loadDb,
   select
 )
-importFrom(BiocManager,install)
 importFrom(GenomeInfoDb,
   seqlengths,
   seqlevels
@@ -37,7 +36,6 @@ importFrom(GenomicFeatures,
   genes,
   transcripts
 )
-importFrom(R.utils,isGzipped)
 importFrom(S4Vectors,metadata)
 importFrom(grDevices,
   dev.cur,
@@ -49,12 +47,6 @@ importFrom(jsonlite,
 )
 importFrom(methods,as)
 importFrom(rtracklayer,import)
-importFrom(sortable,
-  add_rank_list,
-  bucket_list,
-  rank_list,
-  update_rank_list
-)
 importFrom(stats,
   aggregate,
   setNames

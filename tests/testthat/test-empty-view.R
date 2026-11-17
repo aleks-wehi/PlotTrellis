@@ -93,7 +93,7 @@ test_that("an empty view draws each track as usual: heading and axes, no message
                     "bw_pair diff (stacked)", "junction_pair mirrored diff"))
     expect_true(has_text(svg, heading), label = heading)
   # The junction tracks keep their usual heading detail, at 0 reads.
-  expect_identical(lengths(regmatches(svg, gregexpr(">\\s*· S1 \\(max_h=0 reads\\)<", svg))), 2L)
+  expect_identical(lengths(regmatches(svg, gregexpr(">\\s*· S1 \\(max=0\\)<", svg))), 2L)
   # Value axes on the 0-1 scale (bigWig, stacked diff), and no arcs, only the baseline of each
   # junction track (two single, one mirrored).
   expect_true(has_text(svg, "0.8"))
@@ -209,6 +209,20 @@ test_that("odd data paths fail with a plain reason (no fixture data)", {
   expect_error(.pt_check_file(tempdir()), "is a folder, not a data file")
   expect_error(.pt_check_file(missing_file(".bw")), "^file not found: w59-not-there\\.bw \\(in ")
   expect_silent(.pt_check_file(synth_file(".bed")))
+  # The file's own folder (often the sample's) comes right after its name, so a message cut to
+  # fit its track keeps it however long the path above it is.
+  deep <- paste0(strrep("a-long-data-folder/", 8), "quant/LP_rep1/quant.sf")
+  expect_error(.pt_check_file(deep),
+               paste0("^file not found: quant\\.sf \\(in LP_rep1, under ", strrep("a-long-data-folder/", 8), "quant\\)$"))
+})
+
+test_that("an unreadable data file fails with permission denied, naming the file (no fixture data)", {
+  f <- tempfile("unreadable-", fileext = ".bw")
+  writeLines("x", f)
+  on.exit({ Sys.chmod(f, "644"); unlink(f) }, add = TRUE)
+  Sys.chmod(f, "000")
+  skip_if(file.access(f, 4) == 0, "this user can still read a mode-000 file (root, or Windows)")
+  expect_error(.pt_check_file(f), "^could not read unreadable-[^ ]*\\.bw: permission denied \\(in ")
 })
 
 test_that("a missing quant file is named in the error (no fixture data)", {

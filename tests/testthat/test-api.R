@@ -382,3 +382,116 @@ test_that("bare pt_project() with no project says how to make one", {
 test_that("a sample name in the wrong case is not matched; the error lists names and numbers", {
   expect_error(.pt_resolve_tracks(tab, "atac", S, samples = "a"), "Unknown sample 'a'.*1 A, 2 B, 3 C")
 })
+
+# A human-example samples.txt in a new temp folder, its start lines replaced by `start`;
+# returns it and the project folder beside it.
+tab_samples_txt <- function(start = character(0)) {
+  st <- file.path(tempfile(), "samples.txt")
+  dir.create(dirname(st))
+  txt <- readLines(pt_example("human"))
+  txt <- sub("^# data_root: .*", paste("# data_root:", dirname(pt_example("human"))), txt)
+  txt <- sub("^# gtf_path: .*", paste("# gtf_path:", file.path(dirname(pt_example("human")), "annotation.gtf.gz")), txt)
+  writeLines(c(start, txt[!grepl("^# start_", txt)]), st)
+  list(st = st, dir = file.path(dirname(st), "proj"))
+}
+
+test_that("a project kept with saveRDS() and read back still finds genes (bug 122)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  proj <- suppressWarnings(pt_project(EX_DIR, pt_example("human")))
+  f <- tempfile(fileext = ".rds")
+  saveRDS(proj, f)
+  # readRDS() gives a TxDb with a dead database connection; with the open ones closed and
+  # forgotten, as in a new session, pt_figure() has to reopen it.
+  .pt_close_txdbs()
+  expect_equal(pt_figure(readRDS(f), "PSME2", "genes")$gene, "PSME2")
+})
+
+test_that("region = takes the chromosome with or without chr (bug 202)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  proj <- suppressWarnings(pt_project(EX_DIR, pt_example("human")))
+  chrom <- function(r) pt_figure(proj, region = r, tracks = "genes")$region_params$chrom
+  expect_equal(chrom("14:24,140,000-24,160,000"), "chr14")
+  expect_equal(chrom("chr14:24,140,000-24,160,000"), "chr14")
+  expect_equal(chrom("zz9:1-1000"), "zz9")   # no such chromosome: as typed
+})
+
+test_that("knit_print() of a figure outside knitr writes nothing in the working directory (bug 131)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  skip_if_not_installed("knitr")
+  proj <- suppressWarnings(pt_project(EX_DIR, pt_example("human")))
+  wd <- tempfile("pt-wd-")
+  dir.create(wd)
+  old <- setwd(wd)
+  on.exit(setwd(old))
+  out <- knitr::knit_print(pt_figure(proj, "PSME2", "genes"))
+  expect_match(as.character(out), "\\.png")
+  expect_length(list.files(wd, recursive = TRUE, all.files = TRUE, no.. = TRUE), 0)
+})
+
+test_that("# start_comparison: orders the start view's samples without a comparison track too (bug 198)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac", "# start_comparison: K562, GM12878"))
+  suppressWarnings(pt_project(p$dir, p$st))
+  sv <- .pt_project(p$dir)$cfg$start_view
+  expect_equal(sv$view_mode, "two")
+  expect_equal(unlist(sv$conditions), c("K562", "GM12878"))   # K562 the reference
+  expect_equal(unlist(sv$tracks), c("genes", "bw_atac_K562", "bw_atac_GM12878"))
+})
+
+test_that("a start sample the project doesn't have is left out with one warning (bug 123)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  open_with <- function(...) {
+    p <- tab_samples_txt(c("# start_gene: PSME2", ...))
+    w <- character(0)
+    withCallingHandlers(pt_project(p$dir, p$st),
+                        warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") })
+    list(warned = grep("start view", w, value = TRUE), tracks = unlist(.pt_project(p$dir)$cfg$start_view$tracks))
+  }
+  # One sample per track: that sample's tracks go.
+  a <- open_with("# start_tracks: genes, atac, atac", "# start_samples: NA, Zzz, K562")
+  expect_length(a$warned, 1)
+  expect_match(a$warned, "Zzz")
+  expect_equal(a$tracks, c("genes", "bw_atac_K562"))
+  # One sample for every track: the per-sample tracks go.
+  expect_equal(open_with("# start_tracks: genes, atac", "# start_samples: Zzz")$tracks, "genes")
+  # In start_comparison: the other samples stay; a comparison track, now short of 2, goes.
+  b <- open_with("# start_tracks: genes, atac, atac_diff", "# start_comparison: Zzz, K562")
+  expect_length(b$warned, 1)
+  expect_equal(b$tracks, c("genes", "bw_atac_K562"))
+  # No comparison sample left: its per-sample tracks go too, not every sample instead.
+  expect_equal(open_with("# start_tracks: genes, atac", "# start_comparison: Zzz, Yyy")$tracks, "genes")
+  # A sample removed from a 3-sample comparison doesn't make its comparison track's pair.
+  expect_equal(open_with("# start_tracks: atac_diff, genes", "# start_comparison: K562, Zzz, GM12878")$tracks, "genes")
+  # Lines wrong otherwise keep their own error, with no warning first.
+  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac, atac", "# start_samples: Zzz, K562"))
+  w <- character(0)
+  expect_error(withCallingHandlers(pt_project(p$dir, p$st),
+                                   warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") }),
+               "Unknown sample 'Zzz'")
+  expect_length(grep("start view", w), 0)
+  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac", "# start_samples: Zzz, K562"))
+  w <- character(0)
+  expect_error(withCallingHandlers(pt_project(p$dir, p$st),
+                                   warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") }),
+               "Unknown sample 'Zzz'")
+  expect_length(grep("start view", w), 0)
+})
+
+test_that("a samples.txt edited before Save as project default is still re-imported (bug 220)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  p <- tab_samples_txt()
+  Sys.setFileTime(p$st, Sys.time() - 120)
+  suppressWarnings(pt_project(p$dir, p$st))
+  json <- file.path(p$dir, "project_settings.json")
+  # Edited after the import, then the app's Save as project default rewrites the settings,
+  # which are now newer than the edit.
+  writeLines(sub("#377EB8", "#00AA00", readLines(p$st), fixed = TRUE), p$st)
+  Sys.setFileTime(p$st, Sys.time() - 60)
+  .pt_write_project_files(.pt_read_settings(json, .pt_default_settings()), json)
+  expect_message(proj <- pt_project(p$dir, p$st), "Re-importing")
+  expect_equal(proj$colours[["K562"]], "#00AA00")
+  # Not edited since: opened as is.
+  stamp <- file.mtime(json)
+  pt_project(p$dir, p$st)
+  expect_equal(file.mtime(json), stamp)
+})

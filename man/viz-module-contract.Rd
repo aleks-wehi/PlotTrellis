@@ -48,7 +48,7 @@ chromosome the file lacks): the module draws a message across its slot with
 \item{The track can't be drawn}{(a data file missing or unreadable,
 \code{.pt_check_file()}, \code{.pt_read_error()}; a wrong format): the module calls
 \code{stop(..., call. = FALSE)}; an error in either function becomes an in-figure
-"<key> track failed: ..." message in red in that track's slot, and the rest
+"\verb{<key>} track failed: ..." message in red in that track's slot, and the rest
 of the figure still draws.}
 \item{The figure can't be drawn}{An error outside the modules (the genome's
 annotation, an unknown track type, no height set) stops \code{render_all()}.}
@@ -72,10 +72,10 @@ with data) is required:
 of the same name) or \code{"fixed"} (one sample-free track).}
 \item{\code{data_type}}{The \code{samples.txt} data type it reads: one of
 \code{DATA_TYPE_VOCAB} (\code{bw}, \code{bed}, \code{hic}, \code{quantdir}, \code{paired-end}).}
-\item{\code{label}}{Its label in the app; \verb{\{name\}} stands for the data's name.
-The sample(s) follow it. Default \verb{"\{name\}"}, the key for a fixed track.}
-\item{\code{api}}{Its track name in \code{\link[=pt_tracks]{pt_tracks()}}/\code{\link[=pt_figure]{pt_figure()}}, \verb{\{name\}} as in
-\code{label}. Default \verb{"\{name\}"}, the key for a fixed track. When two types give
+\item{\code{label}}{Its label in the app; \code{{name}} stands for the data's name.
+The sample(s) follow it. Default \code{"{name}"}, the key for a fixed track.}
+\item{\code{api}}{Its track name in \code{\link[=pt_tracks]{pt_tracks()}}/\code{\link[=pt_figure]{pt_figure()}}, \code{{name}} as in
+\code{label}. Default \code{"{name}"}, the key for a fixed track. When two types give
 the same name, the type detected later gets \verb{_<key>} appended.}
 \item{\code{order}}{Its position in detection among tracks of its kind (a
 number, default last). It orders \code{\link[=pt_tracks]{pt_tracks()}} and decides which of two

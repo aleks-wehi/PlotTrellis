@@ -17,7 +17,7 @@
 # design, since they're testing the no-scale-bar-first case instead).
 
 test_that("cross-module fixture with no scale-bar module first renders correctly (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   settings      <- test_settings("mouse")
@@ -49,7 +49,7 @@ test_that("cross-module fixture with no scale-bar module first renders correctly
 # enough" assumption actually holds for it: render it twice in one session,
 # diff the raw SVG bytes.
 test_that("cross-module fixture renders deterministically (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   settings      <- test_settings("mouse")
@@ -70,7 +70,8 @@ test_that("cross-module fixture renders deterministically (mouse dataset)", {
 # a "genes" track is present. A regression check that nothing in the render
 # path silently assumes a "genes" track exists somewhere in the figure.
 test_that("multi-track fixture with no genes track renders correctly (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_mini_offline()
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   settings      <- test_settings("mouse")
@@ -90,7 +91,8 @@ test_that("multi-track fixture with no genes track renders correctly (mouse data
 # order-dependent failure modes beyond the cross-module fixture above.
 
 test_that("large multi-track composition 1 renders correctly (mouse dataset, scale-bar module in middle)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_mini_offline()
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   settings      <- test_settings("mouse")

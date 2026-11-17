@@ -99,7 +99,7 @@ test_that("Edit project settings shows the project folder and keeps Clear caches
   dialog <- shown[[1]]
   expect_match(dialog, proj, fixed = TRUE)
   expect_match(dialog, "<details id=\"settings_advanced\">", fixed = TRUE)   # closed: no `open`
-  expect_match(dialog, "<summary>Advanced</summary>", fixed = TRUE)
+  expect_match(dialog, "<summary class=\"btn btn-default btn-sm\">Advanced</summary>", fixed = TRUE)  # a button (bug 192)
   expect_match(dialog, "clear_caches_btn", fixed = TRUE)
   expect_match(dialog, "reset_project_btn", fixed = TRUE)
   # Clear all caches removed the project's cache folder and nothing else.

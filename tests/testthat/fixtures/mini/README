@@ -1,0 +1,37 @@
+PlotTrellis mini test fixtures
+==============================
+
+The mouse test data cut down to chr2:102,900,000-104,000,000 (mm10, around Elf5), so the
+mouse tests run without the full data folder (see tests/testthat/helper-fixtures.R). Same
+layout and file names as the full test data. Not part of the built package (.Rbuildignore).
+Rebuilt by data-raw/build-test-fixtures.R; this README is copied in from
+data-raw/test-fixtures-README.
+
+Source
+------
+Milevskiy MJG, Coughlan HD, Kane SR, et al. Three-dimensional genome architecture
+coordinates key regulators of lineage specification in mammary epithelial cells. Cell Genomics 2023;
+3(11):100424. doi:10.1016/j.xgen.2023.100424. GEO SuperSeries GSE227750.
+
+Files
+-----
+annotations/gencode.vM25.annotation.gtf.gz
+    Every GTF line of the genes overlapping the region, plus the header, from GENCODE mouse
+    release M25 (GRCm38/mm10). Freely available without restriction.
+
+annotations/gencode.vM25.annotation_chrom_sizes.rds
+    mm10 chromosome lengths from UCSC.
+
+mouse_mammary_test/atac/{Ba,LP,P6,P7}_ATAC.bw
+    ATAC-seq coverage cropped to the region, from the authors' GitHub repository
+    https://github.com/mmilevskiy/MammaryGenomics (ATAC folder; RPKM, downsampled by the
+    authors). That repository states no licence.
+
+mouse_mammary_test/loops/*_OmniC_FitHiChIP_10kb_FDR01.bedpe
+    FitHiChIP Omni-C loop calls with either anchor in the region, from the same GitHub
+    repository (Omni-C folder). LP's source file is empty (2 bytes) and is copied as it is.
+
+mouse_mammary_test/quant/{Basal_rep1,LP_rep1}/quant.sf
+    Salmon quantification (GENCODE vM25 index) of RNA-seq runs SRR23919859 and SRR23919856
+    (GSE227748), made by the PlotTrellis authors from the public reads; only the rows for the
+    transcripts in the GTF above, values unchanged.

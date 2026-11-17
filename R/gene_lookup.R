@@ -1,7 +1,7 @@
-# Gene symbol → genomic coordinates via GENCODE TxDb + an OrgDb package.
-# Returns list(chrom, start, end) with nice proportional flanking, or NULL on lookup failure.
-# `orgdb_pkg` is the project genome's OrgDb package; it has no default, so a lookup can
-# never silently use another species'.
+# Gene symbol → genomic coordinates via GENCODE TxDb + an OrgDb package. Returns
+# list(chrom, start, end) with nice proportional flanking, or NULL on lookup
+# failure. `orgdb_pkg` is the project genome's OrgDb package; it has no default,
+# so a lookup can never silently use another species'.
 
 nice_flank <- function(raw_start, raw_end, gene_start, gene_end) {
   # Find the largest "display unit" d (from 1/2/5 × 10^k series) such that
@@ -41,27 +41,37 @@ resolve_gene_query <- function(query, orgdb_pkg, symbols = NULL) {
   db <- get(orgdb_pkg, envir = asNamespace(orgdb_pkg))
   if (grepl(ENSEMBL_GENE_ID_RE, q, ignore.case = TRUE)) {
     id  <- toupper(sub("(\\.[0-9]+)?(_PAR_Y)?$", "", q, ignore.case = TRUE))
-    res <- tryCatch(suppressMessages(AnnotationDbi::select(db, keys = id, keytype = "ENSEMBL", columns = "SYMBOL")),
-                    error = function(e) NULL)
-    sym <- sort(unique(as.character(res$SYMBOL[!is.na(res$SYMBOL)])), method = "radix")
+    res <- tryCatch(
+      suppressMessages(AnnotationDbi::select(
+        db, keys = id, keytype = "ENSEMBL", columns = "SYMBOL"
+      )),
+      error = function(e) NULL
+    )
+    sym <- sort(unique(as.character(res$SYMBOL[!is.na(res$SYMBOL)])),
+                method = "radix")
     if (length(sym) == 0)
       return(list(symbol = NA_character_, ensembl = id,
-                  error = paste0("Ensembl ID '", id, "' has no gene symbol in ", orgdb_pkg)))
+                  error = paste0("Ensembl ID '", id, "' has no gene symbol in ",
+                                 orgdb_pkg)))
     return(list(symbol = sym[1], ensembl = id, error = NULL, also = sym[-1]))
   }
   if (is.null(symbols)) symbols <- AnnotationDbi::keys(db, keytype = "SYMBOL")
   if (q %in% symbols) return(list(symbol = q, ensembl = NULL, error = NULL))
   hits <- symbols[toupper(symbols) == toupper(q)]
-  if (length(hits) == 1) return(list(symbol = hits, ensembl = NULL, error = NULL))
+  if (length(hits) == 1)
+    return(list(symbol = hits, ensembl = NULL, error = NULL))
   list(symbol = NA_character_, ensembl = NULL,
-       error = if (length(hits) > 1) paste0("'", q, "' matches several symbols that differ only in case (",
-                                            paste(hits, collapse = ", "), "); type the exact one") else NULL)
+       error = if (length(hits) > 1)
+         paste0("'", q, "' matches several symbols that differ only in case (",
+                paste(hits, collapse = ", "),
+                "); type the exact one") else NULL)
 }
 
 # `ensembl_id`, when given (the user typed an ID), picks the coordinates;
 # otherwise the first of the symbol's Ensembl IDs that exists in the TxDb
 # (e.g. PTPRC also maps to an alt-haplotype ID absent from a primary GTF).
-gene_to_coords <- function(gene_symbol, txdb, flank_pct = 0.15, orgdb_pkg, ensembl_id = NULL) {
+gene_to_coords <- function(gene_symbol, txdb, flank_pct = 0.15, orgdb_pkg,
+                           ensembl_id = NULL) {
   if (is.null(ensembl_id)) {
     res <- tryCatch(
       suppressMessages(AnnotationDbi::select(

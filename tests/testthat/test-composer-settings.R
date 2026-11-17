@@ -7,7 +7,7 @@
 # .pt_default_settings(), so a newly added setting fails here until it is wired up.
 SETTING_TEST_VALUES <- list(
   font = "Helvetica", fontsize = 14, page_w = 12, chr_fmt = "space", show_track_axes = FALSE,
-  hic_norm = "VC", hic_style = "triangle", zrange_cap = 50, atac_height = 1.6, hic_height = 3,
+  hic_norm = "VC", hic_style = "triangle", hic_colour_scale = "log", zrange_cap = 50, atac_height = 1.6, hic_height = 3,
   hic_res_mode = "finest", hic_max_bins_per_view = 800, hic_resolution = 25000, gene_flank_pct = 50,
   min_junction_support = 3, min_display_tpm = 5, uniprot_reviewed_only = TRUE,
   arc_clip_partial = TRUE, diff_colour_lo = "#111111", diff_colour_hi = "#222222",
@@ -49,7 +49,7 @@ test_that("the non-core settings list matches the panel, the collector and the t
 })
 
 test_that("every composer setting input reaches render_all() and the R script", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   seen <- NULL
@@ -82,7 +82,7 @@ test_that("every composer setting input reaches render_all() and the R script", 
 })
 
 test_that("a composer font size change changes the rendered figure", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   shiny::testServer(cp$app, {
@@ -104,8 +104,8 @@ test_that("a composer flank change re-resolves the current gene's region", {
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   shiny::testServer(cp$app, {
-    session$setInputs(gene_name = "ENSMUSG00000093931")  # Amy2a1 by one of its 3 IDs
-    session$setInputs(gene_name = "Amy2a1")              # the echo
+    session$setInputs(gene_name = "ENSMUSG00000093931")  # Amy2a1 (Milton's OrgDb) by one of its 3 IDs
+    session$setInputs(gene_name = state$gene_symbol)     # the echo (symbol depends on the OrgDb build)
     r15 <- state$gene_region
     session$setInputs(s_gene_flank_pct = 50)
     r50 <- state$gene_region
@@ -116,7 +116,7 @@ test_that("a composer flank change re-resolves the current gene's region", {
 })
 
 test_that("zoom and Apply to figure rebuild the figure with the live settings", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   items <- get("TRACK_ITEMS", envir = environment(cp$app$serverFuncSource()))
@@ -152,7 +152,7 @@ test_that("zoom and Apply to figure rebuild the figure with the live settings", 
 })
 
 test_that("the composer draws with the project's cache folder, and Edit project settings stops it with that word", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   expect_identical(get("RENDER_CFG", envir = environment(cp$app$serverFuncSource()))$cache_dir,
@@ -173,7 +173,7 @@ test_that("the composer draws with the project's cache folder, and Edit project 
 })
 
 test_that("zoom keeps a custom title in the rendered figure", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   shiny::testServer(cp$app, {
@@ -187,7 +187,7 @@ test_that("zoom keeps a custom title in the rendered figure", {
 })
 
 test_that("live changes never touch the project files; Save writes only the non-core keys", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer(list(zrange_cap = NULL, page_w = 10))
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   mirror <- file.path(cp$proj, "project_samples.txt")
@@ -230,7 +230,7 @@ test_that("live changes never touch the project files; Save writes only the non-
 })
 
 test_that("Revert to saved re-renders the panel from the saved settings", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   before <- readLines(cp$json)

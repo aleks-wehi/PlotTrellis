@@ -50,7 +50,7 @@ test_that("sparse in-range region: hic says why it has nothing to draw, with no 
 })
 
 test_that("empty GRanges: junctions draws its empty track instead of crashing (mouse)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows_m    <- test_rows("mouse")
   region_m  <- test_region("mouse")
   settings_m <- test_settings("mouse")
@@ -63,7 +63,7 @@ test_that("empty GRanges: junctions draws its empty track instead of crashing (m
 })
 
 test_that("missing file: bw fails its track in red, the figure still draws (mouse)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows_m    <- test_rows("mouse")
   region_m  <- test_region("mouse")
   settings_m <- test_settings("mouse")

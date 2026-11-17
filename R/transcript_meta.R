@@ -1,5 +1,5 @@
-# Coding status and canonical flag per transcript, from the transcript meta lookup
-# (build_tx_meta_lookup()), keyed by the version-stripped transcript_id.
+# Coding status and canonical flag per transcript, from the transcript meta
+# lookup (build_tx_meta_lookup()), keyed by the version-stripped transcript_id.
 
 # The transcript metadata lookup is read from the path the caller passes
 # (settings$tx_meta_lookup_path, the file ensure_genome_ready() built).
@@ -13,16 +13,20 @@
 # silently folded into "non-coding".
 TX_NONCODING_TYPES <- c(
   "lncRNA", "miRNA", "misc_RNA", "Mt_rRNA", "Mt_tRNA", "processed_transcript",
-  "retained_intron", "ribozyme", "rRNA", "scaRNA", "scRNA", "snoRNA", "snRNA", "sRNA",
-  "processed_pseudogene", "unprocessed_pseudogene", "unitary_pseudogene", "pseudogene",
+  "retained_intron", "ribozyme", "rRNA", "scaRNA", "scRNA", "snoRNA", "snRNA",
+  "sRNA", "processed_pseudogene", "unprocessed_pseudogene",
+  "unitary_pseudogene", "pseudogene",
   "transcribed_processed_pseudogene", "transcribed_unitary_pseudogene",
   "transcribed_unprocessed_pseudogene", "translated_unprocessed_pseudogene",
   "IG_C_gene", "IG_C_pseudogene", "IG_D_gene", "IG_D_pseudogene", "IG_J_gene",
   "IG_LV_gene", "IG_pseudogene", "IG_V_gene", "IG_V_pseudogene",
-  "TR_C_gene", "TR_D_gene", "TR_J_gene", "TR_J_pseudogene", "TR_V_gene", "TR_V_pseudogene"
+  "TR_C_gene", "TR_D_gene", "TR_J_gene", "TR_J_pseudogene", "TR_V_gene",
+  "TR_V_pseudogene"
 )
 
-# coding_status is never NA/blank -- a missing or unbucketed transcript becomes "unknown" (a gap to flag, not a silent guess), one row per `tx_id_stripped` element in order.
+# coding_status is never NA/blank -- a missing or unbucketed transcript becomes
+# "unknown" (a gap to flag, not a silent guess), one row per `tx_id_stripped`
+# element in order.
 transcript_coding_meta <- function(tx_id_stripped, lookup_path) {
   meta <- readRDS(lookup_path)
   m <- meta[tx_id_stripped, , drop = FALSE]
@@ -31,9 +35,12 @@ transcript_coding_meta <- function(tx_id_stripped, lookup_path) {
     ifelse(m$transcript_type == "protein_coding", "coding",
     ifelse(m$transcript_type == "nonsense_mediated_decay", "NMD",
     ifelse(m$transcript_type == "protein_coding_CDS_not_defined", "no CDS",
-    ifelse(m$transcript_type %in% TX_NONCODING_TYPES, "non-coding", "unknown")))))
+    ifelse(m$transcript_type %in% TX_NONCODING_TYPES, "non-coding",
+           "unknown")))))
 
-  is_canonical <- !is.na(m$tag) & (grepl("Ensembl_canonical", m$tag) | grepl("appris_principal", m$tag))
+  is_canonical <- !is.na(m$tag) & (grepl("Ensembl_canonical", m$tag) |
+                                   grepl("appris_principal", m$tag))
 
-  data.frame(coding_status = coding_status, is_canonical = is_canonical, row.names = NULL)
+  data.frame(coding_status = coding_status, is_canonical = is_canonical,
+             row.names = NULL)
 }

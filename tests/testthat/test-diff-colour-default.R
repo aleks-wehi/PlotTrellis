@@ -4,7 +4,7 @@
 # Compares against test_settings()'s copy of the values (the app's own are
 # in .pt_display_defaults(), R/app.R).
 test_that("diff colours fall back to the app's defaults when unset", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   spec          <- pair_track("bw_diff_stacked", rows[["Ba"]], rows[["LP"]])

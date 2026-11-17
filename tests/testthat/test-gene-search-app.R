@@ -12,15 +12,25 @@ test_that("a typed Ensembl ID keeps its own region through the symbol echo", {
                             gtf_path = GENOMES$mouse$gtf_path, orgdb = GENOMES$mouse$orgdb,
                             genome_label = GENOMES$mouse$genome_label), json, auto_unbox = TRUE)
   app <- .pt_composer_app(json, .pt_read_settings(json, .pt_default_settings()))
+  # ENSMUSG00000093931's symbols depend on the org.Mm.eg.db build (Amy2a1 and
+  # Amy2a3 on Milton's build, Amy2a1 having 3 IDs), so they are read from its own tables, as
+  # in test-gene-search.R.
+  map <- merge(AnnotationDbi::toTable(org.Mm.eg.db::org.Mm.egENSEMBL),
+               AnnotationDbi::toTable(org.Mm.eg.db::org.Mm.egSYMBOL), by = "gene_id")
+  syms <- sort(unique(map$symbol[map$ensembl_id == "ENSMUSG00000093931"]), method = "radix")
+  skip_if(length(syms) == 0, "this org.Mm.eg.db build no longer knows ENSMUSG00000093931")
   shiny::testServer(app, {
-    # Amy2a1 has 3 Ensembl IDs; ENSMUSG00000093931 is also named Amy2a3
     want <- GenomicFeatures::genes(TXDBS$mouse, filter = list(gene_id = "ENSMUSG00000093931"))
     session$setInputs(gene_name = "ENSMUSG00000093931")
     by_id <- state$gene_region
-    expect_equal(state$gene_symbol, "Amy2a1")
+    expect_equal(state$gene_symbol, syms[1])
     expect_true(by_id$start < GenomicRanges::start(want) && by_id$end > GenomicRanges::end(want))
-    expect_match(state$gene_note, "also named Amy2a3")
-    session$setInputs(gene_name = "Amy2a1")  # the echo
+    if (length(syms) > 1) {
+      expect_match(state$gene_note, paste("also named", paste(syms[-1], collapse = ", ")), fixed = TRUE)
+    } else {
+      expect_null(state$gene_note)
+    }
+    session$setInputs(gene_name = syms[1])  # the echo
     expect_identical(state$gene_region, by_id)
     session$setInputs(gene_name = "pax5")
     expect_equal(state$gene_symbol, "Pax5")

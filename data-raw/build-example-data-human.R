@@ -97,6 +97,9 @@ writeLines(c(
   "# gtf_path: annotation.gtf.gz",
   "# orgdb: org.Hs.eg.db",
   "# genome_label: hg38",
+  "# start_gene: PSME2",
+  "# start_tracks: atac, junctions, junctions_diff, transcript_expression, transcripts_annotated, genes",
+  "# start_comparison: GM12878, K562",
   "condition\tcolour\tbw:atac\tpaired-end:junctions\tquantdir:quant",
   "GM12878\t#E41A1C\tatac/GM12878_ATAC_foldchange.bigWig\tjunctions/GM12878_rep1.bed\tquant/GM12878_rep1",
   "K562\t#377EB8\tatac/K562_ATAC_foldchange.bigWig\tjunctions/K562_rep1.bed\tquant/K562_rep1"

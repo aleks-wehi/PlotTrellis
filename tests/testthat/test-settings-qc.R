@@ -11,7 +11,7 @@
 # spacing/layout change can't break these assertions.
 
 test_that("control_colour/treatment_colour are wired through bw_diff_stacked (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   settings      <- test_settings("mouse")
@@ -49,7 +49,7 @@ test_that("control_colour/treatment_colour are wired through junctions_mirrored_
 })
 
 test_that("diff_colour_lo/diff_colour_hi are wired through bw_diff_stacked (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   settings      <- test_settings("mouse", overrides = list(diff_colour_lo = "#111111", diff_colour_hi = "#222222"))
@@ -100,24 +100,16 @@ hic_setting_check <- function(dataset, sample, chrom, start, end, settings) {
 # second/third 100MB+ binary just to re-prove settings threading would be
 # pure repo bloat. What IS proven here is that the setting reaches
 # load_hic()'s own resolution-selection logic (the resolution differs).
-# CAVEAT (confirmed live): for the "finest" case specifically, plotgardener's own pixel-count safety valve
-# ("Attempting to plot too many Hi-C pixels. Adjusting to a resolution of
-# 50000 BP.") silently re-coarsens the ACTUAL displayed matrix back to the
-# same 50000bp grid as "auto" on this large a span -- so the resolution
-# load_hic() picked differing is real and correctly asserted, but
-# don't read that as proof the two renders look visibly different at this
-# span; they don't. hic_res_mode's effect IS visibly real at a span where
-# plotgardener's own coarsening doesn't kick in (any span small enough
-# that "finest" stays within plotgardener's own pixel budget) -- not
-# reproduced here to avoid a 3rd giant baseline.
-test_that("hic_res_mode is wired through: auto vs finest pick different resolutions (mouse dataset, large span)", {
+# Finest and Auto differ only at a span where a bin size finer than Auto's pick still fits in the
+# 1,000 bins across the view that plotgardener draws (W93: no mode goes past it), so 10 Mb, not 30.
+test_that("hic_res_mode is wired through: auto vs finest pick different resolutions (mouse dataset, 10 Mb span)", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   settings_auto   <- test_settings("mouse")  # hic_res_mode="auto" (default)
   settings_finest <- test_settings("mouse", overrides = list(hic_res_mode = "finest"))
-  res_auto   <- hic_setting_check("mouse", "Ba", "chr2", 80000000, 110000000, settings_auto)
-  res_finest <- hic_setting_check("mouse", "Ba", "chr2", 80000000, 110000000, settings_finest)
-  expect_identical(res_auto, 50000)    # confirmed live, test-hic-resolution.R's large-span mouse case
-  expect_identical(res_finest, 10000)  # finest available resolution for this fixture
+  res_auto   <- hic_setting_check("mouse", "Ba", "chr2", 95000000, 105000000, settings_auto)
+  res_finest <- hic_setting_check("mouse", "Ba", "chr2", 95000000, 105000000, settings_finest)
+  expect_identical(res_auto, 20000)    # coarsest with at least 500 bins across 10 Mb
+  expect_identical(res_finest, 10000)  # finest available resolution for this fixture (1,000 bins)
   expect_false(identical(res_auto, res_finest))
 })
 

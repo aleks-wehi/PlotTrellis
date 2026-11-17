@@ -28,7 +28,7 @@ layout_texts <- function(svg) {
 }
 
 test_that("transcript track heights are heading + 0.16in per transcript, no minimum (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   region   <- test_region("mouse")
   settings <- test_settings("mouse")
   header <- 0.02 + 7 / 72            # default fontsize 8, heading at 7pt
@@ -48,7 +48,7 @@ test_that("transcript track heights are heading + 0.16in per transcript, no mini
 })
 
 test_that("transcript rows are evenly spaced below the heading, '+n not shown' on its baseline (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows     <- test_rows("mouse")
   region   <- test_region("mouse")
   # No title: the first track then starts at y = 0.1in.

@@ -34,11 +34,18 @@ test_that("gene_display_transcripts() pools only the readable samples and does n
 })
 
 test_that("a missing quant.sf fails only that sample's expression row; the transcript tracks still draw", {
-  txt <- example_copy("mammary")
+  # The copy sits under a long folder, so the drawn message is cut, as on a deep project path.
+  # Three levels: long enough to be cut, short enough for Windows' 260-character paths.
+  top <- tempfile("pt-long-")
+  proj_dir <- tempfile("pt-proj-")
+  copy <- dirname(example_copy("mammary"))
+  on.exit(unlink(c(proj_dir, top, copy), recursive = TRUE), add = TRUE)
+  long <- do.call(file.path, as.list(c(top, rep("a-long-data-folder-name", 3))))
+  dir.create(long, recursive = TRUE)
+  stopifnot(file.rename(copy, file.path(long, "example")))
+  txt <- file.path(long, "example", "samples.txt")
   local_offline_chrom_sizes()
   unlink(file.path(dirname(txt), "quant", "LP_rep1", "quant.sf"))
-  proj_dir <- tempfile("pt-proj-")
-  on.exit(unlink(c(proj_dir, dirname(txt)), recursive = TRUE), add = TRUE)
   proj <- suppressMessages(suppressWarnings(pt_project(proj_dir, txt)))
   fig <- pt_figure(proj, "Elf5", c("transcripts", "transcript_expression"))
   out <- tempfile(fileext = ".svg")
@@ -48,9 +55,9 @@ test_that("a missing quant.sf fails only that sample's expression row; the trans
   # transcripts track drew. Before the fix the transcripts track failed too.
   expect_identical(lengths(regmatches(svg, gregexpr("failed", svg, fixed = TRUE))), 1L)
   expect_match(svg, "quant.sf", fixed = TRUE)
-  # Only LP_rep1's quant.sf was deleted, so the one failed row is LP's. The sample name is not
-  # asserted: a long data path cuts it off in the drawn message (BUGS.md bug 223; restore an
-  # "LP_rep1" check when that is fixed).
+  # Only LP_rep1's quant.sf was deleted, so the one failed row is LP's, and the drawn message
+  # names its folder even when the data folder's path is long.
+  expect_match(svg, "LP_rep1", fixed = TRUE)
   expect_match(svg, "Transcripts (filtered)", fixed = TRUE)
   expect_match(svg, "Elf5-207", fixed = TRUE)   # named from Basal, the readable sample
 })

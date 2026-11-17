@@ -24,7 +24,7 @@ text_label <- function(t) sub(".*>([^<]*)</text>$", "\\1", t)
 text_size  <- function(t) as.numeric(sub(".*font-size: ([0-9.]+)px.*", "\\1", t))
 
 test_that("min_display_tpm changes which transcripts the transcripts track draws (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows   <- test_rows("mouse")
   region <- test_region("mouse")
   spec   <- single_track("transcripts", rows[["Ba"]])
@@ -41,7 +41,7 @@ test_that("min_display_tpm changes which transcripts the transcripts track draws
 })
 
 test_that("fontsize scales the tpm_usage track's bar labels and legend (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows   <- test_rows("mouse")
   region <- test_region("mouse")
   spec   <- single_track("tpm_usage", rows[["Ba"]])
@@ -79,7 +79,7 @@ tpm_px <- function(axis, tpm) sum(stats::coef(axis$fit) * c(1, tpm))
 
 # The Transcript expression bars against their own TPM axis.
 test_that("tpm_usage bars end at their total on a readable TPM axis, and % labels fit their segment (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   # Default settings, and a narrow page with bigger text, where the axis is widened past the
   # usual 1/9 to fit the largest total's label and fewer ticks fit.
@@ -133,7 +133,7 @@ test_that("tpm_usage bars end at their total on a readable TPM axis, and % label
 })
 
 test_that("tpm_usage: total TPM 0 draws '0 TPM'; a gene not in the quant file or a non-number total is a track error (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   settings <- test_settings("mouse")
   region <- test_region("mouse")
@@ -235,7 +235,7 @@ test_that("a sample that can't be drawn doesn't change the shared TPM axis of th
 })
 
 test_that("tpm_usage total labels stay clear of the legend at large text and narrow pages (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   specs <- list(single_track("tpm_usage", rows[["Ba"]]), single_track("tpm_usage", rows[["LP"]]))
   for (ov in list(list(fontsize = 16L), list(page_w = 6, fontsize = 12L), list(page_w = 5))) {
@@ -250,7 +250,8 @@ test_that("tpm_usage total labels stay clear of the legend at large text and nar
   }
   # Too narrow for bars next to the legend: an error, not a backwards axis.
   lab <- text_label(svg_texts(render_svg(specs, test_region("mouse"), test_settings("mouse", overrides = list(page_w = 3)))))
-  expect_true(any(grepl("tpm_usage (Ba, LP) track failed: not enough width", lab, fixed = TRUE)))
+  # The message wraps to the narrow track: its lines read as one.
+  expect_true(grepl("tpm_usage (Ba, LP) track failed: not enough width", paste(lab, collapse = " "), fixed = TRUE))
 })
 
 # Adjacent Transcript expression tracks are one panel.

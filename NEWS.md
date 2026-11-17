@@ -1,3 +1,86 @@
+# PlotTrellis 1.0.1
+
+## New
+
+- STAR `SJ.out.tab` junction files now read and draw (height is the unique read count), and
+  the setup wizard lists them among the arc formats.
+- Hi-C has a **Colour scale** setting, Linear (default) or Log, and the bin size drawn is
+  printed under the colour key ("50 kb bins").
+- The Hi-C **Normalisation** setting is a list (KR, SCALE, VC, VC_SQRT, BALANCE for
+  cooler-balanced files, NONE) that still takes a typed name. A file without the chosen one
+  says which normalisations it has.
+- The setup wizard has the app's title bar, and "Advanced" in Edit project settings is a real
+  button.
+- A long track list scrolls inside its box, above Add all and Clear all, so the buttons never
+  hide a track.
+
+## Changed
+
+- **Every Hi-C figure looks different.** With Colour max blank, the colour scale now tops out
+  at the 95th percentile of the contacts in view (it was the single strongest pixel, which left
+  most maps almost white). No resolution mode draws more than 1,000 bins across a view any
+  more, so the colour key always matches what is drawn.
+- Hi-C settings renamed: "Max bins per view" is now "Min bins across view" (it always was a
+  minimum) and shows only for Resolution Auto; "Bin size (bp)" shows only for Fixed. Colour max
+  accepts values below 1.
+- A single-sample junction track is laid out like a coverage track (same height, heading over
+  the top left), and its heading reads "(max=N)" instead of "(max_h=N reads)". A junction file
+  with no scores (every score ".") shows no maximum.
+- "Clip partial arcs" now also trims the junction scale and axis, and works on both mirrored
+  junction comparisons.
+- Every tooltip and help popover is one short sentence.
+- The README says R 4.5 or later is needed, and shows the error older R gives.
+- Dependencies: BiocManager, R.utils and sortable are no longer imported (a fresh install
+  downloads about 20 fewer packages). The composer's track lists use a bundled copy of
+  SortableJS instead. htmltools is now imported and shiny 1.9.0 or later is required. xml2 is
+  suggested, for the test that stitches many genes' SVGs into one.
+- Internal: the composer and the setup wizard are split into smaller, tested files, and every R
+  file is wrapped to 80 columns. No behaviour change. A small mouse test project in the source
+  tree lets more tests run without the full data.
+
+## Fixed
+
+- A downloaded script with a junction track failed in 1.0.0; every such script now runs, as
+  does any script using an object the package changes in place.
+- Long error and status messages in a track (including "No retained transcripts" and the
+  protein-domain statuses) wrap to the track's width, and shrink only if a line still does not
+  fit.
+- Junction files: header lines (`#`, `track`, `browser`, column names) and a trailing tab on
+  every line are read; a "." score counts once; a blank or empty `.gz` file shows no junctions;
+  a narrowPeak file given as arcs is refused with a message saying so.
+- A loop file with a pair whose two anchors overlap draws that arc instead of failing the
+  whole track.
+- BED files: `track`, blank, tab-only and ragged lines, or spaces for tabs, no longer lose
+  intervals; a header row alone is an empty track; a bare header row no longer makes the read
+  10 times slower; gzipped files read without R.utils; a file that is not BED says why.
+- The junction scale ignores arcs the clip removes or a junction nobody can see; the
+  TPM-scaled comparison stops with a clear message when a quant file lacks the gene.
+- A "nan", "NA" or "inf" TPM for the gene now fails the row, naming the transcript and file
+  (it used to read as 0); a header-only or empty quant.sf names the file.
+- A corrupt gene or protein-domain cache file is looked up again instead of failing the track.
+  The gene database is saved under a temporary name and renamed, so a stopped build or a
+  second R process never leaves a half-written file, and a first project open works under
+  `options(warn = 2)`.
+- Clearer messages: a missing file names its sample's folder even on long paths; an unreadable
+  file says "permission denied"; a local protein-domain error no longer says "network issue?";
+  an unsupported species says UniProt lookups cover human and mouse only; an absolute path in
+  samples.txt warns that it must be relative to the data folder.
+- An exported SVG falls back to a serif or monospace font when that is the chosen one (it was
+  always sans-serif).
+- Scripting: a kept (`saveRDS`) project finds genes again; a start line naming a deleted sample
+  opens without it; the start comparison order is kept; `region = "14:..."` works; a
+  samples.txt edit made before "Save as project default" is picked up; `knit_print()` outside
+  knitr leaves no `figure/` folder.
+- The wizard's Genome label hint follows the GTF (mm10 for the example, hg38 for human), and a
+  chromosome missing from the chromosome sizes no longer ends the session on zoom.
+
+## Other
+
+- `CITATION.cff` added, so GitHub shows "Cite this repository" and Zenodo can archive the
+  release with a DOI. The author's ORCID is in DESCRIPTION.
+- The GitHub repository runs a nightly install check (and a manual one) on Windows and macOS
+  with R release and R 4.5, using the README's install line in an empty library.
+
 # PlotTrellis 1.0.0
 
 ## Breaking changes

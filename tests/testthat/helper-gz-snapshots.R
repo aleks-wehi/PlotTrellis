@@ -18,14 +18,15 @@
 #   gzip -9 -c tests/testthat/_snaps/foo/bar.svg > tests/testthat/_snaps_gz/foo/bar.svg.gz
 #   rm tests/testthat/_snaps/foo/bar.svg
 
-# Gated on PT_TEST_DATA_AVAILABLE (helper-fixtures.R, sourced first -- "f" <
+# Gated on PT_TEST_MOUSE_AVAILABLE (helper-fixtures.R, sourced first -- "f" <
 # "g") -- every expect_doppelganger() call is behind
-# skip_if_not(PT_TEST_DATA_AVAILABLE) too, so without fixture data none of
+# skip_if_not(PT_TEST_MOUSE_AVAILABLE) or the stricter PT_TEST_DATA_AVAILABLE,
+# so without either set of fixture data none of
 # these references would ever be touched by a test in the run. Decompressing
 # them anyway just leaves them all for testthat's unused-snapshot pruning (see
 # above) to delete again. Pruning deletes but doesn't fail the test run, and the plain
 # _snaps/*.svg are untracked, so this only avoids wasted work.
-if (PT_TEST_DATA_AVAILABLE) {
+if (PT_TEST_MOUSE_AVAILABLE) {
   snaps_gz_dir <- testthat::test_path("_snaps_gz")
   snap_gz_files <- list.files(snaps_gz_dir, pattern = "\\.svg\\.gz$", recursive = TRUE, full.names = TRUE)
   for (gz_path in snap_gz_files) {

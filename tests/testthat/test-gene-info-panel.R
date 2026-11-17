@@ -123,7 +123,7 @@ test_that("transcript rows are marked so the page can keep open ones open when U
 })
 
 test_that("UniProt parts show a loading note when their cache is cold, and fill in at once when warm", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   mem <- local_fake_uniprot()
   cp <- gi_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
@@ -165,7 +165,7 @@ test_that("UniProt parts show a loading note when their cache is cold, and fill 
 })
 
 test_that("a transcript_annotations() failure shows an error line instead of an empty table", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   local_fake_uniprot()
   local_mocked_bindings(transcript_annotations = function(...) stop("lookup file missing (test)"))
   cp <- gi_composer()
@@ -182,7 +182,7 @@ test_that("a transcript_annotations() failure shows an error line instead of an 
 })
 
 test_that("the panel is on the Output page and the title field is first in Figure settings", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- gi_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   html <- as.character(get("ui", envir = environment(cp$app$serverFuncSource())))
@@ -202,7 +202,7 @@ test_that("the panel is on the Output page and the title field is first in Figur
 })
 
 test_that("every settings group is a collapsed subsection and every s_<key> input is still rendered", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- gi_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   shiny::testServer(cp$app, {

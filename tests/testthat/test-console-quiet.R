@@ -3,7 +3,7 @@
 # wrapped in suppressMessages().
 
 test_that("rendering gene and transcript tracks prints no select() mapping notes (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   specs <- list(single_track("genes", rows[["Ba"]]), single_track("transcripts", rows[["Ba"]]),
                 single_track("transcripts_annotated", rows[["Ba"]]), single_track("tpm_usage", rows[["Ba"]]))
@@ -20,7 +20,7 @@ test_that("rendering gene and transcript tracks prints no select() mapping notes
 })
 
 test_that("gene search and the Gene info transcript table print no select() mapping notes (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   fx <- FIXTURES[["mouse"]]
   genome <- GENOMES[[fx$genome]]
   expect_no_message(gene_to_coords(fx$gene, TXDBS[[fx$genome]], orgdb_pkg = genome$orgdb),

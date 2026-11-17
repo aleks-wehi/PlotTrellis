@@ -3,7 +3,7 @@
 # so a settings list without them (test_settings(), or a script calling
 # render_all() directly) must give a figure with both.
 test_that("show_title and show_scale_bar remove the title and the scale bar", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
   spec          <- single_track("bw", rows[["Ba"]])

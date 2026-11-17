@@ -4,20 +4,30 @@ info_transcripts_annotated <- function() list(
 )
 
 # The same transcripts and height as the Transcripts (filtered) track.
-settings_transcripts_annotated <- function(dict, entry, settings, track_w, region_params)
+settings_transcripts_annotated <- function(
+  dict, entry, settings, track_w, region_params
+)
   settings_transcripts(dict, entry, settings, track_w, region_params)
 
 render_transcripts_annotated <- function(entry, dict, ctx) {
-  plotText(label = "Transcripts annotated (filtered)", x = ctx$track_x + 0.05, y = ctx$y + 0.02,
-           just = c("left", "top"), fontsize = ctx$fontsize - 1, fontface = "bold",
+  plotText(label = "Transcripts annotated (filtered)", x = ctx$track_x + 0.05,
+           y = ctx$y + 0.02, just = c("left", "top"),
+           fontsize = ctx$fontsize - 1, fontface = "bold",
            fontfamily = ctx$font, fontcolor = ctx$fontcol)
 
   if (entry$data$n_excluded > 0) {
-    header_text_h <- grid::convertHeight(grid::grobHeight(grid::textGrob("Xg", gp = grid::gpar(
-      fontsize = ctx$fontsize - 1, fontface = "bold", fontfamily = ctx$font))), "inches", valueOnly = TRUE)
-    plotText(label = sprintf("+%d not shown", entry$data$n_excluded), x = ctx$track_x + ctx$track_w,
-             y = ctx$y + 0.02 + header_text_h, just = c("right", "bottom"),  # on the heading's baseline
-             fontsize = ctx$fontsize - 2, fontfamily = ctx$font, fontcolor = "grey50")
+    header_text_h <- grid::convertHeight(
+      grid::grobHeight(grid::textGrob("Xg", gp = grid::gpar(
+        fontsize = ctx$fontsize - 1, fontface = "bold", fontfamily = ctx$font
+      ))),
+      "inches", valueOnly = TRUE
+    )
+    plotText(label = sprintf("+%d not shown", entry$data$n_excluded),
+             x = ctx$track_x + ctx$track_w,
+             # on the heading's baseline
+             y = ctx$y + 0.02 + header_text_h, just = c("right", "bottom"),
+             fontsize = ctx$fontsize - 2, fontfamily = ctx$font,
+             fontcolor = "grey50")
   }
 
   header_h <- .pt_tx_header_h(ctx$fontsize)
@@ -25,35 +35,53 @@ render_transcripts_annotated <- function(entry, dict, ctx) {
   n_rows <- nrow(kept)
 
   if (n_rows == 0) {
-    plotText(label = "No retained transcripts for this gene in view", x = ctx$track_x + ctx$track_w / 2,
-             y = ctx$y + header_h + (ctx$height - header_h) / 2, just = "center",
-             fontsize = ctx$fontsize - 1, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+    # Fitted to the space below the heading (wrapped, smaller if need be) so it
+    # stays in the track.
+    no_data_text(ctx$track_x, ctx$y + header_h, ctx$track_w,
+                 ctx$height - header_h, ctx$fontsize - 1, ctx$font, ctx$fontcol,
+                 label = "No retained transcripts for this gene in view")
     return(invisible(NULL))
   }
 
   row_h <- .pt_tx_row_h(ctx$fontsize)
   row_y <- ctx$y + header_h + (seq_len(n_rows) - 1) * row_h
-  label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches", valueOnly = TRUE)
+  label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches",
+                                          valueOnly = TRUE)
 
   # coding_status -> (text colour, tag background); "coding" draws no tag.
-  status_colour <- c(NMD = "grey40", "no CDS" = "grey40", "non-coding" = "grey40", unknown = "#c76e00")
-  status_bg     <- c(NMD = "#e8e8e8", "no CDS" = "#e8e8e8", "non-coding" = "#e8e8e8", unknown = "#fbe4c8")
+  status_colour <- c(NMD = "grey40", "no CDS" = "grey40",
+                     "non-coding" = "grey40", unknown = "#c76e00")
+  status_bg     <- c(NMD = "#e8e8e8", "no CDS" = "#e8e8e8",
+                     "non-coding" = "#e8e8e8", unknown = "#fbe4c8")
   swatch_size <- 0.09
   tag_pad_x   <- 0.045
   tag_pad_y   <- 0.03
 
   txn_text_w <- function(label, fontsize, fontfamily, fontface = "plain") {
-    grid::convertWidth(grid::grobWidth(grid::textGrob(label, gp = grid::gpar(fontsize = fontsize, fontfamily = fontfamily, fontface = fontface))), "inches", valueOnly = TRUE)
+    grid::convertWidth(
+      grid::grobWidth(grid::textGrob(label, gp = grid::gpar(
+        fontsize = fontsize, fontfamily = fontfamily, fontface = fontface
+      ))),
+      "inches", valueOnly = TRUE
+    )
   }
   txn_text_h <- function(label, fontsize, fontfamily, fontface = "plain") {
-    grid::convertHeight(grid::grobHeight(grid::textGrob(label, gp = grid::gpar(fontsize = fontsize, fontfamily = fontfamily, fontface = fontface))), "inches", valueOnly = TRUE)
+    grid::convertHeight(
+      grid::grobHeight(grid::textGrob(label, gp = grid::gpar(
+        fontsize = fontsize, fontfamily = fontfamily, fontface = fontface
+      ))),
+      "inches", valueOnly = TRUE
+    )
   }
 
   colours <- .pt_tx_colours(dict)
   for (j in seq_len(n_rows)) {
-    plotTranscripts(params = ctx$region, transcriptFilter = kept$transcript_id[j], labels = NULL,
-                     x = ctx$track_x, y = row_y[j], width = ctx$track_w, height = row_h,
-                     boxHeight = grid::unit(2, "mm"), fill = colours[[kept$transcript_name[j]]], colorbyStrand = FALSE)
+    plotTranscripts(params = ctx$region,
+                    transcriptFilter = kept$transcript_id[j], labels = NULL,
+                    x = ctx$track_x, y = row_y[j], width = ctx$track_w,
+                    height = row_h, boxHeight = grid::unit(2, "mm"),
+                    fill = colours[[kept$transcript_name[j]]],
+                    colorbyStrand = FALSE)
 
     row_yc <- row_y[j] + label_dy
     status <- kept$coding_status[j]
@@ -64,20 +92,25 @@ render_transcripts_annotated <- function(entry, dict, ctx) {
       tag_w <- txn_text_w(status, ctx$fontsize - 1.5, ctx$font) + 2 * tag_pad_x
       tag_h <- txn_text_h("Xg", ctx$fontsize - 1.5, ctx$font) + 2 * tag_pad_y
       tag_x <- ctx$track_x - 0.05 - tag_w
-      plotRect(x = tag_x, y = row_yc, width = tag_w, height = tag_h, just = c("left", "center"),
-               default.units = "inches", fill = unname(status_bg[status]), linecolor = NA)
-      plotText(label = status, x = tag_x + tag_pad_x, y = row_yc, just = c("left", "center"),
+      plotRect(x = tag_x, y = row_yc, width = tag_w, height = tag_h,
+               just = c("left", "center"), default.units = "inches",
+               fill = unname(status_bg[status]), linecolor = NA)
+      plotText(label = status, x = tag_x + tag_pad_x, y = row_yc,
+               just = c("left", "center"),
                fontsize = ctx$fontsize - 1.5, fontfamily = ctx$font,
-               fontface = if (status == "unknown") "bold" else "plain", fontcolor = unname(status_colour[status]))
+               fontface = if (status == "unknown") "bold" else "plain",
+               fontcolor = unname(status_colour[status]))
     }
 
     cur_x <- ctx$track_x + ctx$track_w + 0.05
-    plotRect(x = cur_x, y = row_yc, width = swatch_size, height = swatch_size, just = c("left", "center"),
+    plotRect(x = cur_x, y = row_yc, width = swatch_size, height = swatch_size,
+             just = c("left", "center"),
              default.units = "inches", fill = colours[[name]], linecolor = NA)
     cur_x <- cur_x + swatch_size + 0.06
 
     plotText(label = name, x = cur_x, y = row_yc, just = c("left", "center"),
-             fontsize = ctx$fontsize - 1.5, fontfamily = ctx$font, fontface = face, fontcolor = ctx$fontcol)
+             fontsize = ctx$fontsize - 1.5, fontfamily = ctx$font,
+             fontface = face, fontcolor = ctx$fontcol)
   }
   invisible(NULL)
 }

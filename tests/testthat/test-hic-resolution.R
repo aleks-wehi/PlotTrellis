@@ -105,7 +105,7 @@ hic_fixed_settings <- function(dataset, size) {
 
 test_that("fixed mode uses exactly the asked-for bin size, whatever auto would pick (mouse dataset)", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
-  region <- list(chrom = "chr2", start = 80000000, end = 110000000, gene = NA_character_)   # auto picks 50000 here
+  region <- list(chrom = "chr2", start = 95000000, end = 105000000, gene = NA_character_)   # auto picks 20000 here
   auto <- hic_tier_check("mouse", "Ba", region$chrom, region$start, region$end)
   want <- min(auto$avail)                                                                   # not what auto picks
   expect_false(identical(auto$res, want))
@@ -113,6 +113,11 @@ test_that("fixed mode uses exactly the asked-for bin size, whatever auto would p
   entry <- load_hic(single_track("hic", test_rows("mouse")[["Ba"]], settings = settings), region, settings)
   expect_identical(entry$data$resolution, want)
   expect_false(isTRUE(entry$data$failed))
+  # Too fine to draw across a 30 Mb view (3,000 bins; plotgardener draws at most 1,000): the finest
+  # size that fits, which the colour range is then taken from (bug 137).
+  wide <- list(chrom = "chr2", start = 80000000, end = 110000000, gene = NA_character_)
+  entry <- load_hic(single_track("hic", test_rows("mouse")[["Ba"]], settings = settings), wide, settings)
+  expect_identical(entry$data$resolution, 50000)
 })
 
 test_that("fixed mode with a bin size the file lacks stops with the closest sizes the file has (mouse dataset)", {
@@ -129,7 +134,7 @@ test_that("fixed mode with a bin size the file lacks stops with the closest size
                paste0("no 12,345 bp bins; closest: ", paste(format(near, big.mark = ",", trim = TRUE), collapse = ", "), " bp"),
                fixed = TRUE)
   # Blank bin size in fixed mode: an error too, not a silent default.
-  expect_error(load_hic(spec, region, hic_fixed_settings("mouse", NULL)), "no bin size is set", fixed = TRUE)
+  expect_error(load_hic(spec, region, hic_fixed_settings("mouse", NULL)), "Hi-C Resolution is Fixed but no Bin size (bp) is set.", fixed = TRUE)
 })
 
 test_that("a Hi-C track with a missing bin size shows the error in the figure and the other tracks still draw", {
@@ -151,7 +156,7 @@ test_that("a Hi-C track with a missing bin size shows the error in the figure an
 })
 
 test_that("the fixed bin size reaches a downloaded script", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   settings <- hic_fixed_settings("mouse", 25000)
   spec <- single_track("hic", test_rows("mouse")[["Ba"]], settings = settings)
   script <- assemble_download_script(list(spec), test_region("mouse"), settings)
@@ -176,13 +181,14 @@ test_that("an all-NaN Hi-C view names the normalisation and what to change; NONE
   region <- list(chrom = "chr1", start = 198300000, end = 199100000, gene = NA_character_)
   settings <- test_settings("human")
   spec <- single_track("hic", test_rows("human")[["GM12878"]], settings = settings)
-  msg <- "no KR values at 1,000 bp bins in this view: set Hi-C normalisation to NONE, or Resolution mode Fixed with a 5,000 bp bin size."
+  msg <- "no KR values at 1,000 bp bins in this view: set Hi-C normalisation to NONE, or Resolution Fixed with a 5,000 bp bin size."
   expect_error(load_hic(spec, region, settings), msg, fixed = TRUE)
   none <- load_hic(spec, region, test_settings("human", list(hic_norm = "NONE")))
   expect_true(any(is.finite(none$data$matrix$counts)))
-  # Over 1,000 bins across the view, plotgardener draws a coarser bin size, which has values: no error.
+  # 1,000 bp bins would be over 1,000 across this view, which plotgardener can't draw: the next
+  # size, 5,000 bp, which has values (no error).
   wide <- list(chrom = "chr1", start = 198300000, end = 199500000, gene = NA_character_)
-  expect_identical(load_hic(spec, wide, settings)$data$resolution, 1000)
+  expect_identical(load_hic(spec, wide, settings)$data$resolution, 5000)
 
   tmp <- tempfile(fileext = ".svg")
   on.exit(unlink(tmp), add = TRUE)
@@ -192,8 +198,10 @@ test_that("an all-NaN Hi-C view names the normalisation and what to change; NONE
     render_all(specs, region, settings, device_fn = function(w, h) svglite::svglite(tmp, width = w, height = h))))
   grDevices::dev.off()
   svg <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
-  # The whole message, not cut in the middle (render_all() cuts one over 140 characters).
-  expect_match(svg, paste("track failed:", gsub("&", "&amp;", msg, fixed = TRUE)), fixed = TRUE)
+  # The whole message, not cut in the middle (render_all() cuts one over 140 characters). It is
+  # wider than the track, so it is drawn as several lines (bug 77): read them as one.
+  text <- paste(regmatches(svg, gregexpr("(?<=>)[^<]*(?=</text>)", svg, perl = TRUE))[[1]], collapse = " ")
+  expect_match(text, paste("track failed:", gsub("&", "&amp;", msg, fixed = TRUE)), fixed = TRUE)
   expect_identical(lengths(regmatches(svg, gregexpr("track failed", svg, fixed = TRUE))), 1L)
 })
 
@@ -212,13 +220,13 @@ test_that("a Hi-C view whose maximum is below 0.00005 draws instead of failing (
   region <- test_region("mouse")
   settings <- test_settings("mouse")
   spec <- single_track("hic", test_rows("mouse")[["Ba"]], settings = settings)
-  # The same view with every count scaled down so the maximum is about 0.00001: 4-decimal
-  # rounding used to give a colour range of c(0, 0), which plotgardener can't draw.
+  # The same view with every count scaled down so the colour scale's top (the 95th percentile) is
+  # 0.00001: 4-decimal rounding used to give a colour range of c(0, 0), which plotgardener can't draw.
   real_load <- load_hic
   local_mocked_bindings(load_hic = function(entry, region_params, settings) {
     entry <- real_load(entry, region_params, settings)
     m <- entry$data$matrix
-    entry$data$matrix$counts <- m$counts / max(m$counts, na.rm = TRUE) * 1e-5
+    entry$data$matrix$counts <- m$counts / stats::quantile(m$counts, 0.95, na.rm = TRUE, names = FALSE) * 1e-5
     entry
   })
   svg <- hic_svg(list(spec), region, settings)

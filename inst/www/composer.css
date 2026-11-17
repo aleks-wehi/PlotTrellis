@@ -1,0 +1,110 @@
+
+    :root {
+      --bio-font-base:    15px;
+      --bio-font-small:   13px;
+      --bio-font-label:   16px;
+      --bio-font-heading: 19px;
+      --bio-font-code:    12px;
+    }
+    body  { font-size: var(--bio-font-base); }
+    label { font-size: var(--bio-font-label); }
+    h4    { font-size: var(--bio-font-heading); font-weight: 600;
+            margin-top: 8px; margin-bottom: 6px; }
+    .shiny-input-container .radio label,
+    .shiny-input-container .checkbox label { font-size: var(--bio-font-label); }
+    .shiny-input-container .radio input[type='radio'] {
+      transform: scale(1.35); transform-origin: center; margin-right: 4px; cursor: pointer;
+    }
+    .zoom-group-label { font-size: var(--bio-font-label); font-weight:600; color:var(--pt-muted);
+                        margin-bottom:5px; letter-spacing:0.03em; }
+    .rank-list-container { min-height: 60px; max-height: 42vh; overflow-y: auto; }
+    .rank-list-item { cursor: grab; }
+    .rank-list-item:active { cursor: grabbing; }
+    .track-filters { margin-bottom:10px; display:flex; flex-wrap:wrap; gap:4px; }
+    .track-filters .btn { flex:1 1 0; margin-right:0; }
+    .track-filters .btn.active, .track-filters .btn.active:hover, .track-filters .btn.active:focus {
+      background-color:var(--pt-primary); color:var(--pt-on-primary); border-color:var(--pt-primary-edge);
+    }
+    /* Gene-dependent tracks (Transcripts (filtered)/Transcripts/Transcripts
+       annotated (filtered)/Canonical protein annotation/Transcript expression/
+       Junctions mirrored diff (TPM-scaled), see GENE_REQUIRED_TYPES_JS)
+       while region mode is Coordinates, not Gene name -- flagged, not hidden,
+       since a track can already be sitting in
+       Figure tracks when the mode switches away from Gene name; Generate stays
+       disabled while one is there. Applies in every sample-count mode:
+       applyGeneRequiredFlag() scopes to the single #tracks-block shared by
+       all three modes. */
+    /* A declared file that is missing (moved/deleted) gets the same red box
+       as the gene-required flag above, in every view mode's picker. */
+    .rank-list-item.track-gene-required,
+    .rank-list-item.track-broken {
+      background-color: var(--pt-danger-soft) !important;
+      border: 2px dashed var(--pt-danger) !important;
+      opacity: 0.7;
+    }
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--pt-overlay); z-index: 9999;
+      text-align: center; padding-top: 38vh; box-sizing: border-box;
+    }
+    /* A loading bar: blocks sliding along a framed track while the figure renders
+       (there is no progress to report, so it never fills). */
+    .plottrellis-spinner {
+      display: inline-block; position: relative; overflow: hidden; width: 280px; height: 22px;
+      border: 2px solid var(--pt-heading); border-radius: 7px; background: var(--pt-surface);
+      box-shadow: 0 3px 0 var(--pt-border-strong);
+    }
+    .plottrellis-spinner::after {
+      content: ''; position: absolute; top: 3px; bottom: 3px; left: 0; width: 36%; border-radius: 3px;
+      background: repeating-linear-gradient(90deg, var(--pt-primary) 0, var(--pt-primary) 12px, transparent 12px, transparent 16px);
+      animation: plottrellis-load 1.4s linear infinite;
+    }
+    @keyframes plottrellis-load { from { transform: translateX(-100%); } to { transform: translateX(278%); } }
+    @media (prefers-reduced-motion: reduce) { .plottrellis-spinner::after { animation-duration: 6s; } }
+    /* Single-page layout: hide the nav tab links, keep the PlotTrellis title bar */
+    .navbar-nav { display: none !important; }
+    /* Collapsible section panels */
+    .plottrellis-section { margin-bottom: 12px; border-radius: 12px; }
+    .plottrellis-section > .panel-heading {
+      background-color: var(--pt-surface-2); border-bottom: 1px solid var(--pt-border);
+      border-radius: 11px 11px 0 0; padding: 8px 18px; cursor: pointer;
+    }
+    .plottrellis-section.collapsed-panel > .panel-heading {
+      border-radius: 11px; border-bottom-color: transparent;
+    }
+    .plottrellis-section .panel-heading a {
+      color: var(--pt-heading); text-decoration: none; font-family: var(--pt-font-display); font-size: 19px;
+      font-weight: 600; display: block;
+    }
+    .plottrellis-section .plottrellis-section .panel-heading a { font-size: 17px; }
+    .plottrellis-section .panel-heading a:hover { color: var(--pt-link); }
+    .plottrellis-section > .panel-body { padding: 12px 18px; }
+    hr { margin-top: 10px; margin-bottom: 10px; }
+    #topbar-actions {
+      position: fixed; top: 10px; right: 15px; z-index: 9998;
+      display: flex; align-items: center; gap: 8px;
+    }
+    /* Advanced in the Edit project settings dialog: a button that opens and closes its section,
+       with an arrow that shows which. Bootstrap 3 makes a summary a plain block with no marker. */
+    #settings_advanced > summary { display: inline-block; list-style: none; cursor: pointer; margin-bottom: 10px; }
+    #settings_advanced > summary::-webkit-details-marker { display: none; }
+    #settings_advanced > summary::before { content: '\25B8'; display: inline-block; width: 1em; }
+    #settings_advanced[open] > summary::before { content: '\25BE'; }
+    /* region_mode radios (Gene / Coordinates), dimmed by
+       setConditionGateLocked() while mode+conditions aren't both resolved
+       yet. */
+    .shiny-input-container .radio-inline.disabled-radio-label {
+      opacity: 0.45; cursor: not-allowed;
+    }
+    /* Track picker (Available/Figure rank-lists), dimmed by setPickerLocked()
+       while mode+conditions+region aren't all resolved yet. */
+    .rank-list-locked {
+      opacity: 0.45; cursor: not-allowed;
+    }
+    /* Add all / Clear all, at the bottom of each list's box (addListButtons()),
+       below the list: a long list scrolls inside the box, so the button stays in
+       view and never covers a row. The padding keeps a chosen row's
+       ring and a hovered row's lift inside the list's clip. */
+    #tracks-block .rank-list { flex: 1 1 auto; overflow-y: auto; padding: 3px; }
+    .track-list-action { align-self: center; margin-top: 8px; }
+  

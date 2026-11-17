@@ -13,7 +13,7 @@ render_svg_text <- function(items, region, settings) {
 }
 
 test_that("a settings_ error fails only its own track, with the reason shown", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   local_mocked_bindings(settings_junctions = function(...) stop("boom in settings"))
   items <- list(single_track("bw", rows[["Ba"]]), single_track("junctions", rows[["Ba"]]))
@@ -24,18 +24,18 @@ test_that("a settings_ error fails only its own track, with the reason shown", {
 })
 
 test_that("a render_ error fails only its own track, with the reason shown", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   local_mocked_bindings(render_bw = function(...) stop("boom in render"))
   items <- list(single_track("bw", rows[["Ba"]]), single_track("junctions", rows[["Ba"]]))
   expect_message(svg <- render_svg_text(items, test_region("mouse"), test_settings("mouse")),
                  "bw \\(.*\\) track failed: boom in render")
   expect_match(svg, "track failed: boom in render", fixed = TRUE)
-  expect_match(svg, "Ba (max_h=0)", fixed = TRUE)  # the junctions track (loops, none here) still drew
+  expect_match(svg, "Ba (max=0)", fixed = TRUE)  # the junctions track (loops, none here) still drew
 })
 
 test_that("the error label survives a message with invalid bytes, and covers partial drawing", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   local_mocked_bindings(render_bw = function(entry, dict, ctx) {
     plotText("PARTIAL", x = ctx$track_x, y = ctx$y, just = c("left", "top"))
@@ -50,7 +50,7 @@ test_that("the error label survives a message with invalid bytes, and covers par
 })
 
 test_that("junctions heading accepts a non-integer junction score", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows   <- test_rows("mouse")
   region <- test_region("mouse")
   mid    <- round((region$start + region$end) / 2)
@@ -58,6 +58,6 @@ test_that("junctions heading accepts a non-integer junction score", {
   local_mocked_bindings(load_junctions = function(...)
     data.frame(intron_start = mid - 5000L, intron_end = mid + 5000L, nSupport = 3.457920544))
   svg <- render_svg_text(list(single_track("junctions", rows[["Ba"]])), region, test_settings("mouse"))
-  expect_match(svg, "max_h=3.46)", fixed = TRUE)   # a loop file's score, so no "reads"
+  expect_match(svg, "(max=3.46)", fixed = TRUE)   # a loop file's score
   expect_false(grepl("track failed", svg, fixed = TRUE))
 })

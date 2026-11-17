@@ -1,0 +1,126 @@
+# Install check: does the install line in README.md work for a user on Windows and macOS?
+#
+# Runs the README's own install code in an empty library (and on Windows with Rtools removed,
+# as on a typical user's machine), prints the R and PlotTrellis versions, checks the installed
+# version equals the one R-universe serves as source, then draws the bundled example figure
+# and saves it. It never uses the package's tests or this repo's files except README.md.
+#
+# Runs every night and on the "Run workflow" button. A red run means a user following the
+# README would fail (or get an old version) on that system and R version.
+name: install-check
+
+on:
+  schedule:
+    - cron: "17 17 * * *"   # 17:17 UTC, early morning in Australia
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-check:
+    name: ${{ matrix.os }}, R ${{ matrix.r }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    # A user without Rtools or Xcode tools has no make, and then install.packages() takes
+    # binaries only and never compiles. The macOS runner has make, so point R at a program
+    # that does not exist, on both systems, to get the same behaviour.
+    env:
+      MAKE: no-make-on-this-machine
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        r: [release, "4.5"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r }}
+          rtools-version: none
+          windows-path-include-rtools: false
+
+      # A user's Windows machine has no Rtools, so a package that needs compiling cannot be
+      # installed there. Remove it (and any other make/gcc) from the runner before installing.
+      - name: Remove Rtools (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem C:\ -Directory -Filter 'rtools*' | Remove-Item -Recurse -Force
+          $clean = ($env:PATH -split ';' | Where-Object { $_ -and $_ -notmatch 'rtools|strawberry|mingw|msys' }) -join ';'
+          "PATH=$clean" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Make an empty library
+        shell: Rscript {0}
+        run: |
+          lib <- gsub("\\\\", "/", file.path(Sys.getenv("RUNNER_TEMP"), "empty-lib"))
+          dir.create(lib)
+          cat(sprintf("R_LIBS_USER=%s\n", lib), file = Sys.getenv("GITHUB_ENV"), append = TRUE)
+
+      - name: Check the library is empty and no compiler is found
+        shell: Rscript {0}
+        run: |
+          cat(R.version.string, "\n")
+          print(.libPaths())
+          ip <- installed.packages()
+          extra <- ip[is.na(ip[, "Priority"]), "Package"]
+          if (length(extra)) stop("Library is not empty: ", paste(extra, collapse = ", "))
+          print(Sys.which(c("make", "gcc", "g++")))
+          if (nzchar(Sys.which(Sys.getenv("MAKE", "make")))) stop("R can still find a make program")
+          if (.Platform$OS.type == "windows") {
+            if (any(nzchar(Sys.which(c("make", "gcc"))))) stop("make or gcc is on the PATH; this is not a machine without Rtools")
+            if (length(Sys.glob("C:/rtools*"))) stop("Rtools is still installed")
+          }
+
+      # The code block is read from README.md, so this checks the line users actually copy.
+      # Only a CRAN mirror is added in front, because install.packages() needs one when R
+      # is not interactive.
+      - name: Install with the README line
+        shell: Rscript {0}
+        run: |
+          readme <- readLines("README.md")
+          open <- grep("^`{3}r$", readme)[1]
+          close <- grep("^`{3}$", readme)
+          close <- close[close > open][1]
+          code <- readme[(open + 1):(close - 1)]
+          if (!any(grepl('install.packages("PlotTrellis"', code, fixed = TRUE)))
+            stop("README.md's first R block has no install.packages(\"PlotTrellis\" ...) line")
+          writeLines(code, "readme-install.R")
+          cat(code, sep = "\n")
+          options(repos = c(CRAN = "https://cloud.r-project.org"))
+          source("readme-install.R", echo = TRUE, max.deparse.length = Inf)
+          if (!requireNamespace("PlotTrellis", quietly = TRUE))
+            stop("The README install line did not install PlotTrellis")
+
+      - name: Report versions and compare with R-universe
+        shell: Rscript {0}
+        run: |
+          cat(R.version.string, "\n")
+          installed <- as.character(packageVersion("PlotTrellis"))
+          cat("Installed PlotTrellis:", installed, "\n")
+          readme <- paste(readLines("README.md"), collapse = "\n")
+          universe <- regmatches(readme, regexpr("https://[A-Za-z0-9-]+\\.r-universe\\.dev", readme))
+          if (length(universe) != 1) stop("no r-universe address found in README.md")
+          served <- jsonlite::fromJSON(paste0(universe, "/api/packages/PlotTrellis"))$Version
+          if (length(served) != 1) stop("could not read the version R-universe serves")
+          cat("R-universe serves source:", served, "\n")
+          cat(sprintf("%s: R %s, PlotTrellis %s (R-universe %s)\n", Sys.getenv("RUNNER_OS"), getRversion(), installed, served),
+              file = Sys.getenv("GITHUB_STEP_SUMMARY"), append = TRUE)
+          if (!identical(installed, served))
+            stop("Installed ", installed, " but R-universe serves ", served)
+
+      - name: Draw the bundled example
+        shell: Rscript {0}
+        run: |
+          # The example is a mouse project, and the vignette tells users to install this first.
+          if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) BiocManager::install("org.Mm.eg.db", update = FALSE)
+          library(PlotTrellis)
+          proj <- pt_project(project_dir = file.path(tempdir(), "PlotTrellis-example"), samples_txt = pt_example())
+          fig <- pt_figure(proj, "Elf5", tracks = c("atac", "transcript_expression", "transcripts_annotated", "genes"))
+          out <- file.path(tempdir(), "Elf5.png")
+          pt_save(fig, out)
+          size <- file.size(out)
+          cat("Saved", out, size, "bytes\n")
+          if (is.na(size) || size < 30000) stop("The saved figure is missing or too small: ", size)
+          if (!identical(readBin(out, "raw", 4), as.raw(c(0x89, 0x50, 0x4e, 0x47)))) stop("The saved file is not a PNG")

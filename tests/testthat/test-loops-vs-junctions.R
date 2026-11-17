@@ -1,8 +1,8 @@
 # Loops (BEDPE) and splice junctions share the paired-end column type. Only junctions get the
-# gene-TPM-scaled comparison and a "reads" label; a loop file's score isn't reads, and a BEDPE
-# without a score has no height to report. No fixture data needed (a copy of the human example).
+# gene-TPM-scaled comparison; both headings give the tallest arc's height as (max=N), and a
+# BEDPE without a score has no height to report. No fixture data needed (a copy of the human example).
 
-test_that("loops get no _diff_tpm track and no reads label; junctions keep both (no fixture data)", {
+test_that("loops get no _diff_tpm track, junctions keep it; scored headings say (max=N), unscored none (no fixture data)", {
   skip_if_not_installed("org.Hs.eg.db")
   local_offline_chrom_sizes()
   txt <- example_copy("human")
@@ -27,18 +27,18 @@ test_that("loops get no _diff_tpm track and no reads label; junctions keep both 
   on.exit(unlink(svg_file), add = TRUE)
   suppressMessages(pt_save(pt_figure(proj, "PSME2", c("junctions", "loops", "scored"), samples = "GM12878"), svg_file))
   svg <- paste(readLines(svg_file, warn = FALSE), collapse = "\n")
-  expect_match(svg, "max_h=[0-9]+ reads")                      # junctions: read counts
-  expect_match(svg, "max_h=7.5)", fixed = TRUE)                # scored loops: the score, not reads
-  expect_identical(lengths(regmatches(svg, gregexpr("max_h=", svg, fixed = TRUE))), 2L)  # unscored: none
-  expect_identical(lengths(regmatches(svg, gregexpr(" reads", svg, fixed = TRUE))), 1L)
+  expect_match(svg, "\\(max=[0-9]+\\)")                      # junctions: the read count
+  expect_match(svg, "(max=7.5)", fixed = TRUE)                 # scored loops: the score
+  expect_identical(lengths(regmatches(svg, gregexpr("(max=", svg, fixed = TRUE))), 2L)  # unscored: none
+  expect_false(grepl("max_h| reads", svg))
 })
 
 test_that(".pt_arc_file_kind() tells junctions, scored loops and unscored loops apart (no fixture data)", {
   f <- function(...) { p <- tempfile(fileext = ".bed"); writeLines(c(...), p); p }
   bed12 <- "chr1\t10\t500\tj1\t5\t+\t10\t500\t0\t2\t10,10\t0,480"
   expect_identical(.pt_arc_file_kind(f(paste(c("#Chr", 2:12), collapse = "\t"), bed12)), "junctions")
-  # A header read_junction_file() can't take (not 12 columns): unknown, so the track stays and shows its error.
-  expect_identical(.pt_arc_file_kind(f("#Chr\tStart", bed12)), NA_character_)
+  # A commented header of any width is skipped (bug 145): the first data line decides.
+  expect_identical(.pt_arc_file_kind(f("#Chr\tStart", bed12)), "junctions")
   expect_identical(.pt_arc_file_kind(f("chr1\t10\t500\tj1\t5\t+")), "junctions")
   expect_identical(.pt_arc_file_kind(f("chr1\t10\t20\tchr1\t500\t510")), "unscored")
   expect_identical(.pt_arc_file_kind(f("chr1\t10\t20\tchr1\t500\t510\tl1\t3.2")), "loops")
@@ -46,6 +46,18 @@ test_that(".pt_arc_file_kind() tells junctions, scored loops and unscored loops 
   expect_identical(.pt_arc_file_kind(f(paste(rep("x", 11), collapse = "\t"))), NA_character_)
   expect_identical(.pt_arc_file_kind(f("")), NA_character_)
   expect_identical(.pt_arc_file_kind(tempfile()), NA_character_)
+  # Junctions whose scores are all "." stay junctions (they keep the TPM-scaled track), but have no
+  # counts for the heading (bug 227).
+  dot12 <- "chr1\t10\t500\tj1\t.\t+\t10\t500\t0\t2\t10,10\t0,480"
+  dot6 <- "chr1\t10\t500\tj1\t.\t+"
+  expect_identical(.pt_arc_file_kind(f(dot12)), "junctions")
+  expect_true(.pt_junction_scoreless(f(dot12)))
+  expect_true(.pt_junction_scoreless(f("#Chr\tStart", dot6, "chr1\t20\t600\tj2\t.\t-")))
+  expect_false(.pt_junction_scoreless(f(dot12, bed12)))
+  expect_false(.pt_junction_scoreless(f(bed12)))
+  expect_false(.pt_junction_scoreless(f(dot6, "chr1\t20\t600\tj2\t3\t-")))
+  expect_false(.pt_junction_scoreless(f("")))
+  expect_false(.pt_junction_scoreless(tempfile()))
 })
 
 test_that("a 7-column BEDPE takes arc heights from a numeric 7th column (ENCODE ChIA-PET) (no fixture data)", {

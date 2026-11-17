@@ -4,6 +4,9 @@ Build genomic track figures (coverage, Hi-C, splice junctions, transcript struct
 protein domains) in a point-and-click app, without writing code. Every figure can be
 downloaded as a standalone R script that reproduces it.
 
+PlotTrellis needs R 4.5 or later (check with `R.version.string`). On older R the install
+stops with `Error in install.packages : unknown input format`.
+
 Install from R-universe:
 
 ```r

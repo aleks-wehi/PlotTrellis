@@ -1,0 +1,62 @@
+
+      .wiz-page { max-width: 1100px; margin: 0 auto; padding: 6px 24px 60px; font-size: 15px; }
+      .wiz-page h1 { font-size: 34px; margin: 0 0 6px; }
+      .wiz-page h3 { font-size: 20px; margin: 0; }
+      .wiz-lead { font-size: 17px; color: var(--pt-muted); max-width: 820px; margin-bottom: 26px; }
+      .wiz-page label { font-size: 15px; }
+      /* Landing: what a project needs, then the two ways in. */
+      .wiz-needs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 26px; }
+      .wiz-need { flex: 1 1 240px; background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; padding: 14px 16px; }
+      .wiz-need b { display: block; color: var(--pt-heading); margin-bottom: 4px; }
+      .wiz-need, .wiz-choice p { color: var(--pt-text); }
+      .wiz-choices { display: flex; gap: 16px; flex-wrap: wrap; }
+      .wiz-choice { flex: 1 1 300px; background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; padding: 20px 20px 16px; box-shadow: var(--pt-shadow); }
+      .wiz-choice h3 { margin-bottom: 6px; }
+      .wiz-choice p { min-height: 44px; color: var(--pt-muted); }
+      .wiz-choice .btn { width: 100%; }
+      /* Numbered section cards. */
+      .wiz-section { background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; box-shadow: var(--pt-shadow); padding: 20px 22px 14px; margin-bottom: 18px; }
+      .wiz-section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+      .wiz-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--pt-primary); color: var(--pt-on-primary); font-weight: 700; font-size: 15px; flex: none; }
+      .wiz-section-intro { color: var(--pt-muted); margin-bottom: 14px; }
+      .wiz-guide { margin: -4px 0 16px; }
+      .wiz-guide > summary { display: list-item; cursor: pointer; font-weight: 600; color: var(--pt-link); }
+      .wiz-guide > summary:hover { color: var(--pt-link-hover); }
+      .wiz-guide ul { margin-top: 10px; }
+      .wiz-guide li { margin-bottom: 6px; }
+      .wiz-guide-table { margin-bottom: 8px; }
+      .wiz-guide-table th { color: var(--pt-muted); font-weight: 600; }
+      .wiz-guide-table td, .wiz-guide-table th { border-top-color: var(--pt-border) !important; }
+      /* Field status lines and errors. */
+      .wiz-status { margin: -8px 0 12px; font-size: 14px; }
+      .wiz-row { padding: 6px 0; border-bottom: 1px solid var(--pt-border); }
+      .wiz-row-error { background: var(--pt-danger-soft); }
+      .wiz-error { color: var(--pt-danger); margin-bottom: 8px; }
+      .wiz-error-box { background: var(--pt-danger-soft); border: 1px solid var(--pt-danger); border-radius: 10px; padding: 10px 14px; }
+      .wiz-warn-box { background: #FBF3E3; border: 1px solid var(--pt-warn-edge); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+      .wiz-ok    { color: #2e7d32; }
+      .wiz-warn  { color: var(--pt-accent-strong); }
+      .wiz-empty { color: var(--pt-muted); padding: 14px 0 6px; }
+      .wiz-samples { margin-top: 12px; }
+      .wiz-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+      .wiz-export { margin-left: auto; text-align: right; font-size: 12px; }
+      .wiz-export .btn.btn-link { padding: 0 0 2px; font-weight: 600; box-shadow: none; border: 0; background: transparent; color: var(--pt-link); margin: 0; text-decoration: underline; }
+      .wiz-page code { background: var(--pt-code-bg); color: var(--pt-code-text); }
+      .wiz-back { display: inline-block; margin-bottom: 14px; font-weight: 600; }
+      /* Add-sample modal (modalDialog size='l') is Bootstrap's fixed 900px
+         .modal-lg -- widen it so the instance-row selectize boxes have more
+         room. #shiny-modal is the one live modal at a time, so this only
+         affects a modal-lg while it's showing. */
+      #shiny-modal .modal-lg { width: 1100px; max-width: 95vw; }
+      #shiny-modal .modal-body { font-size: 15px; }
+      .wiz-file-kinds .btn { margin-right: 6px; margin-bottom: 8px; }
+      .wiz-kind { font-weight: 600; color: var(--pt-heading); padding-top: 7px; }
+      /* selectize's single-select box doesn't truncate long selected paths by
+         default -- they overflow past the visible input. Clip with ellipsis
+         instead. */
+      .selectize-input, .selectize-input > input, .selectize-input > .item {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    

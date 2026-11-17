@@ -29,7 +29,7 @@ expected_hic_height <- function(page_w = 9, hic_style = "rectangle") {
 }
 
 test_that("settings$atac_height override changes bw track height (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")
   region_params <- test_region("mouse")
 

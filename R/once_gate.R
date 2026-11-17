@@ -1,16 +1,20 @@
-# Repeat-click gate: a button with class "pt-once" runs its action once per click, however
-# fast it is clicked again. Used by the composer app and the setup wizard; each puts
-# .pt_once_js() in its page head and calls .pt_once_server() in its server.
+# Repeat-click gate: a button with class "pt-once" runs its action once per
+# click, however fast it is clicked again. Used by the composer app and the
+# setup wizard; each puts .pt_once_js() in its page head and calls
+# .pt_once_server() in its server.
 #
-# Client: a click on a busy button is dropped before Shiny sees it, and so is every later click
-# of a double-click that started on a gated button, wherever it lands (on the button again, or
-# on the dialog the first click opened). Any other click marks the button busy (greyed out
-# with the "disabled" class; not the disabled property, which would drop keyboard focus) and
-# sends `pt_once_click` with its id, after the button's own value (in the same input message,
-# or for a button with its own onclick, the next one; the server handles messages in order).
-# Server: after the flush that ran the button's action, `pt_once_ready` releases the button,
-# so a deliberate later click works again. A download link has no server round trip (the
-# file comes over HTTP), so it is held for 2 seconds instead.
+# Client: a click on a busy button is dropped before Shiny sees it, and so is
+# every later click of a double-click that started on a gated button, wherever
+# it lands (on the button again, or on the dialog the first click opened). Any
+# other click marks the button busy (greyed out with the "disabled" class; not
+# the disabled property, which would drop keyboard focus) and sends
+# `pt_once_click` with its id, after the button's own value (in the same input
+# message, or for a button with its own onclick, the next one; the server
+# handles messages in order).
+# Server: after the flush that ran the button's action, `pt_once_ready` releases
+# the button, so a deliberate later click works again. A download link has no
+# server round trip (the file comes over HTTP), so it is held for 2 seconds
+# instead.
 .pt_once_js <- function() tags$script(HTML("
   (function() {
     function gated(e) { return e.target && e.target.closest ? e.target.closest('.pt-once') : null; }
@@ -54,6 +58,7 @@
 .pt_once_server <- function(input, session) {
   observeEvent(input$pt_once_click, {
     id <- input$pt_once_click
-    session$onFlushed(function() session$sendCustomMessage("pt_once_ready", id), once = TRUE)
+    session$onFlushed(function() session$sendCustomMessage("pt_once_ready", id),
+                      once = TRUE)
   })
 }

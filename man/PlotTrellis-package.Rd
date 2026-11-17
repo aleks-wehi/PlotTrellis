@@ -14,12 +14,20 @@ For developers: adding a new track type is a matter of defining its
 \link{viz-module-contract} for the convention and \link{viz-module-discovery} for how
 modules are found.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/aleks-wehi/PlotTrellis}
+  \item Report bugs at \url{https://github.com/aleks-wehi/PlotTrellis/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Aleksander Pacnik \email{pacnik.a@wehi.edu.au}
+\strong{Maintainer}: Aleksander Pacnik \email{pacnik.a@wehi.edu.au} (\href{https://orcid.org/0009-0000-4062-2582}{ORCID})
 
 Authors:
 \itemize{
-  \item Aleksander Pacnik \email{pacnik.a@wehi.edu.au}
+  \item Aleksander Pacnik \email{pacnik.a@wehi.edu.au} (\href{https://orcid.org/0009-0000-4062-2582}{ORCID})
 }
 
 }

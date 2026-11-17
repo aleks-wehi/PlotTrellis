@@ -17,7 +17,7 @@ effects_composer <- function() {
 }
 
 test_that("reference_colour/comparison_colour colour the comparison tracks (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- effects_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   shiny::testServer(cp$app, {
@@ -43,7 +43,7 @@ test_that("reference_colour/comparison_colour colour the comparison tracks (mous
 })
 
 test_that("uniprot_reviewed_only switches the Gene info UniProt link to Swiss-Prot only (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   # The panel also makes a live UniProt call (canonical-isoform check); fail it fast.
   # It shows the rendered figure's gene, so a (stubbed) figure is generated first.
   local_mocked_bindings(.uniprot_read_lines = function(url) stop("offline (test)"),

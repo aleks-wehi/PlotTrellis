@@ -6,7 +6,7 @@
 # and run one script end to end with Rscript.
 
 test_that("assemble_download_script() produces syntactically valid, self-contained R code", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "no /vast test data on this machine")
 
   region_params <- test_region("mouse")
   settings <- test_settings("mouse")
@@ -111,11 +111,12 @@ test_that("every track type's script uses only what it defines, loads or gets fr
     exprs <- parse(text = script, keep.source = FALSE)
     attached <- regmatches(script, gregexpr("(?m)^\\s*library\\(\\K[A-Za-z0-9.]+(?=\\))", script, perl = TRUE))[[1]]
     checked <- eval(Find(function(e) is.call(e) && identical(e[[1]], as.name("for")), exprs)[[3]], baseenv())
-    # The whole script as one function body: findGlobals() then reports exactly
-    # the names it uses but never assigns.
+    # The whole script as one function body: .pt_fn_globals() then reports exactly
+    # the names it uses but never assigns (an object only changed in place, such as a
+    # cache's `memo[[key]] <- v`, counts as used: bug 226).
     whole <- function() NULL
     body(whole) <- as.call(c(as.name("{"), as.list(exprs)))
-    used <- codetools::findGlobals(whole, merge = TRUE)
+    used <- .pt_fn_globals(whole)
     # Names a pasted function writes into the global environment with assign("<name>", ...).
     assigned <- regmatches(script, gregexpr('assign\\("\\K[A-Za-z0-9._]+(?=")', script, perl = TRUE))[[1]]
     missing <- setdiff(used, c(visible_names(attached), assigned))
@@ -136,7 +137,7 @@ test_that("every track type's script uses only what it defines, loads or gets fr
 })
 
 test_that("a script stops with an install hint when a package it needs is missing", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "no /vast test data on this machine")
   settings <- test_settings("mouse", overrides = list(orgdb_pkg = "org.Xx.eg.db"))
   script <- assemble_download_script(list(list(viz = "genes")), test_region("mouse"), settings)
   check <- Find(function(e) is.call(e) && identical(e[[1]], as.name("for")), parse(text = script, keep.source = FALSE))
@@ -144,21 +145,15 @@ test_that("a script stops with an install hint when a package it needs is missin
                "needs the R package 'org.Xx.eg.db'. Install it with BiocManager::install(\"org.Xx.eg.db\")", fixed = TRUE)
 })
 
-test_that("a gzipped BED track needs R.utils: imported by the package and checked by its script", {
-  expect_match(utils::packageDescription("PlotTrellis")$Imports, "R.utils", fixed = TRUE)
+test_that("a gzipped BED track needs no R.utils: not imported, and its script reads the file itself", {
+  expect_false(grepl("R.utils", utils::packageDescription("PlotTrellis")$Imports, fixed = TRUE))
   skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
-  script <- assemble_download_script(list(list(viz = "bed", name = "peaks", path = "peaks.bed.gz")),
-                                     test_region("human"), test_settings("human"))
-  check <- Find(function(e) is.call(e) && identical(e[[1]], as.name("for")), parse(text = script, keep.source = FALSE))
-  expect_true("R.utils" %in% eval(check[[3]], baseenv()))
-  # A plain .bed file or another track type doesn't ask for it.
-  plain <- assemble_download_script(list(list(viz = "bed", name = "peaks", path = "peaks.bed")),
-                                    test_region("human"), test_settings("human"))
   needed <- function(s) eval(Find(function(e) is.call(e) && identical(e[[1]], as.name("for")),
                                     parse(text = s, keep.source = FALSE))[[3]], baseenv())
-  expect_false("R.utils" %in% needed(plain))
-  other <- assemble_download_script(list(list(viz = "genes")), test_region("human"), test_settings("human"))
-  expect_false("R.utils" %in% needed(other))
+  script <- assemble_download_script(list(list(viz = "bed", name = "peaks", path = "peaks.bed.gz")),
+                                     test_region("human"), test_settings("human"))
+  expect_false("R.utils" %in% needed(script))
+  expect_match(script, ".pt_fread <- function(path, ...)", fixed = TRUE)
 })
 
 test_that("load_bed() reads a gzipped BED file's chromosomes", {
@@ -169,6 +164,30 @@ test_that("load_bed() reads a gzipped BED file's chromosomes", {
   out <- load_bed(list(path = f), list(chrom = "chr1"))
   expect_false(out$data$no_chrom)
   expect_equal(out$data$chrom, "chr1")
+})
+
+# fread() reads gzip and bzip2 only through R.utils (not a dependency): .pt_fread() must hand it
+# plain text only, whatever the file's name or compression, and read the same rows.
+test_that(".pt_fread() reads gzip, bzip2 and plain BED without giving fread() a compressed file", {
+  rows <- c("chr1\t100\t200", "chr2\t300\t400")
+  write_with <- function(open, ext) { f <- tempfile(fileext = ext); con <- open(f, "w"); writeLines(rows, con); close(con); f }
+  files <- list(gz = write_with(gzfile, ".bed.gz"), bz2 = write_with(bzfile, ".bed.bz2"),
+                gz_no_ext = write_with(gzfile, ".bed"), bz2_no_ext = write_with(bzfile, ".bed"),
+                plain = write_with(file, ".bed"), plain_named_gz = write_with(file, ".bed.gz"))
+  seen <- character(0)
+  real_fread <- data.table::fread
+  local_mocked_bindings(fread = function(file, ...) {
+    magic <- readBin(file, "raw", 3L)
+    seen <<- c(seen, if (grepl("\\.(b?gz|bz2)$", file) || identical(magic[1:2], as.raw(c(0x1f, 0x8b))) ||
+                           identical(magic, charToRaw("BZh"))) "compressed" else "plain")
+    real_fread(file, ...)
+  }, .package = "data.table")
+  for (nm in names(files)) {
+    d <- .pt_fread(files[[nm]], header = FALSE)
+    expect_equal(as.character(d[[1]]), c("chr1", "chr2"), info = nm)
+    expect_equal(d[[3]], c(200L, 400L), info = nm)
+  }
+  expect_equal(seen, rep("plain", length(files)))
 })
 
 # The data block's three objects, read back from the script text.
@@ -262,4 +281,34 @@ test_that("the bundled example's script runs alone with Rscript and draws pt_sav
   # A quiet run: no per-object plotgardener lines, no "null device", one closing line.
   expect_false(any(grepl("^\\w+\\[\\w+\\]\\s*$|null device", out)))
   expect_identical(sum(grepl("^Figure written to", out)), 1L)
+})
+
+test_that("a script of every track type in the human example runs alone with Rscript and draws every track", {
+  skip_on_cran()
+  skip_if_not_installed("org.Hs.eg.db")
+  proj <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-script-human"), pt_example("human")))
+  tracks <- unique(pt_tracks(proj)$track)
+  expect_true(all(c("junctions", "junctions_diff", "atac_diff") %in% tracks))
+  fig <- pt_figure(proj, "PSME2", tracks, comparison = c("GM12878", "K562"))
+
+  run_dir <- tempfile("pt-script-run-")
+  dir.create(run_dir)
+  pt_script(fig, file.path(run_dir, "figure.R"))
+  old <- setwd(run_dir)
+  on.exit(setwd(old), add = TRUE)
+  # The script runs first, on cold caches, so it takes every cache-miss path itself.
+  out <- system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", "figure.R"), stdout = TRUE, stderr = TRUE,
+                 env = paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep)))
+  api_svg <- tempfile(fileext = ".svg")
+  pt_save(fig, api_svg)
+  expect_null(attr(out, "status"))
+  # A track that fails draws "<track> track failed: <why>" in red and says so on the console
+  # (bug 226: every junctions track failed on a name only its cache wrote).
+  expect_identical(grep("track failed", out, value = TRUE), character(0))
+  svg <- list.files(run_dir, pattern = "\\.svg$")
+  expect_length(svg, 1)
+  expect_false(any(grepl("track failed", readLines(svg, warn = FALSE), fixed = TRUE)))
+  # A track that catches its own error draws a status or a fallback instead: the figure must
+  # be the package's own, byte for byte.
+  expect_identical(readBin(svg, "raw", file.size(svg)), readBin(api_svg, "raw", file.size(api_svg)))
 })

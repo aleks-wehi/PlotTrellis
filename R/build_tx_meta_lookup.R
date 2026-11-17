@@ -1,8 +1,9 @@
-# transcript_id -> transcript_type, tag and ccdsid, from a GENCODE- or Ensembl-style GTF's "transcript"
-# lines. `tag` can appear several times per transcript ("Ensembl_canonical",
-# "appris_principal_1", "CCDS"), so every one is kept, comma-joined; `ccdsid` (e.g.
-# "CCDS37873.1") names the CCDS record the "CCDS" tag only says exists. Built by
-# ensure_genome_ready() the first time a genome is used.
+# transcript_id -> transcript_type, tag and ccdsid, from a GENCODE- or
+# Ensembl-style GTF's "transcript" lines. `tag` can appear several times per
+# transcript ("Ensembl_canonical", "appris_principal_1", "CCDS"), so every one
+# is kept, comma-joined; `ccdsid` (e.g. "CCDS37873.1") names the CCDS record the
+# "CCDS" tag only says exists. Built by ensure_genome_ready() the first time a
+# genome is used.
 
 build_tx_meta_lookup <- function(gtf_path, out_path) {
   # Portable base-R prefilter (no zgrep dependency) -- see
@@ -41,8 +42,9 @@ build_tx_meta_lookup <- function(gtf_path, out_path) {
       sub('.*ccds_id "([^"]+)".*', "\\1", attrs),
       NA_character_))
 
-  meta <- data.frame(transcript_type = transcript_type, tag = tag, ccds_id = ccds_id,
-                      stringsAsFactors = FALSE, row.names = tx_id_stripped)
+  meta <- data.frame(transcript_type = transcript_type, tag = tag,
+                     ccds_id = ccds_id,
+                     stringsAsFactors = FALSE, row.names = tx_id_stripped)
   saveRDS(meta, out_path)
   invisible(meta)
 }

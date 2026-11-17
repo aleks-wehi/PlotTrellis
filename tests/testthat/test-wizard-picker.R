@@ -1,14 +1,16 @@
 # The wizard's file picker (wizard_scoped_choices()) lists the files each data type's loader reads,
-# gzipped bed and paired-end files included (bug 142: they load, the picker used to hide them).
+# gzipped bed and paired-end files included (bug 142: they load, the picker used to hide them), and
+# a STAR SJ.out.tab among the paired-end files (not STAR's other .tab files).
 
 test_that("the picker lists gzipped bed and paired-end files, not other types' files", {
   root <- tempfile("pt-picker-"); dir.create(file.path(root, "sub"), recursive = TRUE)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   files <- c("a.bed", "b.bed.gz", "c.narrowPeak.gz", "sub/d.bedpe.gz", "e.bed12.gz", "f.bw", "g.bw.gz",
-             "h.hic", "i.bed.gz.tbi", "j.txt.gz")
+             "h.hic", "i.bed.gz.tbi", "j.txt.gz", "sub/k.SJ.out.tab", "sub/ReadsPerGene.out.tab",
+             "chrName.tab")
   file.create(file.path(root, files))
   expect_setequal(wizard_scoped_choices(root, "bed"), c("a.bed", "b.bed.gz", "c.narrowPeak.gz"))
-  expect_setequal(wizard_scoped_choices(root, "paired-end"), c("a.bed", "b.bed.gz", "sub/d.bedpe.gz", "e.bed12.gz"))
+  expect_setequal(wizard_scoped_choices(root, "paired-end"), c("a.bed", "b.bed.gz", "sub/d.bedpe.gz", "e.bed12.gz", "sub/k.SJ.out.tab"))
   # bigWig and Hi-C files are binary formats their readers take only as they are.
   expect_equal(wizard_scoped_choices(root, "bw"), "f.bw")
   expect_equal(wizard_scoped_choices(root, "hic"), "h.hic")

@@ -1,5 +1,5 @@
 test_that("smoke: single bw track renders (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows     <- test_rows("mouse")
   region   <- test_region("mouse")
   settings <- test_settings("mouse")

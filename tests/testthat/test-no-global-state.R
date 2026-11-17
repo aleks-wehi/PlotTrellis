@@ -63,7 +63,7 @@ canned_uniprot <- function(aa = 99) function(url) {
 }
 
 test_that("a render opens the TxDb at most once and two genes' protein tracks build the CDS index once (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   cache_dir <- tempfile("pt-cache-")
   on.exit(unlink(cache_dir, recursive = TRUE), add = TRUE)

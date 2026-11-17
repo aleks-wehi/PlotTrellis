@@ -83,7 +83,7 @@ test_that("min_junction_support filters junction arcs (no fixture data)", {
   above_all <- svg_at(31)
   expect_identical(n_arcs(above_all), 0L)
   # All filtered out: the track as usual with no arcs, not a message.
-  expect_true(has_text(above_all, " \u00B7 S1 (max_h=0 reads)"))
+  expect_true(has_text(above_all, " \u00B7 S1 (max=0)"))
   expect_false(grepl("No data", above_all, fixed = TRUE))
 })
 
@@ -105,6 +105,54 @@ test_that("arc_clip_partial drops junction arcs that overhang the window (no fix
   svg_at <- function(clip) render_svg(list(track), synth_settings(list(arc_clip_partial = clip)), SYNTH_REGION)
   expect_identical(n_arcs(svg_at(FALSE)), 3L)
   expect_identical(n_arcs(svg_at(TRUE)), 2L)
+})
+
+test_that("arc_clip_partial: the junction scale and heading count only the arcs drawn (bug 81) (no fixture data)", {
+  skip_no_synth()
+  # The tallest junction (510-5000, 30 reads) overhangs the 1000-10000 window on the left; on the
+  # right, an arc ending at 9999 is drawn (its 1 bp end anchor stops at 10000), one at 10000 isn't.
+  track <- junctions_track(bed12_file(list(c(510L, 5000L, 30L), c(3000L, 7000L, 12L),
+                                           c(5000L, 9999L, 7L), c(6000L, 10000L, 20L))))
+  svg_at <- function(clip) render_svg(list(track), synth_settings(list(arc_clip_partial = clip)), SYNTH_REGION)
+  kept <- svg_at(FALSE)
+  expect_identical(n_arcs(kept), 4L)
+  expect_identical(n_arcs(svg_at(TRUE)), 2L)
+  expect_true(has_text(kept, " \u00B7 S1 (max=30)"))
+  expect_true(has_text(kept, "30"))  # value axis top tick
+  clipped <- svg_at(TRUE)
+  expect_true(has_text(clipped, " \u00B7 S1 (max=12)"))
+  expect_false(has_text(clipped, "30"))
+  expect_true(has_text(clipped, "12"))
+})
+
+test_that("arc_clip_partial drops the overhanging arcs of both mirrored comparisons, and their scale (bug 82) (no fixture data)", {
+  skip_no_synth()
+  track <- list(viz = "junctions_mirrored_diff", name = "Junctions", control_label = "A", treatment_label = "B",
+                control_path   = bed12_file(list(c(3000L, 7000L, 5L), c(6000L, 10000L, 8L))),
+                treatment_path = bed12_file(list(c(510L, 5000L, 30L), c(3000L, 7000L, 12L))),
+                control_colour = "#4D4D4D", treatment_colour = "#56B4E9", height = NULL, data = NULL)
+  svg_at <- function(clip) render_svg(list(track), synth_settings(list(arc_clip_partial = clip)), SYNTH_REGION)
+  kept <- svg_at(FALSE)
+  expect_identical(n_arcs(kept), 4L)  # an overhanging arc in each sample
+  expect_true(has_text(kept, "30"))  # the count axis's shared maximum, top and bottom
+  clipped <- svg_at(TRUE)
+  expect_identical(n_arcs(clipped), 2L)
+  expect_false(has_text(clipped, "30"))
+  expect_true(has_text(clipped, "12"))
+  # The TPM-scaled track clips in its settings step, before the scale: only the in-window arcs.
+  local_mocked_bindings(
+    load_junctions = function(path, region_params)
+      data.frame(intron_start = c(510L, 3000L), intron_end = c(5000L, 7000L), nSupport = c(30L, 12L)),
+    .pt_annotation = function(settings) NULL,
+    filtered_transcripts = function(gene, samples, anno) structure(data.frame(), total_tpm = 10, n_quantified = 1L)
+  )
+  prepared <- function(clip) settings_junctions_mirrored_diff_tpm_scaled(list(),
+    list(control_label = "A", treatment_label = "B"),
+    list(gtf_path = NULL, junction_height = 0.85, junction_opacity_cap = 2, arc_clip_partial = clip), 7.2,
+    list(chrom = "chr1", start = 1000L, end = 10000L, gene = "Elf5"))$entry$data
+  expect_identical(prepared(FALSE)$raw_treat$intron_start, c(510L, 3000L))
+  expect_identical(prepared(TRUE)$raw_treat$intron_start, 3000L)
+  expect_identical(prepared(TRUE)$raw_ctrl$intron_start, 3000L)
 })
 
 test_that("arc_clip_partial = FALSE keeps a partial arc from a BEDPE file too (no fixture data)", {
@@ -176,6 +224,32 @@ arcs_sorted <- function(d) {
   rownames(d) <- NULL
   d
 }
+
+test_that("a BEDPE whose anchors overlap or touch draws its arcs, not a failed track (bug 240) (no fixture data)", {
+  skip_no_synth()
+  f <- tempfile("synth-", fileext = ".bedpe")
+  on.exit(unlink(f))
+  writeLines(c("chr1\t3000\t4000\tchr1\t3500\t5000\tover\t50",     # end1 past start2
+               "chr1\t6000\t6500\tchr1\t6500\t7000\ttouch\t20",    # end1 == start2
+               "chr1\t2000\t2100\tchr1\t8000\t8100\tnormal\t5",
+               "chr1\t8000\t9500\tchr1\t8500\t9000\tinside\t4",   # second anchor inside the first
+               "chr1\t1500\t2000\tchr1\t1500\t2500\tsame\t3"), f)   # same start, shorter first
+  j <- read_junction_file(f, "chr1", 1000L, 10000L)
+  # An overlap's arc spans the overlap, its ends in order, whichever anchor comes first.
+  expect_identical(j[order(j$nSupport, decreasing = TRUE), c("intron_start", "intron_end")],
+                   data.frame(intron_start = c(3500L, 6500L, 2100L, 8500L, 1500L),
+                              intron_end   = c(4000L, 6500L, 8000L, 9000L, 2000L)),
+                   ignore_attr = TRUE)
+  swapped <- tempfile("synth-", fileext = ".bedpe")
+  on.exit(unlink(swapped), add = TRUE)
+  writeLines(c("chr1\t8500\t9000\tchr1\t8000\t9500\tinside\t4", "chr1\t1500\t2500\tchr1\t1500\t2000\tsame\t3"), swapped)
+  expect_identical(read_junction_file(swapped, "chr1", 1000L, 10000L)[, c("intron_start", "intron_end")],
+                   j[j$nSupport %in% c(4, 3), c("intron_start", "intron_end")], ignore_attr = TRUE)
+  svg <- render_svg(list(junctions_track(f)), synth_settings(), SYNTH_REGION)
+  expect_false(grepl("track failed", svg, fixed = TRUE))
+  expect_identical(n_arcs(svg), 5L)
+  expect_true(has_text(svg, " \u00B7 S1 (max=50)"))
+})
 
 test_that("read_junction_file() reads a raw HiCCUPS loop file as its converted BEDPE (no fixture data)", {
   raw <- hiccups_file()
@@ -299,17 +373,32 @@ test_that("a 6-column BEDPE still reads as BEDPE: a number in column 6 (no fixtu
                    data.frame(intron_start = c(500L, 4000L), intron_end = c(5000L, 6000L), nSupport = c(1L, 1L)))
 })
 
+test_that("a junction file with all-'.' scores heads its track with no max (bug 227) (no fixture data)", {
+  skip_no_synth()
+  heading_svg <- function(score) {
+    path <- tempfile(fileext = ".bed")
+    on.exit(unlink(path))
+    writeLines(sprintf("chr1\t3000\t7000\tj1\t%s\t+\t3000\t7000\t0\t2\t10,10\t0,3990", score), path)
+    render_svg(list(junctions_track(path)), synth_settings(), SYNTH_REGION)
+  }
+  dotted <- heading_svg(".")
+  expect_true(has_text(dotted, " \u00B7 S1"))
+  expect_false(grepl("(max=", dotted, fixed = TRUE))
+  expect_identical(n_arcs(dotted), 1L)  # still drawn, at the one height every arc gets
+  expect_true(has_text(heading_svg("4"), " \u00B7 S1 (max=4)"))
+})
+
 test_that("a junction BED6 draws the same arcs as the BEDPE with the same introns (no fixture data)", {
   skip_no_synth()
   bed6 <- bed6_file()
   bedpe <- bed6_as_bedpe_file()
   on.exit(unlink(c(bed6, bedpe)))
   svg_of <- function(path, ms) render_svg(list(junctions_track(path)), synth_settings(list(min_junction_support = ms)), SYNTH_REGION)
-  # The same drawing; only the heading differs: a BED6's score is read counts, a BEDPE's isn't.
-  same_arcs <- function(svg) sub(" reads)", ")", gsub("textLength='[0-9.]+px'|width='[0-9.]+'", "", svg), fixed = TRUE)
+  # The same drawing, heading included.
+  same_arcs <- function(svg) gsub("textLength='[0-9.]+px'|width='[0-9.]+'", "", svg)
   for (ms in c(0, 10)) expect_identical(same_arcs(svg_of(bed6, ms)), same_arcs(svg_of(bedpe, ms)))
-  expect_match(svg_of(bed6, 0), "max_h=30 reads)", fixed = TRUE)
-  expect_match(svg_of(bedpe, 0), "max_h=30)", fixed = TRUE)
+  expect_match(svg_of(bed6, 0), "S1 (max=30)", fixed = TRUE)
+  expect_match(svg_of(bedpe, 0), "S1 (max=30)", fixed = TRUE)
   expect_identical(n_arcs(svg_of(bed6, 0)), 3L)
   expect_identical(n_arcs(svg_of(bed6, 10)), 2L)  # the min-support filter acts on the score column
 })
@@ -354,7 +443,8 @@ test_that("junction_height: a single-sample track's arcs are that tall, each hal
     jh <- jh %||% 0.85
     axes <- axis_spans(svg)
     expect_equal(axes$length, c(jh, 2 * jh) * 72, tolerance = 0.02 / 60)
-    # Each track is its heading band (0.3 in) plus its arcs; tracks are 0.1 in apart.
+    # The single track's arcs start at its top; the mirrored track's 0.3 in below, under its
+    # heading band. Tracks are 0.1 in apart.
     expect_equal(diff(axes$top), (jh + 0.1 + 0.3) * 72, tolerance = 0.02 / 60)
     # The mirrored track's 0 tick is exactly halfway: one junction_height per sample.
     t <- left_of_track_texts(svg)
@@ -442,6 +532,23 @@ test_that("TPM-scaled junctions: a quant file whose TPM column isn't numbers is 
   expect_no_error(run("Ba", "Ba"))
 })
 
+
+test_that("TPM-scaled junctions: a gene missing from a quant file is an error, not 0 TPM (bug 76) (no fixture data)", {
+  # filtered_transcripts() says n_quantified = 0 when none of the gene's transcripts are in the
+  # file (a gene found at 0 TPM is 1 or more): the Transcript expression track's error, naming the sample.
+  local_mocked_bindings(
+    load_junctions = function(...) NULL,
+    .pt_annotation = function(settings) NULL,
+    filtered_transcripts = function(gene, samples, anno) structure(data.frame(), total_tpm = 0,
+      n_quantified = if (samples[[1]]$sample_id == "LP") 0L else 3L)
+  )
+  run <- function(ctrl, treat) settings_junctions_mirrored_diff_tpm_scaled(list(),
+    list(control_label = ctrl, treatment_label = treat), list(gtf_path = NULL), 7.2, list(gene = "Elf5"))
+  msg <- "^none of Elf5's transcripts are in LP's quant file \\(is the GTF the one the quant files were made with\\?\\)$"
+  expect_error(run("LP", "Ba"), msg)
+  expect_error(run("Ba", "LP"), msg)
+  expect_no_error(run("Ba", "Ba"))  # found, even at 0 TPM: a real result
+})
 
 test_that("a junction opacity cap of 0 or below says so in the comparison track (no fixture data)", {
   skip_no_synth()

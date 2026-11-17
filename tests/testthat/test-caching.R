@@ -1,7 +1,7 @@
 # Cache-correctness contracts for the caches under a project's cache folder.
 
 test_that("protein_domains never persists an error-status cache entry", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "no /vast test data on this machine")
 
   tmp_cache <- tempfile()
   dir.create(tmp_cache)
@@ -32,7 +32,7 @@ test_that("protein_domains never persists an error-status cache entry", {
 })
 
 test_that("gene_display_transcripts cache key includes the samples list", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "no /vast test data on this machine")
 
   fx <- FIXTURES$mouse
   anno <- .pt_annotation(test_settings("mouse"))
@@ -52,7 +52,7 @@ test_that("gene_display_transcripts cache key includes the samples list", {
 })
 
 test_that("gene_display_transcripts cache key includes min_display_tpm", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "no /vast test data on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "no /vast test data on this machine")
 
   fx <- FIXTURES$mouse
   anno <- .pt_annotation(test_settings("mouse"))

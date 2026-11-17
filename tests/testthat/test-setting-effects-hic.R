@@ -26,6 +26,12 @@ hic_svg <- function(entry, region, settings) {
   paste(readLines(f), collapse = "\n")
 }
 
+# The colour key's top label with no colour range set: the 95th percentile of the loaded contacts.
+auto_top_label <- function(loaded) {
+  top <- .pt_hic_round_top(stats::quantile(loaded$data$matrix$counts, 0.95, na.rm = TRUE, names = FALSE))
+  format(signif(top, 3), scientific = FALSE)
+}
+
 svg_labels <- function(svg) {
   sub(".*>([^<]*)</text>$", "\\1", regmatches(svg, gregexpr("<text[^>]*>[^<]*</text>", svg))[[1]])
 }
@@ -62,11 +68,14 @@ test_that("hic_norm changes the drawn heatmap at a fixed colour scale (mouse dat
   none <- hic_pixels(hic_svg(entry, fx$region, modifyList(fixed, list(hic_norm = "NONE"))))$fill
   expect_gt(sum(!is.na(kr)), 0)
   expect_false(identical(kr, none))
-  # Auto colour scale: the legend maximum follows the normalised matrix (KR max 48, raw max 74).
+  # Auto colour scale: the legend maximum follows the normalised matrix (its 95th percentile).
   auto_kr   <- svg_labels(hic_svg(entry, fx$region, fx$settings))
   auto_none <- svg_labels(hic_svg(entry, fx$region, modifyList(fx$settings, list(hic_norm = "NONE"))))
-  expect_true("48" %in% auto_kr)
-  expect_true("74" %in% auto_none)
+  kr_top   <- auto_top_label(load_hic(entry, fx$region, fx$settings))
+  none_top <- auto_top_label(load_hic(entry, fx$region, modifyList(fx$settings, list(hic_norm = "NONE"))))
+  expect_false(identical(kr_top, none_top))
+  expect_true(kr_top %in% auto_kr)
+  expect_true(none_top %in% auto_none)
 })
 
 test_that("zrange_cap (settings$zrange) sets the heatmap colour-scale maximum (mouse dataset)", {
@@ -75,10 +84,12 @@ test_that("zrange_cap (settings$zrange) sets the heatmap colour-scale maximum (m
   entry <- single_track("hic", fx$rows[["Ba"]], settings = fx$settings)
   auto   <- hic_svg(entry, fx$region, fx$settings)
   capped <- hic_svg(entry, fx$region, modifyList(fx$settings, list(zrange = c(0, 7))))
-  expect_true("48" %in% svg_labels(auto))   # data max, today's default
+  auto_top <- auto_top_label(load_hic(entry, fx$region, fx$settings))
+  expect_false(identical(auto_top, "7"))
+  expect_true(auto_top %in% svg_labels(auto))   # the 95th percentile in view, the default
   expect_false("7" %in% svg_labels(auto))
   expect_true("7" %in% svg_labels(capped))
-  expect_false("48" %in% svg_labels(capped))
+  expect_false(auto_top %in% svg_labels(capped))
   # More pixels saturate at the cap colour.
   expect_false(identical(hic_pixels(auto)$fill, hic_pixels(capped)$fill))
 })

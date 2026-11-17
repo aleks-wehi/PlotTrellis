@@ -14,7 +14,7 @@ svg_lines <- function(items, region, settings) {
 rect_styles <- function(s) ifelse(grepl("^<rect .*style='", s), sub("^<rect .*style='([^']*)'.*$", "\\1", s), NA)
 
 test_that(".pt_tidy_svg() removes only invisible rects and fixes text and fonts (mouse dataset)", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows <- test_rows("mouse")
   raw <- svg_lines(list(single_track("bw", rows[["Ba"]]), single_track("transcripts", rows[["Ba"]])),
                    test_region("mouse"), test_settings("mouse"))
@@ -43,7 +43,7 @@ test_that(".pt_tidy_svg() removes only invisible rects and fixes text and fonts 
 })
 
 test_that("pt_save() writes a tidied SVG", {
-  skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   local_mocked_bindings(render_all = function(items, region_params, settings, device_fn) {
     device_fn(2, 1)
     grid::grid.rect(gp = grid::gpar(col = NA, fill = NA))

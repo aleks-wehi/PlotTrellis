@@ -102,6 +102,33 @@ test_that("the wizard's live status lines render from the inputs (debounced path
   })
 })
 
+test_that("the genome label's placeholder follows the GTF's build (bug 218)", {
+  skip_if(!nzchar(example_gtf))
+  hints <- character(0)
+  local_mocked_bindings(updateTextInput = function(session, inputId, label = NULL, value = NULL, placeholder = NULL)
+    if (identical(inputId, "wiz_genome_label") && !is.null(placeholder)) hints <<- c(hints, placeholder))
+  json <- file.path(tempfile("wiz-hint-"), "project_settings.json")
+  dir.create(dirname(json))
+  defaults <- .pt_default_settings()
+  shiny::testServer(wizard_server(json, defaults, defaults), {
+    session$setInputs(wiz_gtf_path = example_gtf)
+    session$elapse(500)
+    expect_identical(tail(hints, 1), "mm10")  # the example GTF is GRCm38
+    session$setInputs(wiz_gtf_path = write_gtf("ENSG00000000003.15", header = "#!genome-build GRCh38.p14"))
+    session$elapse(500)
+    expect_identical(tail(hints, 1), "hg38")
+    session$setInputs(wiz_gtf_path = write_gtf("ENSMUSG00000000001.4"))  # no build in the header
+    session$elapse(500)
+    expect_identical(tail(hints, 1), "mm39")
+    session$setInputs(wiz_gtf_path = write_gtf("ENSG00000000003.15"))
+    session$elapse(500)
+    expect_identical(tail(hints, 1), "hg38")  # no build: the species' current build
+    session$setInputs(wiz_gtf_path = "")
+    session$elapse(500)
+    expect_identical(tail(hints, 1), "mm39")  # no GTF: the old default
+  })
+})
+
 test_that("the GTF file is read once per pause in typing, not per keystroke", {
   skip_if(!nzchar(example_gtf))
   calls <- 0L
@@ -171,9 +198,9 @@ test_that("wiz_help() is a popover button carrying its text, not a title tooltip
   page <- as.character(wizard_ui(file.path(tempdir(), "no-such-settings.json")))
   expect_match(page, "pt-help-pinned", fixed = TRUE)
   expect_match(page, ".popover.pt-help-popover", fixed = TRUE)
-  # So does the composer: its UI is built inside .pt_composer_app(), so the source is checked,
+  # So does the composer: its page head is built by .pt_composer_head(), so the source is checked,
   # which only exists in a source tree (not under R CMD check or an installed package).
-  app_src <- testthat::test_path("..", "..", "R", "app.R")
+  app_src <- testthat::test_path("..", "..", "R", "composer-ui.R")
   skip_if_not(file.exists(app_src), "package source not available")
   expect_true(any(grepl(".pt_help_assets()", readLines(app_src, warn = FALSE), fixed = TRUE)))
 })
@@ -191,4 +218,28 @@ test_that("the wizard's Save and Add-sample errors are lists, one problem per it
   expect_match(html, "<li>Data root is required.</li>", fixed = TRUE)
   expect_match(html, "<li>GTF path is required.</li>", fixed = TRUE)
   expect_false(grepl(" | ", html, fixed = TRUE))
+})
+
+# W92: nobody reads more than one sentence, so a help popover is one short sentence. The Hi-C
+# popovers (W93's) are left out here; the sample modal's help is covered by the same
+# wiz_help() path but needs a session, so the composer's settings panel and the wizard's form
+# stand for it.
+test_that("help popovers are one short sentence (Hi-C settings excluded)", {
+  defaults <- .pt_default_settings()
+  ui <- .pt_display_settings_ui(defaults, "s_")
+  html <- paste(as.character(ui$display), as.character(ui$diff),
+                as.character(wiz_shared_form(defaults, is_edit = FALSE)),
+                as.character(.pt_plot_title_input()))
+  chunks <- strsplit(html, "<label", fixed = TRUE)[[1]]
+  chunks <- chunks[grepl("data-pt-help=", chunks, fixed = TRUE)]
+  expect_gt(length(chunks), 15)
+  chunks <- chunks[!grepl("hic_|zrange_cap", substr(chunks, 1, 300))]
+  texts <- sub('.*data-pt-help="([^"]*)".*', "\\1", chunks)
+  # The colour swatches' labels carry a native title tooltip, held to the same rule.
+  titles <- regmatches(html, gregexpr('<label[^>]*title="[^"]*"', html))[[1]]
+  expect_gt(length(titles), 3)
+  texts <- c(texts, sub('.*title="([^"]*)"$', "\\1", titles))
+  expect_true(all(nchar(texts) <= 110), info = paste(texts[nchar(texts) > 110], collapse = " | "))
+  # One sentence: no full stop followed by a new capitalised sentence.
+  expect_false(any(grepl("\\. [A-Z]", texts)), info = paste(texts[grepl("\\. [A-Z]", texts)], collapse = " | "))
 })

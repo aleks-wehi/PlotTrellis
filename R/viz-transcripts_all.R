@@ -1,42 +1,54 @@
 info_transcripts_all <- function() list(
-  kind = "fixed", order = 30, label = "Transcripts", filter = c(annotation = "Annotations"),
+  kind = "fixed", order = 30, label = "Transcripts",
+  filter = c(annotation = "Annotations"),
   needs_gene = TRUE
 )
 
-settings_transcripts_all <- function(dict, entry, settings, track_w, region_params) {
+settings_transcripts_all <- function(dict, entry, settings, track_w,
+                                     region_params) {
   entry <- load_transcripts(entry, region_params, settings)
   tx <- entry$data$tx_all[order(entry$data$tx_all$transcript_name), ]
   entry$data$tx <- tx
   dict <- .pt_add_tx_names(dict, tx$transcript_name)
-  if (is.null(entry$height)) entry$height <- .pt_tx_height(nrow(tx), settings$fontsize)
+  if (is.null(entry$height))
+    entry$height <- .pt_tx_height(nrow(tx), settings$fontsize)
   list(dict = dict, entry = entry)
 }
 
 render_transcripts_all <- function(entry, dict, ctx) {
-  plotText(label = "Transcripts", x = ctx$track_x + 0.05, y = ctx$y + 0.02, just = c("left", "top"),
-           fontsize = ctx$fontsize - 1, fontface = "bold", fontfamily = ctx$font, fontcolor = ctx$fontcol)
+  plotText(label = "Transcripts", x = ctx$track_x + 0.05, y = ctx$y + 0.02,
+           just = c("left", "top"), fontsize = ctx$fontsize - 1,
+           fontface = "bold", fontfamily = ctx$font, fontcolor = ctx$fontcol)
   header_h <- .pt_tx_header_h(ctx$fontsize)
   tx <- entry$data$tx
   n_rows <- nrow(tx)
 
   if (n_rows == 0) {
-    plotText(label = "No annotated transcripts for this gene in view", x = ctx$track_x + ctx$track_w / 2,
-             y = ctx$y + header_h + (ctx$height - header_h) / 2, just = "center",
-             fontsize = ctx$fontsize - 1, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+    # Fitted to the space below the heading (wrapped, smaller if need be) so it
+    # stays in the track.
+    no_data_text(ctx$track_x, ctx$y + header_h, ctx$track_w,
+                 ctx$height - header_h, ctx$fontsize - 1, ctx$font, ctx$fontcol,
+                 label = "No annotated transcripts for this gene in view")
     return(invisible(NULL))
   }
 
   row_h <- .pt_tx_row_h(ctx$fontsize)
   row_y <- ctx$y + header_h + (seq_len(n_rows) - 1) * row_h
-  label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches", valueOnly = TRUE)
+  label_dy <- row_h - grid::convertHeight(grid::unit(1, "mm"), "inches",
+                                          valueOnly = TRUE)
   colours <- .pt_tx_colours(dict)
 
   for (j in seq_len(n_rows)) {
-    plotTranscripts(params = ctx$region, transcriptFilter = tx$transcript_id[j], labels = NULL,
-                     x = ctx$track_x, y = row_y[j], width = ctx$track_w, height = row_h,
-                     boxHeight = grid::unit(2, "mm"), fill = colours[[tx$transcript_name[j]]], colorbyStrand = FALSE)
-    plotText(label = tx$transcript_name[j], x = ctx$track_x + ctx$track_w + 0.05, y = row_y[j] + label_dy,
-             just = c("left", "center"), fontsize = ctx$fontsize - 1.5, fontfamily = ctx$font, fontcolor = ctx$fontcol)
+    plotTranscripts(params = ctx$region, transcriptFilter = tx$transcript_id[j],
+                    labels = NULL, x = ctx$track_x, y = row_y[j],
+                    width = ctx$track_w, height = row_h,
+                    boxHeight = grid::unit(2, "mm"),
+                    fill = colours[[tx$transcript_name[j]]],
+                    colorbyStrand = FALSE)
+    plotText(label = tx$transcript_name[j],
+             x = ctx$track_x + ctx$track_w + 0.05, y = row_y[j] + label_dy,
+             just = c("left", "center"), fontsize = ctx$fontsize - 1.5,
+             fontfamily = ctx$font, fontcolor = ctx$fontcol)
   }
   invisible(NULL)
 }

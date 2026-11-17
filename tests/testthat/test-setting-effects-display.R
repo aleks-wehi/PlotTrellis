@@ -104,7 +104,7 @@ test_that("font changes the font-family of figure text (no fixture data)", {
 
 # A bed track reads the first three columns of any BED file and draws plain boxes: extra
 # columns and BED12 blocks make no difference (the vignette's data-type table says so).
-# Not covered: gappedPeak-style files with a decimal column, which have a known problem.
+# A gappedPeak file (commas, then a decimal column) keeps its first interval (bug 87).
 test_that("bed draws one plain box per interval from a BED3, BED6 or BED12 file (no fixture data)", {
   skip_no_synth()
   bed_file <- function(lines) { f <- tempfile(fileext = ".bed"); writeLines(lines, f); f }
@@ -125,6 +125,43 @@ test_that("bed draws one plain box per interval from a BED3, BED6 or BED12 file 
   expect_identical(n_boxes(bed6), 3L)
   expect_identical(n_boxes(bed12), 3L)  # blocks are not drawn: still one box per interval
   expect_identical(n_boxes(outside), 0L)
+})
+
+# Bug 87: fread()'s header = "auto" took this ENCODE-style gappedPeak first line for column
+# names, and only 2 of the 3 boxes were drawn. A header line, with or without "#", is still not
+# an interval, and a gzip-compressed file draws the same (read without R.utils).
+test_that("bed draws every interval of a gappedPeak, a header-row and a gzipped file", {
+  skip_no_synth()
+  spans <- rbind(c(2000, 2800), c(5000, 5500), c(9000, 9500))
+  gapped <- tempfile(fileext = ".gappedPeak")
+  writeLines(sprintf("chr1\t%d\t%d\tpeak%d\t0\t.\t%d\t%d\t0\t3\t100,200,50,\t0,300,%d,\t13.48\t-1\t4.06",
+                     spans[, 1], spans[, 2], 1:3, spans[, 1], spans[, 2], spans[, 2] - spans[, 1] - 50), gapped)
+  headed <- tempfile(fileext = ".bed")
+  writeLines(c("#chrom\tstart\tend", sprintf("chr1\t%d\t%d", spans[, 1], spans[, 2])), headed)
+  bare <- tempfile(fileext = ".bed")
+  writeLines(c("chrom\tstart\tend", sprintf("chr1\t%d\t%d", spans[, 1], spans[, 2])), bare)
+  gz <- tempfile(fileext = ".bed.gz")
+  con <- gzfile(gz, "w"); writeLines(sprintf("chr1\t%d\t%d", spans[, 1], spans[, 2]), con); close(con)
+  on.exit(unlink(c(gapped, headed, bare, gz)), add = TRUE)
+  n_boxes <- function(path) {
+    track <- list(viz = "bed", sample = "S1", name = "peaks", colour = "#1B9E77", path = path, height = NULL, data = NULL)
+    svg <- suppressWarnings(synth_svg(list(track), synth_settings()))
+    rects <- regmatches(svg, gregexpr("<rect[^>]*>", svg))[[1]]
+    sum(grepl("fill: #1B9E77", rects, fixed = TRUE))
+  }
+  expect_identical(n_boxes(gapped), 3L)
+  expect_identical(n_boxes(headed), 3L)
+  expect_identical(n_boxes(bare), 3L)  # a header row without '#'
+  expect_identical(n_boxes(gz), 3L)
+})
+
+# Bug 88: a file with fewer than 3 columns says so, instead of a 'names' attribute error.
+test_that("a BED file with fewer than 3 columns stops with a plain reason", {
+  two <- tempfile(fileext = ".bed")
+  writeLines(c("chr1\t100", "chr1\t300"), two)
+  on.exit(unlink(two), add = TRUE)
+  expect_error(.pt_read_bed(two), paste0(basename(two), " is not a BED file: it has 2 columns, and needs at least 3 ",
+                                         "(chromosome, start, end)"), fixed = TRUE)
 })
 
 # ---- Fonts: each offered font renders, a missing one falls back ------------
@@ -260,7 +297,8 @@ for (cs in font_cases) {
   local({
     cs <- cs
     test_that(paste0("every ", cs$type, " label follows the font setting (", cs$dataset, " dataset)"), {
-      skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+      skip_if_not(fixture_available(cs$dataset, cs$type), "PlotTrellis test fixture data not available on this machine")
+      if (cs$type == "protein_domains") skip_if_mini_offline()
       rows <- test_rows(cs$dataset)
       spec <- if (is.null(cs$sample)) pair_track(cs$type, rows[[cs$control]], rows[[cs$treatment]])
               else single_track(cs$type, rows[[cs$sample]])
@@ -326,4 +364,41 @@ test_that("atac_height sizes the bw_diff_stacked track (no fixture data)", {
   expect_equal(tall - def, (1.6 - 0.85) * 72, tolerance = 1e-6)
   # Default layout, no title (none given): top 0.1 + track 0.85 + gap 0.1 + genome axis 0.35.
   expect_equal(def, (0.1 + 0.85 + 0.1 + GENOME_AXIS_RESERVE) * 72, tolerance = 1e-6)
+})
+
+test_that("a junction track is laid out like a coverage track, its heading reads (max=N) (no fixture data)", {
+  skip_no_synth()
+  svg <- synth_svg(list(synth_bw_track(), synth_junctions_track()), synth_settings())
+  # Each track's value axis is the vertical line at track_x - 0.08 in (51.84pt): it spans the
+  # signal or the arcs, from the top of the track's slot.
+  lines <- regmatches(svg, gregexpr("<line x1='51.84' [^>]*x2='51.84'[^>]*>", svg))[[1]]
+  y <- function(a) as.numeric(sub(sprintf(".*\\b%s='([0-9.]+)'.*", a), "\\1", lines))
+  top <- pmin(y("y1"), y("y2"))
+  span <- abs(y("y2") - y("y1"))
+  top <- top[span > 5]
+  span <- span[span > 5]
+  # Same height (0.85 in by default for both), the junction slot right after the coverage slot
+  # and the 0.1 in gap: no heading band above the arcs.
+  expect_equal(span, rep(0.85 * 72, 2), tolerance = 1e-4)
+  expect_equal(diff(top), (0.85 + 0.1) * 72, tolerance = 1e-4)
+  # The arcs fill that slot too, as the signal fills the coverage slot: they stand on its bottom
+  # and the tallest reaches its top. The first polygon is the coverage signal, the rest are arcs.
+  polys <- regmatches(svg, gregexpr("<polygon points='[^']*'", svg))[[1]]
+  arc_y <- lapply(polys[-1], function(p) {
+    xy <- as.numeric(unlist(strsplit(gsub("<polygon points='|'", "", p), "[ ,]")))
+    xy[c(FALSE, TRUE)]
+  })
+  expect_length(arc_y, 2)
+  # Within 0.5pt (an arc is drawn as points, so its apex can fall just short of the top); the old
+  # heading band moved the arcs 21.6pt.
+  expect_lt(abs(max(unlist(arc_y)) - (top[2] + span[2])), 0.5)
+  expect_lt(abs(min(unlist(arc_y)) - top[2]), 0.5)
+  # Each arc starts at its left foot, on the slot's bottom (an upside-down arc would start at the top).
+  expect_equal(vapply(arc_y, `[`, numeric(1), 1), rep(top[2] + span[2], 2), tolerance = 1e-4)
+  # The heading sits at the same place in both slots.
+  heading_y <- function(label) as.numeric(sub(".* y='([0-9.]+)'.*", "\\1", text_of(svg, label)))
+  expect_equal(heading_y("Junctions") - top[2], heading_y("atac") - top[1], tolerance = 1e-4)
+  # Just the tallest arc's number: no "reads", no "max_h".
+  expect_length(text_of(svg, " · S1 (max=12)"), 1)
+  expect_false(grepl("max_h|reads\\)", svg))
 })

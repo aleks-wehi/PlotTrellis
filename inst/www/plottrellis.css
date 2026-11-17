@@ -31,7 +31,8 @@ label { color: var(--pt-text); font-weight: 600; }
 .text-muted, .help-block { color: var(--pt-muted); }
 input[type='radio'], input[type='checkbox'] { accent-color: var(--pt-primary); }
 
-/* Title bar: stays at the top of the window, so the buttons fixed to it always sit on it. */
+/* Title bar (the composer's, and the setup wizard's .pt_title_bar()): stays at the top of the
+   window, so the buttons fixed to it always sit on it. */
 .navbar.navbar-default {
   background: var(--pt-nav-bg); border: 0; border-bottom: 3px solid var(--pt-accent);
   border-radius: 0; margin-bottom: 18px; position: sticky; top: 0; z-index: 1000;
@@ -39,6 +40,9 @@ input[type='radio'], input[type='checkbox'] { accent-color: var(--pt-primary); }
 .navbar-default .navbar-brand, .navbar-default .navbar-brand:hover, .navbar-default .navbar-brand:focus {
   color: var(--pt-nav-text); font-family: var(--pt-font-display); font-size: 23px; letter-spacing: 0.01em;
 }
+.plottrellis-version { margin-left: 8px; font-size: 60%; opacity: 0.7; }
+/* Keep anything scrolled into view clear of the title bar. */
+html { scroll-padding-top: 66px; }
 #topbar-actions .btn, #topbar-actions .btn:focus {
   background: transparent; color: var(--pt-nav-text); border: 1px solid var(--pt-nav-line); box-shadow: none;
 }

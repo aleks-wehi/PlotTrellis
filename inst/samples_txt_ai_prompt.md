@@ -29,8 +29,9 @@ The types and the files each accepts:
   bw          bigWig coverage: .bw or .bigWig (ATAC-seq, ChIP-seq, CUT&RUN, RNA-seq coverage)
   quantdir    a Salmon output folder, the folder that holds quant.sf (write the folder, not
               quant.sf itself)
-  paired-end  arcs between two regions: splice junctions as BED12 or BED6 (.bed, .bed12),
-              BEDPE (.bedpe), or a HiCCUPS loop file as it comes; may be gzipped (.gz)
+  paired-end  arcs between two regions: splice junctions as BED12 or BED6 (.bed, .bed12) or
+              STAR's SJ.out.tab (.tab) as it comes, BEDPE (.bedpe), or a HiCCUPS loop file as
+              it comes; may be gzipped (.gz)
   hic         Hi-C contact map: .hic, .cool or .mcool
   bed         intervals such as peaks: .bed, .narrowPeak, .broadPeak or .gappedPeak (3 or more
               columns); may be gzipped (.gz)
@@ -52,9 +53,6 @@ HOW TO GUIDE THEM
    For files PlotTrellis cannot read, say so and suggest how to convert them:
      BAM coverage           -> bigWig with deepTools bamCoverage
      bedGraph or wig        -> bigWig with UCSC bedGraphToBigWig or wigToBigWig
-     STAR SJ.out.tab        -> BED6 junctions (column 5 the read count, column 6 the strand
-                               as + or -), with exactly this command:
-       awk -v OFS='\t' '{print $1,$2-1,$3,".",$7,($4==1?"+":($4==2?"-":"."))}' X.SJ.out.tab > X.SJ.bed
      Hi-C .pairs            -> .hic with Juicer Tools "pre", or .cool/.mcool with cooler
      kallisto, RSEM, counts -> not supported; PlotTrellis reads Salmon's quant.sf
    FASTQ files, reports and logs are not needed; leave them out.

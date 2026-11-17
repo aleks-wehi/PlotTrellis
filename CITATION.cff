@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use PlotTrellis, please cite it using these metadata."
+type: software
+title: "PlotTrellis: Composable Genomic Track Visualisations for Non-Coders"
+version: 1.0.1
+abstract: >-
+  A plotgardener-based genomic track composer that lets biologists build
+  common EDA visualisations (coverage, Hi-C, splice junctions, transcript
+  structure, protein domains) via a Shiny interface, without writing code,
+  and download a standalone R script that reproduces the exact figure
+  offline.
+authors:
+  - family-names: Pacnik
+    given-names: Aleksander
+    orcid: "https://orcid.org/0009-0000-4062-2582"
+    affiliation: "Walter and Eliza Hall Institute of Medical Research (WEHI)"
+license: Artistic-2.0
+repository-code: "https://github.com/aleks-wehi/PlotTrellis"
+url: "https://aleks-wehi.r-universe.dev/PlotTrellis"
+keywords:
+  - R
+  - bioinformatics
+  - Shiny
+  - genomics
+  - visualisation
+  - plotgardener
+  - genome browser
+  - RNA-seq
+  - ATAC-seq
+  - Hi-C
