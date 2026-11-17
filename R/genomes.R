@@ -150,12 +150,13 @@ GENOME_PRESETS <- list(
 # A TxDb built from the GTF. txdbmaker's two routine warnings for a
 # GENCODE/Ensembl GTF (stop_codon rows with a phase; no genome version) are
 # dropped, so options(warn = 2) does not stop a first open on them; any other
-# warning still reaches the user.
+# warning still reaches the user. Newer txdbmaker words the second one "genome
+# assembly is not available".
 .pt_make_txdb <- function(gtf_path) {
   # txdbmaker lists every type with a phase ("features of type Selenocysteine,
   # stop_codon").
   routine <- c("features of type\\s+([A-Za-z_]+,\\s+)*stop_codon",
-               "genome version information is not available")
+               "genome (version information|assembly) is not available")
   withCallingHandlers(
     suppressMessages(txdbmaker::makeTxDbFromGFF(gtf_path, format = "gtf")),
     warning = function(w) {

@@ -19,6 +19,25 @@ test_that("a cold project opens under options(warn = 2) (bug 129)", {
   expect_s3_class(suppressMessages(pt_project(proj, pt_example())), "pt_project")
 })
 
+# The test above only sees the installed txdbmaker's wording; R-universe's newer txdbmaker
+# says "genome assembly" where older ones say "genome version information".
+test_that("the TxDb build drops both wordings of the missing-genome warning, and only those", {
+  build_warning <- NULL
+  local_mocked_bindings(makeTxDbFromGFF = function(...) {
+    warning(build_warning)
+    "a TxDb"
+  }, .package = "txdbmaker")
+  for (msg in c("genome version information is not available for this TxDb object",
+                "genome assembly is not available for this TxDb object",
+                paste("The \"phase\" metadata column contains non-NA values for features",
+                      "of type Selenocysteine, stop_codon. This information was ignored."))) {
+    build_warning <- msg
+    expect_no_warning(expect_identical(.pt_make_txdb("x.gtf"), "a TxDb"))
+  }
+  build_warning <- "some CDS phases are missing or not between 0 and 2"
+  expect_warning(.pt_make_txdb("x.gtf"), "some CDS phases", fixed = TRUE)
+})
+
 test_that("a TxDb build stopped part-way leaves no file at the cache path (bug 212)", {
   skip_if_not_installed("org.Mm.eg.db")
   cache_dir <- tempfile("pt-cache-")
