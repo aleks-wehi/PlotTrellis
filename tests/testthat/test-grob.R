@@ -70,9 +70,14 @@ test_that("pt_grob() is the figure at its own size; grid.draw() draws it and a p
   grDevices::dev.off()
   expect_equal(svg_sizes(f), svg_sizes(single))
   # R's pdf() device does not know the font: a clear stop, and no viewport left behind.
+  # On macOS without DejaVu Sans the figure is in "sans", which pdf() draws.
   grDevices::pdf(NULL)
   pdf_dev <- grDevices::dev.cur()
-  expect_warning(expect_error(grid::grid.draw(g), "draw it on a cairo device"), "draw it on a cairo device")
+  if (g$font %in% names(grDevices::pdfFonts())) {
+    expect_no_error(grid::grid.draw(g))
+  } else {
+    expect_warning(expect_error(grid::grid.draw(g), "draw it on a cairo device"), "draw it on a cairo device")
+  }
   expect_identical(grid::current.vpPath(), NULL)
   grDevices::dev.off(pdf_dev)
   # The pt_figure itself.
@@ -118,10 +123,12 @@ test_that("a pt_grob composes with ggplot2 in patchwork and cowplot, text kept",
   expect_no_warning(ggplot2::ggsave(f, cw, width = g$width + 4.5, height = g$height + 0.5))
   expect_labels_kept(f, single)
   expect_true(any(grepl(">B<", readLines(f))))
-  # patchwork drops errors raised while it draws: the warning still says what to do.
+  # patchwork drops errors raised while it draws: the warning still says what to do
+  # (unless pdf() knows the font, as "sans" on macOS without DejaVu Sans).
   f <- file.path(p$dir, "patchwork-default.pdf")
-  expect_warning(ggplot2::ggsave(f, pw, width = g$width + 4.5, height = g$height + 0.5, device = grDevices::pdf),
-                 "draw it on a cairo device")
+  if (!g$font %in% names(grDevices::pdfFonts()))
+    expect_warning(ggplot2::ggsave(f, pw, width = g$width + 4.5, height = g$height + 0.5, device = grDevices::pdf),
+                   "draw it on a cairo device")
 })
 
 test_that("a pt_grob + a ggplot says to use patchwork, instead of a silent NULL (bug 266, no fixture data)", {

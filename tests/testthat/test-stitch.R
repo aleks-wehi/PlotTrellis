@@ -32,10 +32,12 @@ test_that("pt_stitch() stacks figures in one file, as pt_save() draws each", {
   # The same labels in the same fonts as the two single figures (live text).
   expect_equal(texts(out), sort(c(texts(singles[1]), texts(singles[2]))))
   expect_true(any(grepl(">Elf5-201<", s)) && any(grepl(">Cat-202<", s)))
-  # Cat below Elf5: its title is lower on the page than Elf5's height.
-  y_of <- function(label) as.numeric(sub(".* y='([0-9.]+)'.*", "\\1", grep(paste0(">", label, "</text>"), s, value = TRUE)[1]))
-  expect_lt(y_of("Elf5"), wh[2, 1])
-  expect_gt(y_of("Cat"), wh[2, 1])
+  # Cat below Elf5: its title is lower on the page than Elf5's height. Gene labels can
+  # repeat a title (Cat lies near Elf5, and shows with a narrower font), so the top
+  # Elf5 and the bottom Cat.
+  y_of <- function(label) as.numeric(sub(".* y='([0-9.]+)'.*", "\\1", grep(paste0(">", label, "</text>"), s, value = TRUE)))
+  expect_lt(min(y_of("Elf5")), wh[2, 1])
+  expect_gt(max(y_of("Cat")), wh[2, 1])
 
   # Side by side (ncol = 2): one row, as wide as both, as tall as the taller.
   side <- pt_stitch(figs, file.path(dir, "side.svg"), ncol = 2)
