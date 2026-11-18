@@ -1,7 +1,7 @@
 # The setup wizard's Genome section: one block of wizard_server(). The species
 # preset fills the OrgDb and genome label fields, and the live status lines
 # under the GTF, OrgDb and genome label fields say what the checks in
-# utils-wizard-checks.R find.
+# wizard-checks.R find.
 
 # One status line under a field, for a check's list(state =, text =); NULL for
 # "blank".

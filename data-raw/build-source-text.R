@@ -5,7 +5,7 @@
 # R_KEEP_PKG_SOURCE=yes/--with-keep.source, which no ordinary install sets)
 # -- so assemble_download_script() can't recover it from the live object at
 # runtime the way it could when the package is loaded from source. See
-# .pt_source_text() in R/download-script.R, the only reader of this data.
+# .pt_source_text() in R/api-download-script.R, the only reader of this data.
 
 r_files <- list.files("R", pattern = "\\.R$", full.names = TRUE)
 

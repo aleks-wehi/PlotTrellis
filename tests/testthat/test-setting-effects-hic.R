@@ -4,9 +4,7 @@
 # difference. Needs the mouse fixture (Ba .hic around Elf5, a ~45Kb window at
 # 10Kb resolution, so each render is well under a second).
 #
-# zrange_cap reaches render_all() as settings$zrange = c(0, cap) (the
-# composer renames it, .pt_settings_base() in R/figure_helpers.R); that rename is the composer's
-# wiring and is not covered here.
+# zrange_cap reaches render_all() as it is (.pt_settings_base() in R/api-figure-helpers.R).
 
 hic_fixture <- function() {
   list(rows = test_rows("mouse"), region = test_region("mouse"), settings = test_settings("mouse"))
@@ -27,8 +25,11 @@ hic_svg <- function(entry, region, settings) {
 }
 
 # The colour key's top label with no colour range set: the 95th percentile of the loaded contacts.
-auto_top_label <- function(loaded) {
-  top <- .pt_hic_round_top(stats::quantile(loaded$data$matrix$counts, 0.95, na.rm = TRUE, names = FALSE))
+# The automatic colour top's key label: the 95th percentile of the contacts the track draws
+# (settings_hic(), at the track width render_all() gives a page_w 9 figure).
+auto_top_label <- function(entry, region, settings) {
+  out <- settings_hic(list(), entry, settings, 9 - 0.8 - 1.0, region)
+  top <- .pt_hic_round_top(out$dict[[.pt_shared_range_key("hic_zrange_", entry)]])
   format(signif(top, 3), scientific = FALSE)
 }
 
@@ -63,7 +64,7 @@ test_that("hic_norm changes the drawn heatmap at a fixed colour scale (mouse dat
   fx <- hic_fixture()
   entry <- single_track("hic", fx$rows[["Ba"]], settings = fx$settings)
   # Fixed zrange so only plotgardener's own re-read (ctx$hic_norm) can change the pixels.
-  fixed <- modifyList(fx$settings, list(zrange = c(0, 20)))
+  fixed <- modifyList(fx$settings, list(zrange_cap = 20))
   kr   <- hic_pixels(hic_svg(entry, fx$region, fixed))$fill
   none <- hic_pixels(hic_svg(entry, fx$region, modifyList(fixed, list(hic_norm = "NONE"))))$fill
   expect_gt(sum(!is.na(kr)), 0)
@@ -71,20 +72,20 @@ test_that("hic_norm changes the drawn heatmap at a fixed colour scale (mouse dat
   # Auto colour scale: the legend maximum follows the normalised matrix (its 95th percentile).
   auto_kr   <- svg_labels(hic_svg(entry, fx$region, fx$settings))
   auto_none <- svg_labels(hic_svg(entry, fx$region, modifyList(fx$settings, list(hic_norm = "NONE"))))
-  kr_top   <- auto_top_label(load_hic(entry, fx$region, fx$settings))
-  none_top <- auto_top_label(load_hic(entry, fx$region, modifyList(fx$settings, list(hic_norm = "NONE"))))
+  kr_top   <- auto_top_label(entry, fx$region, fx$settings)
+  none_top <- auto_top_label(entry, fx$region, modifyList(fx$settings, list(hic_norm = "NONE")))
   expect_false(identical(kr_top, none_top))
   expect_true(kr_top %in% auto_kr)
   expect_true(none_top %in% auto_none)
 })
 
-test_that("zrange_cap (settings$zrange) sets the heatmap colour-scale maximum (mouse dataset)", {
+test_that("zrange_cap sets the heatmap colour-scale maximum (mouse dataset)", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   fx <- hic_fixture()
   entry <- single_track("hic", fx$rows[["Ba"]], settings = fx$settings)
   auto   <- hic_svg(entry, fx$region, fx$settings)
-  capped <- hic_svg(entry, fx$region, modifyList(fx$settings, list(zrange = c(0, 7))))
-  auto_top <- auto_top_label(load_hic(entry, fx$region, fx$settings))
+  capped <- hic_svg(entry, fx$region, modifyList(fx$settings, list(zrange_cap = 7)))
+  auto_top <- auto_top_label(entry, fx$region, fx$settings)
   expect_false(identical(auto_top, "7"))
   expect_true(auto_top %in% svg_labels(auto))   # the 95th percentile in view, the default
   expect_false("7" %in% svg_labels(auto))

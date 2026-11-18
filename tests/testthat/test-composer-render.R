@@ -1,4 +1,4 @@
-# The composer's rendering (R/composer-render.R) on its own: .pt_render_svg() and
+# The composer's rendering (R/app-render.R) on its own: .pt_render_svg() and
 # assemble_download_script() are replaced by recorders, the track items are hand-made
 # (helper-composer-fakes.R), and the region, mode and live settings are reactive values the
 # test sets. No genome, no figure is drawn.
@@ -36,7 +36,7 @@ fake_worker <- function() {
 drive_render <- function(code, worker = NULL, ctx = fake_ctx()) {
   code <- rlang::enquo(code)
   rec <- recording_session()
-  rec$renders <- list(); rec$scripts <- list(); rec$notes <- list()
+  rec$renders <- list(); rec$scripts <- list(); rec$script_tops <- list(); rec$notes <- list()
   rec$render_result <- NULL; rec$script_error <- NULL
   local_mocked_bindings(
     .pt_render_svg = function(entries, region_params, settings) {
@@ -44,8 +44,9 @@ drive_render <- function(code, worker = NULL, ctx = fake_ctx()) {
       writeLines("<svg width='1'></svg>", settings$output_path)
       rec$render_result
     },
-    assemble_download_script = function(entries, region_params, settings) {
+    assemble_download_script = function(entries, region_params, settings, hic_tops = NULL) {
       rec$scripts[[length(rec$scripts) + 1]] <- list(entries = entries, region_params = region_params, settings = settings)
+      rec$script_tops <- c(rec$script_tops, list(hic_tops))
       if (!is.null(rec$script_error)) stop(rec$script_error)
       paste("script", length(rec$scripts))
     })
@@ -84,6 +85,15 @@ test_that("Generate draws the picked tracks over the resolved region with the li
   expect_match(r$settings$output_path, "\\.svg$")
   # The script is assembled from exactly what was drawn.
   expect_identical(rec$scripts[[1]], r)
+})
+
+test_that("the script names the Hi-C colour tops the render drew", {
+  rec <- drive_render({
+    rec$render_result <- list(hic_tops = c(hic_zrange_HiC = 41.5))
+    !!generate
+    expect_null(state$plot_error)
+  })
+  expect_identical(rec$script_tops, list(c(hic_zrange_HiC = 41.5)))
 })
 
 test_that("a finished render puts the figure, script, region, tracks, title and gene in state", {

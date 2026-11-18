@@ -1,6 +1,6 @@
 # Hand-made stand-ins for the composer's startup context (.pt_composer_context()), so the
 # composer's lifted UI builders and server blocks can be tested on their own, with no
-# genome and no data files. The items have the shape track_detection.R gives them.
+# genome and no data files. The items have the shape viz-track-detection.R gives them.
 
 # Two samples, A and B: an ATAC coverage track each (B's file missing, so `broken`), a Hi-C
 # track and a Transcript expression track for A, the A-vs-B and B-vs-A coverage

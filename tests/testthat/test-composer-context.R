@@ -1,4 +1,4 @@
-# The composer's startup context (R/composer-context.R). The settings checks stop before
+# The composer's startup context (R/app-context.R). The settings checks stop before
 # the genome loads (ensure_genome_ready() is replaced by a stop), so they need no genome;
 # the full context is built from the bundled mammary example, as test-filter-buttons.R does.
 

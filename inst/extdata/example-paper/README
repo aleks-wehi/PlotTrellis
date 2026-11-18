@@ -1,0 +1,107 @@
+PlotTrellis paper example data
+==============================
+
+The example of the PlotTrellis paper: see ?pt_example. Five mouse genes, Eya2, Lrrfip1, Acot7, Dzip1 and Cxcl14,
+in two mouse mammary epithelial populations, basal cells (Basal) and luminal
+progenitors (LP), with every data type PlotTrellis draws: RNA-seq coverage, splice
+junctions and transcript quantification, ATAC-seq coverage and peaks, H3K36me3 CUT&Tag
+coverage and peaks with its IgG control, and Omni-C (Hi-C) contacts. mm39, GENCODE vM39.
+
+Source
+------
+Milevskiy MJG, Coughlan HD, Kane SR, et al. Three-dimensional genome architecture
+coordinates key regulators of lineage specification in mammary epithelial cells. Cell Genomics 2023;
+3(11):100424. doi:10.1016/j.xgen.2023.100424. GEO SuperSeries GSE227750.
+
+Every sample data file here is derived from that study's public reads (SRA, through GEO), processed for
+PlotTrellis with the PlotTrellis-wf Nextflow workflow (GENCODE vM39 primary assembly, mm39),
+biological replicates 1 and 2 of each assay:
+
+    Assay               Basal                     LP
+    RNA-seq             GSM7106766, GSM7106767    GSM7106769, GSM7106770
+    ATAC-seq            GSM7142618, GSM7142619    GSM7142621, GSM7142622
+    H3K36me3 CUT&Tag    GSM7142870, GSM7142871    GSM7142892, GSM7142893
+    IgG CUT&Tag         GSM7142882, GSM7142883    GSM7142904, GSM7142905
+    Omni-C (Hi-C)       GSM7142991, GSM7142992    GSM7142993, GSM7142994
+
+The workflow writes one file per population and data type from both replicates (for
+the transcript quantification, the mean of the two replicates' TPMs). Those files
+were cut down to the five genes' windows below, values unchanged.
+
+Windows (mm39; each gene plus half its length on each side, at least 25 kb, ends rounded
+out to 10 kb):
+    Eya2      chr2:165,340,001-165,710,000   (370 kb)
+    Lrrfip1   chr1:90,860,001-91,130,000     (270 kb)
+    Acot7     chr4:152,210,001-152,410,000   (200 kb)
+    Dzip1     chr14:119,080,001-119,190,000  (110 kb)
+    Cxcl14    chr13:56,410,001-56,470,000    (60 kb)
+The GTF keeps the 47 genes overlapping these windows (349 transcripts). Only the five
+genes above have all their data: a neighbouring gene that reaches past a window, a view
+zoomed out past it, or a region elsewhere shows little or no data there (Hi-C reaches a
+little further, see below). Where a window holds no
+peak or junction line on its chromosome, the nearest line outside it is kept, so the
+file still names that chromosome.
+
+Files
+-----
+samples.txt
+    The project description PlotTrellis reads (hand-written). Paths in it are relative to
+    this folder. Same columns as the workflow's own samples.txt, so code written against
+    this example runs on the full data.
+
+rna/{Basal,LP}_RNA.bw
+    RNA-seq coverage, the bins overlapping the windows.
+
+rna/{Basal,LP}_junctions.bed
+    Splice junctions (BED12, read count in the score column), the lines overlapping the
+    windows.
+
+rna/{Basal,LP}_salmon/quant.sf
+    Salmon transcript quantification (Name, TPM: the mean of the two replicates), only the
+    rows of the transcripts in the GTF below. TPM is not renormalised, so it does not sum
+    to one million here; every gene's transcript expression is as in the full file.
+
+atac/{Basal,LP}_ATAC.bw, atac/{Basal,LP}_ATAC_peaks.narrowPeak
+    ATAC-seq coverage (bins overlapping the windows) and peak calls (lines overlapping
+    them).
+
+cuttag/{Basal,LP}_H3K36me3.bw, cuttag/{Basal,LP}_IgG.bw,
+cuttag/{Basal,LP}_H3K36me3_peaks.broadPeak
+    H3K36me3 and IgG CUT&Tag coverage and H3K36me3 broad peaks, cropped the same way.
+
+hic/{Basal,LP}_HiC.mcool
+    Omni-C contacts with both ends in a wider window per gene (the gene's default view
+    plus its width on each side, what a Hi-C track up to as tall as it is wide reads
+    there), at every bin size of the workflow's .hic files (1 kb to 2.5 Mb), in the
+    .mcool layout that PlotTrellis and plotgardener read (not checked with other cooler
+    tools): raw counts, plus the .hic's KR, SCALE, VC and VC_SQRT normalisation vectors
+    as bins columns, so each normalisation gives the .hic's values bin for bin. A view
+    whose ends are not on bin edges can differ slightly at its edges, and so in its
+    colour scale's top (Cxcl14's default view: 4.45 here, 4.46 from the .hic): the
+    .mcool reader keeps the part-covered edge bins, the .hic reader leaves them out.
+    One zero-count contact on the last bin of the file (the end of chr14) is added so
+    the reader can read up to the last window.
+
+annotation.gtf.gz
+    Every GTF line of the genes overlapping the windows, plus the file header, from
+    GENCODE mouse release M39, gencode.vM39.primary_assembly.annotation.gtf.gz.
+
+annotation_chrom_sizes.rds
+    mm39 chromosome lengths from UCSC (GenomeInfoDb::Seqinfo(genome = "mm39")), shipped so
+    the first launch doesn't need to download them.
+
+Licence and terms
+-----------------
+- GEO and SRA data: NCBI places no restrictions on the use or distribution of GEO data,
+  though submitters may claim patent, copyright or other rights in the data they
+  submitted (https://www.ncbi.nlm.nih.gov/geo/info/disclaimer.html). Please cite the
+  paper above.
+- GENCODE annotation and UCSC chromosome sizes: freely available without restriction.
+- The processing and cropping are distributed with PlotTrellis under its licence
+  (Artistic-2.0).
+
+How it was made
+---------------
+data-raw/build-example-data-paper.R in the PlotTrellis source repository rebuilds every
+file here except samples.txt and this README, from the workflow's results folder, and
+checks each crop against it.

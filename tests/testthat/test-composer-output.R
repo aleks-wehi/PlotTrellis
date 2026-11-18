@@ -1,4 +1,4 @@
-# The composer's Output section (R/composer-output.R) on its own: a state holding a small
+# The composer's Output section (R/app-output.R) on its own: a state holding a small
 # hand-written SVG file and R script, no render.
 
 output_app <- function() function(input, output, session) {

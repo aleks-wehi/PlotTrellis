@@ -1,4 +1,4 @@
-# The composer's shared UI pieces (R/utils-ui.R): the Generate button, the collapsible
+# The composer's shared UI pieces (R/app-utils-ui.R): the Generate button, the collapsible
 # section shell and the inline SVG wrapper. Plain HTML, no app.
 
 test_that("an enabled Generate button is an action button with the generate-btn class", {

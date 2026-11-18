@@ -56,7 +56,9 @@ test_that("with no Colour max, the colour scale tops at the 95th percentile of t
   settings <- test_settings("mouse")
   entry <- single_track("hic", test_rows("mouse")[["Ba"]], settings = settings)
   out <- settings_hic(list(), entry, settings, 7, region)
-  counts <- out$entry$data$matrix$counts
+  # The contacts drawn (W95): Rectangle's strip.
+  counts <- .pt_hic_drawn_counts(out$entry$data$matrix, "rectangle", region$start, region$end,
+                                 out$entry$data$resolution, out$entry$height / 7)
   top <- out$dict[[.pt_shared_range_key("hic_zrange_", entry)]]
   expect_equal(top, unname(stats::quantile(counts, 0.95, na.rm = TRUE)))
   # Far below the maximum: the diagonal no longer takes the whole scale.
@@ -89,7 +91,8 @@ test_that("Colour scale Log runs from the smallest value above 0 to the largest,
   lin_settings <- test_settings("mouse")
   log_settings <- test_settings("mouse", list(hic_colour_scale = "log"))
   out <- settings_hic(list(), single_track("hic", row, settings = log_settings), log_settings, 7, region)
-  counts <- out$entry$data$matrix$counts
+  counts <- .pt_hic_drawn_counts(out$entry$data$matrix, "rectangle", region$start, region$end,
+                                 out$entry$data$resolution, out$entry$height / 7)
   counts <- counts[is.finite(counts)]
   expect_true(out$entry$data$log_scale)
   expect_equal(out$dict[[.pt_shared_range_key("hic_zrange_", out$entry)]], max(counts))
@@ -110,10 +113,10 @@ test_that("Colour scale Log runs from the smallest value above 0 to the largest,
   fills <- function(svg) regmatches(svg, gregexpr("<polygon[^>]*fill: #[0-9A-Fa-f]+", svg))[[1]]
   expect_gt(length(fills(lg)), 0)
   # The transform itself, at one colour range: only colorTrans differs between the two.
-  same <- list(zrange = c(0, 20))
+  same <- list(zrange_cap = 20)
   expect_false(identical(fills(svg_of(modifyList(lin_settings, same))), fills(svg_of(modifyList(log_settings, same)))))
   # A Colour max with Log: the bottom stays the smallest value, the top is the max set.
-  capped <- svg_of(test_settings("mouse", list(hic_colour_scale = "log", zrange = c(0, 20))))
+  capped <- svg_of(test_settings("mouse", list(hic_colour_scale = "log", zrange_cap = 20)))
   expect_false(grepl("track failed", capped, fixed = TRUE))
   expect_match(capped, ">20<", fixed = TRUE)
 })
@@ -132,7 +135,7 @@ test_that("the colour key labels the colour range to 3 significant digits", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   region <- test_region("mouse")
   row <- test_rows("mouse")[["Ba"]]
-  settings <- test_settings("mouse", list(zrange = c(0, 12.3456)))
+  settings <- test_settings("mouse", list(zrange_cap = 12.3456))
   f <- tempfile(fileext = ".svg")
   on.exit(unlink(f), add = TRUE)
   suppressMessages(suppressWarnings(render_all(list(single_track("hic", row, settings = settings)), region, settings,
@@ -146,14 +149,14 @@ test_that("a Normalisation the file lacks says so and lists the ones it has (mou
   region <- test_region("mouse")
   settings <- test_settings("mouse", list(hic_norm = "BALANCE"))
   spec <- single_track("hic", test_rows("mouse")[["Ba"]], settings = settings)
-  expect_error(load_hic(spec, region, settings), "this file has no BALANCE normalisation at [0-9,]+ bp bins; it has .*KR.*: pick one of those.")
+  expect_error(load_hic(spec, region, settings), "^this file has no BALANCE normalisation at [0-9,]+ bp bins: in Figure settings, Hi-C, set Normalisation \\(hic_norm\\) to [A-Z_, ]+ or NONE[.]$")
   mcool <- file.path(DATA_ROOT, "hic_test", "LEUK_HEK_PJA27_inter_30.mcool")
   skip_if_not(file.exists(mcool))
   spec$path <- mcool
   wide <- list(chrom = "chr2", start = 100000000, end = 110000000, gene = NA_character_)
   msg <- tryCatch(load_hic(spec, wide, settings), error = conditionMessage)
-  expect_match(msg, "this file has no BALANCE normalisation; it has KR, VC, VC_SQRT, NONE: pick one of those.", fixed = TRUE)
-  expect_lte(nchar(paste("hic (Ba) track failed:", msg)), 140)   # render_all() shows up to 140 characters uncut
+  expect_identical(msg, "this file has no BALANCE normalisation: in Figure settings, Hi-C, set Normalisation (hic_norm) to KR, VC, VC_SQRT or NONE.")
+  expect_lte(nchar(msg), 140)   # render_all() shows a message of up to 140 characters uncut, after "<track> track failed: "
 })
 
 # ---- Settings labels ------------------------------------------------------------------------------

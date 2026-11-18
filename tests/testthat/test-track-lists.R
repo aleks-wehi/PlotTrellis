@@ -1,5 +1,5 @@
-# The composer's track lists (R/track-lists.R): the markup, update message and input values the
-# composer's script (R/app.R), plottrellis.css and the browser checks rely on.
+# The composer's track lists (R/app-track-lists.R): the markup, update message and input values the
+# composer's script (R/app-main.R), plottrellis.css and the browser checks rely on.
 
 composer_lists <- function() {
   bucket_list(

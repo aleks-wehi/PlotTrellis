@@ -21,7 +21,7 @@ test_that("reference_colour/comparison_colour colour the comparison tracks (mous
   cp <- effects_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
   shiny::testServer(cp$app, {
-    # Comparison item key format: R/track_detection.R (<viz>_<name>_<ref>_vs_<cmp>).
+    # Comparison item key format: R/viz-track-detection.R (<viz>_<name>_<ref>_vs_<cmp>).
     key <- "bw_diff_stacked_atac_Ba_vs_LP"
     session$setInputs(view_mode = "compose", region_mode = "coords", region_chr = "chr2",
                       region_range = c(103400000L, 103460000L), figure_tracks = key)

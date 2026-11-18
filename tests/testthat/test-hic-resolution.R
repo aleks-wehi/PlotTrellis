@@ -1,7 +1,7 @@
 # Hi-C auto-resolution-tier fixtures, small-span and large-span per
 # Hi-C-having dataset (both mouse and human have real per-condition .hic
 # files, see helper-fixtures.R's FIXTURES table). Asserts the auto-resolution
-# logic (load_hic() in loader-hic.R, "auto" hic_res_mode) actually picks the
+# logic (load_hic() in data-loader-hic.R, "auto" hic_res_mode) actually picks the
 # expected tier for each span, not just that a render happens to succeed
 # either way.
 #
@@ -181,7 +181,7 @@ test_that("an all-NaN Hi-C view names the normalisation and what to change; NONE
   region <- list(chrom = "chr1", start = 198300000, end = 199100000, gene = NA_character_)
   settings <- test_settings("human")
   spec <- single_track("hic", test_rows("human")[["GM12878"]], settings = settings)
-  msg <- "no KR values at 1,000 bp bins in this view: set Hi-C normalisation to NONE, or Resolution Fixed with a 5,000 bp bin size."
+  msg <- "no KR values at 1,000 bp bins in view: in Figure settings, Hi-C, set Normalisation (hic_norm) to NONE, or Resolution Fixed, Bin size 5000."
   expect_error(load_hic(spec, region, settings), msg, fixed = TRUE)
   none <- load_hic(spec, region, test_settings("human", list(hic_norm = "NONE")))
   expect_true(any(is.finite(none$data$matrix$counts)))
@@ -223,10 +223,13 @@ test_that("a Hi-C view whose maximum is below 0.00005 draws instead of failing (
   # The same view with every count scaled down so the colour scale's top (the 95th percentile) is
   # 0.00001: 4-decimal rounding used to give a colour range of c(0, 0), which plotgardener can't draw.
   real_load <- load_hic
-  local_mocked_bindings(load_hic = function(entry, region_params, settings) {
-    entry <- real_load(entry, region_params, settings)
+  local_mocked_bindings(load_hic = function(entry, region_params, settings, pad = 0) {
+    entry <- real_load(entry, region_params, settings, pad)
     m <- entry$data$matrix
-    entry$data$matrix$counts <- m$counts / stats::quantile(m$counts, 0.95, na.rm = TRUE, names = FALSE) * 1e-5
+    # Scaled by the 95th percentile of the contacts drawn (the track width of a page_w 9 figure).
+    drawn <- .pt_hic_drawn_counts(m, "rectangle", region_params$start, region_params$end,
+                                  entry$data$resolution, entry$height / (9 - 0.8 - 1.0))
+    entry$data$matrix$counts <- m$counts / stats::quantile(drawn, 0.95, na.rm = TRUE, names = FALSE) * 1e-5
     entry
   })
   svg <- hic_svg(list(spec), region, settings)
@@ -271,12 +274,12 @@ test_that("a Hi-C colour cap of 0 says so in the track, keeping its height (mous
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   region <- test_region("mouse")
   row <- test_rows("mouse")[["Ba"]]
-  draw <- function(zrange) {
-    settings <- test_settings("mouse", list(zrange = zrange))
+  draw <- function(cap) {
+    settings <- test_settings("mouse", list(zrange_cap = cap))
     hic_svg(list(single_track("hic", row, settings = settings)), region, settings)
   }
-  ok <- draw(c(0, 100))
-  zero <- draw(c(0, 0))
+  ok <- draw(100)
+  zero <- draw(0)
   expect_false(grepl("track failed", ok, fixed = TRUE))
   expect_match(zero, "hic (Ba) track failed: the Hi-C colour cap must be above 0 (it is 0).", fixed = TRUE)
   height <- function(svg) regmatches(svg, regexpr("height='[0-9.]+pt'", svg))

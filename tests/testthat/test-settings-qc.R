@@ -1,7 +1,7 @@
 # "Settings-actually-wired QC" -- confirms a setting doesn't just reach the
 # UI, it changes the render: control_colour/treatment_colour (both
-# comparison vizzes), diff_colour_lo/diff_colour_hi (viz-bw_diff_stacked.R
-# specifically), junction_opacity_cap (viz-junctions_mirrored_diff.R
+# comparison vizzes), diff_colour_lo/diff_colour_hi (viz-bw-diff-stacked.R
+# specifically), junction_opacity_cap (viz-junctions-mirrored-diff.R
 # specifically), and hic_res_mode/hic_max_bins_per_view (single-sample
 # viz-hic.R only -- no 2-sample hic comparison viz exists).
 #

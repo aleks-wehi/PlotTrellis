@@ -215,6 +215,13 @@ test_that("pt_preload() stores the figure as the app's start view", {
                                     "junctions_mirrored_diff_junctions_GM12878_vs_K562"))
   # The app reads it back through the normal settings reader.
   expect_equal(.pt_project(proj$dir)$cfg$start_view$gene, "PSME2")
+  # Bug 264: a figure from another project is refused, the start view left as it was.
+  other <- pt_figure(proj, "IRF9", "genes")
+  expect_identical(other$project_dir, proj$dir)
+  other$project_dir <- tempfile("pt-other-project-")
+  saved <- readLines(json)
+  expect_error(pt_preload(proj, other), "fig was made from another project")
+  expect_identical(readLines(json), saved)
 })
 
 test_that("pt_tracks(), pt_samples() and print(proj) give the numbers pt_figure() takes", {
@@ -370,6 +377,37 @@ test_that("one folder holds one project: a different samples.txt there is an err
   expect_error(pt_project(dir, b), "already holds a project, made from .*project_dir")
   expect_message(suppressWarnings(pt_project(dir, b, overwrite = TRUE)), "Re-importing")
   expect_error(pt_project(dir, a), "made from .*samples.txt")
+})
+
+test_that("a project made from a bundled example reopens after PlotTrellis moves (bug 263)", {
+  skip_if_not_installed("org.Hs.eg.db")
+  dir <- tempfile("pt-moved-")
+  suppressWarnings(pt_project(dir, pt_example("human")))
+  json <- file.path(dir, "project_settings.json")
+  made_from <- function(src) {
+    s <- jsonlite::read_json(json)
+    s$samples_txt_source <- src
+    s$data_dir <- "/old/R/4.4/library/PlotTrellis/extdata/example-human"
+    writeLines(jsonlite::toJSON(s, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), json)
+  }
+  # As the same example in another library recorded it (an R upgrade or reinstall).
+  made_from("/old/R/4.4/library/PlotTrellis/extdata/example-human/samples.txt")
+  expect_message(proj <- suppressWarnings(pt_project(dir, pt_example("human"))), "Re-importing")
+  s <- jsonlite::read_json(json)
+  expect_identical(s$samples_txt_source, normalizePath(pt_example("human")))
+  # Its data is read from this install now, not the old one.
+  expect_identical(normalizePath(s$data_dir), normalizePath(dirname(pt_example("human"))))
+  expect_s3_class(pt_figure(proj, "PSME2", "genes"), "pt_figure")
+  # A source tree of the package (a clone of its repository) too.
+  made_from("/home/me/src/PlotTrellis/inst/extdata/example-human/samples.txt")
+  expect_message(suppressWarnings(pt_project(dir, pt_example("human"))), "Re-importing")
+  # Opened again from the same place: as before, no re-import.
+  expect_no_message(suppressWarnings(pt_project(dir, pt_example("human"))), message = "Re-importing")
+  # The other example, or a samples.txt outside a PlotTrellis install, is still another project.
+  made_from("/old/R/4.4/library/PlotTrellis/extdata/example/samples.txt")
+  expect_error(pt_project(dir, pt_example("human")), "already holds a project")
+  made_from("/home/me/extdata/example-human/samples.txt")
+  expect_error(pt_project(dir, pt_example("human")), "already holds a project")
 })
 
 test_that("bare pt_project() with no project says how to make one", {

@@ -1,5 +1,5 @@
 // The composer's two track lists (Available, Figure) on SortableJS: the Shiny side of
-// bucket_list(), add_rank_list() and update_rank_list() in R/track-lists.R. Adapted from the R
+// bucket_list(), add_rank_list() and update_rank_list() in R/app-track-lists.R. Adapted from the R
 // package sortable 0.6.0 (MIT; see LICENSE), so the lists behave as they did with it: the same
 // Sortable options and callbacks, the same inputs ('<list>:sortablejs.rank_list' and
 // '<group>:sortablejs.bucket_list') and the same update message.

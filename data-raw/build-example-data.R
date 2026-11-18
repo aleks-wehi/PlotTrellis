@@ -53,7 +53,7 @@ cat(sprintf("GTF: %d genes, %d transcripts, %d lines\n", length(genes), length(t
 
 # ---- Chromosome sizes: what ensure_genome_ready() would otherwise fetch -----
 # from UCSC at first launch, under the name .pt_shipped_chrom_sizes() looks for next to the GTF.
-source(file.path(pkg, "R", "build_chrom_sizes.R"))
+source(file.path(pkg, "R", "genome-build-chrom-sizes.R"))
 build_chrom_sizes("mm10", file.path(out, "gencode.vM25.example_chrom_sizes.rds"))
 
 for (cond in names(CONDITIONS)) {

@@ -36,7 +36,7 @@ test_that("sparse in-range region: hic says why it has nothing to draw, with no 
   # names the normalisation and what to change instead of drawing an empty panel.
   region <- list(chrom = "chr1", start = 143800000, end = 144200000, gene = "PTPRC")
   spec   <- single_track("hic", test_rows("human")[["GM12878"]])
-  expect_error(load_hic(spec, region, test_settings("human")), "no KR values at 1,000 bp bins in this view", fixed = TRUE)
+  expect_error(load_hic(spec, region, test_settings("human")), "no KR values at 1,000 bp bins in view", fixed = TRUE)
   tmp <- tempfile(fileext = ".svg")
   on.exit(unlink(tmp), add = TRUE)
   # settings_hic() adds no "returning -Inf" warning of its own for the failed track.
@@ -45,7 +45,7 @@ test_that("sparse in-range region: hic says why it has nothing to draw, with no 
                device_fn = function(w, h) svglite::svglite(tmp, width = w, height = h))))
   grDevices::dev.off()
   svg <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
-  expect_match(svg, "hic (GM12878) track failed: no KR values at 1,000 bp bins in this view", fixed = TRUE)
+  expect_match(svg, "hic (GM12878) track failed: no KR values at 1,000 bp bins in view", fixed = TRUE)
   expect_false(grepl("No data", svg, fixed = TRUE))
 })
 

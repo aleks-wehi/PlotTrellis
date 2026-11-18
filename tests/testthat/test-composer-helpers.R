@@ -1,8 +1,8 @@
 # Unit tests of the composer's small helpers (label formatting, chromosome sorting, number
 # formatting and parsing, track pools, the Generate button, panels, the inlined SVG). They
 # were written against the helpers inside .pt_composer_app(); `h` maps each old closure
-# name to its top-level function (utils-format.R, utils-ui.R, composer-tracks.R,
-# figure_helpers.R), with the app's startup context filled in where the old closure read it.
+# name to its top-level function (util-format.R, app-utils-ui.R, app-tracks.R,
+# api-figure-helpers.R), with the app's startup context filled in where the old closure read it.
 h <- function(name, cp) {
   ctx <- get("ctx", envir = environment(cp$app$serverFuncSource()))
   switch(name,

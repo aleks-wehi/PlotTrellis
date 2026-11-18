@@ -127,7 +127,11 @@ test_that("every track type's script uses only what it defines, loads or gets fr
     pd <- utils::getParseData(parse(text = script, keep.source = TRUE))
     colons <- unique(pd$text[pd$token == "SYMBOL_PACKAGE"])
     is_base <- vapply(colons, function(p) identical(utils::packageDescription(p, fields = "Priority"), "base"), logical(1))
-    expect_identical(setdiff(colons[!is_base], checked), character(0), info = key)
+    # A package only building a missing genome cache uses is checked when it builds.
+    rebuild <- eval(str2lang(sub('.*"plottrellis_cache", (.*)\\),$', "\\1",
+                                 grep("plottrellis_cache\", ", strsplit(script, "\n")[[1]], value = TRUE,
+                                      fixed = TRUE))), baseenv())
+    expect_identical(setdiff(colons[!is_base], c(checked, rebuild)), character(0), info = key)
     expect_true(settings$orgdb_pkg %in% checked, info = key)
     # The figure's own track type is pasted; render_all() comes first, the call last.
     expect_true(grepl(paste0("\nrender_", key, " <- function"), script, fixed = TRUE), info = key)
@@ -311,4 +315,57 @@ test_that("a script of every track type in the human example runs alone with Rsc
   # A track that catches its own error draws a status or a fallback instead: the figure must
   # be the package's own, byte for byte.
   expect_identical(readBin(svg, "raw", file.size(svg)), readBin(api_svg, "raw", file.size(api_svg)))
+})
+
+test_that("a script run where the project's genome cache is gone builds it from the GTF and draws the same SVG (bug 256)", {
+  skip_on_cran()
+  skip_if_not_installed("org.Mm.eg.db")
+  proj <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-script-nocache"), pt_example("mammary")))
+  fig <- pt_figure(proj, "Elf5", c("atac", "genes", "transcripts", "transcript_expression"),
+                   samples = c("Basal", NA, NA, "LP"))
+  api_svg <- tempfile(fileext = ".svg")
+  pt_save(fig, api_svg)
+  run_dir <- tempfile("pt-script-run-")
+  dir.create(run_dir)
+  pt_script(fig, file.path(run_dir, "figure.R"))
+  # The collaborator's computer: the data and GTF, but not the sender's cache folder.
+  .pt_close_txdbs()
+  cache <- proj$render_cfg$cache_dir
+  expect_true(file.exists(fig$settings$txdb_path))
+  unlink(cache, recursive = TRUE)
+  expect_false(file.exists(fig$settings$txdb_path))
+
+  old <- setwd(run_dir)
+  on.exit(setwd(old), add = TRUE)
+  run <- function() system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", "figure.R"),
+                            stdout = TRUE, stderr = TRUE,
+                            env = paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep)))
+  svg <- file.path(run_dir, "plottrellis_Elf5.svg")
+  for (i in 1:2) {
+    unlink(svg)
+    out <- run()
+    expect_null(attr(out, "status"))
+    # Said on the run that builds the cache only; the second run reuses it.
+    expect_identical(sum(grepl("genome cache is not here", out, fixed = TRUE)), if (i == 1) 1L else 0L)
+    expect_identical(grep("track failed", out, value = TRUE), character(0))
+    expect_identical(readBin(svg, "raw", file.size(svg)), readBin(api_svg, "raw", file.size(api_svg)))
+  }
+  expect_true(dir.exists(file.path(run_dir, "plottrellis_cache", "genome")))
+  # Nothing was written back into the sender's (missing) cache folder.
+  expect_false(dir.exists(cache))
+})
+
+test_that("a script checks up front only the packages drawing needs; txdbmaker only when it builds a genome cache", {
+  script <- strsplit(assemble_download_script(
+    list(list(viz = "genes")), list(chrom = "chr2", start = 1000L, end = 5000L, gene = NA_character_),
+    list(orgdb_pkg = "org.Mm.eg.db", genome_label = "mm10")), "\n", fixed = TRUE)[[1]]
+  needs <- grep("^# Needs the R packages: ", script, value = TRUE)
+  expect_false(grepl("txdbmaker", needs, fixed = TRUE))
+  rebuild_line <- grep("plottrellis_cache in the current folder, once (that needs ", script, value = TRUE, fixed = TRUE)
+  expect_length(rebuild_line, 1)
+  expect_true(grepl("txdbmaker", rebuild_line, fixed = TRUE))
+  # .pt_script_genome() checks for it itself, before building.
+  call <- grep('.pt_script_genome(settings, "plottrellis_cache", ', script, value = TRUE, fixed = TRUE)
+  expect_length(call, 1)
+  expect_true(grepl('"txdbmaker"', call, fixed = TRUE))
 })

@@ -1,4 +1,4 @@
-/* Help popovers (R/help_popover.R, plottrellis-help.js). Colours are plottrellis.css's --pt-*
+/* Help popovers (R/app-help-popover.R, plottrellis-help.js). Colours are plottrellis.css's --pt-*
    tokens, so a second colour scheme only redefines those. */
 .pt-help {
   display: inline-flex; align-items: center; justify-content: center;

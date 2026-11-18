@@ -1,6 +1,6 @@
 # Every list of track types the app, the code API and the fixture helpers use is derived
 # from the modules' own info_<key>() declarations (see the viz-module-contract in
-# R/render_all.R). The literals below pin those lists' values, and the derived
+# R/viz-render-all.R). The literals below pin those lists' values, and the derived
 # values must stay equal to them (in order where the
 # order decides something: detection order sets pt_tracks()' order and which of two
 # same-named types keeps the plain name). Only the track types below are pinned, so a new

@@ -19,14 +19,17 @@ test_that("a figure drawn in the render process is the one drawn in-process (mou
   here  <- c(test_settings("mouse"), list(output_path = tempfile(fileext = ".svg")))
   there <- c(test_settings("mouse"), list(output_path = tempfile(fileext = ".svg")))
   on.exit(unlink(c(here$output_path, there$output_path)), add = TRUE)
-  expect_null(.pt_render_svg(specs, test_region("mouse"), here))
+  drawn <- .pt_render_svg(specs, test_region("mouse"), here)
+  expect_true(is.list(drawn))
+  expect_named(drawn, "hic_tops")
 
   w <- .pt_render_worker()
   on.exit(w$close(), add = TRUE)
   res <- list()
   w$render(specs, test_region("mouse"), there, function(err) res$err <<- list(err))
   expect_true(wait_for(function() length(res) > 0, 120))
-  expect_null(res$err[[1]])
+  # The process's result: the same list, not an error message.
+  expect_identical(res$err[[1]], drawn)
   expect_identical(readLines(there$output_path), readLines(here$output_path))
 })
 
@@ -182,6 +185,6 @@ test_that("a failed track's line from a real render reaches the app's console", 
   res <- list()
   w$render(specs, test_region("mouse"), settings, function(err) res$err <<- list(err))
   shown <- console_of(function() expect_true(wait_for(function() length(res) > 0, 180)))
-  expect_null(res$err[[1]])
+  expect_false(is.character(res$err[[1]]))   # drawn (a list), not an error message
   expect_match(shown, "PlotTrellis: hic (Ba) track failed:", fixed = TRUE)
 })

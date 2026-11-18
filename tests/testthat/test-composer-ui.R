@@ -1,4 +1,4 @@
-# The composer page's builders (R/composer-ui.R) on a hand-made startup context
+# The composer page's builders (R/app-ui.R) on a hand-made startup context
 # (helper-composer-fakes.R): plain HTML, no genome, no app.
 
 # The <option>s of one select in `html`, as c(value = selected?).

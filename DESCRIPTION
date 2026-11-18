@@ -1,6 +1,6 @@
 Package: PlotTrellis
 Title: Composable Genomic Track Visualisations for Non-Coders
-Version: 1.0.1
+Version: 1.1.0
 Authors@R: c(
     person("Aleksander", "Pacnik", email = "pacnik.a@wehi.edu.au", role = c("aut", "cre"),
         comment = c(ORCID = "0009-0000-4062-2582")),
@@ -59,7 +59,10 @@ Suggests:
     org.Mm.eg.db,
     org.Hs.eg.db,
     pkgload,
-    xml2
+    xml2,
+    ggplot2,
+    patchwork,
+    cowplot
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0

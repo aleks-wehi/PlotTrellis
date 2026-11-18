@@ -1,4 +1,4 @@
-# The composer's stage gating (R/composer-gate.R) on its own: the region and conditions
+# The composer's stage gating (R/app-gate.R) on its own: the region and conditions
 # blocks are replaced by reactive values the test sets, the track items are hand-made
 # (helper-composer-fakes.R), and the lock messages are recorded by the mock session.
 

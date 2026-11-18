@@ -73,7 +73,9 @@ render_transcripts <- function(entry, dict, ctx) {
     # stays in the track.
     no_data_text(ctx$track_x, ctx$y + header_h, ctx$track_w,
                  ctx$height - header_h, ctx$fontsize - 1, ctx$font, ctx$fontcol,
-                 label = "No retained transcripts for this gene in view")
+                 label = if (.pt_no_gene(ctx$region_params$gene))
+                   .pd_status_text("no_gene") else
+                   "No retained transcripts for this gene in view")
     return(invisible(NULL))
   }
 

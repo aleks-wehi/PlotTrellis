@@ -101,6 +101,14 @@ test_that("an empty view draws each track as usual: heading and axes, no message
   expect_identical(n_baselines(svg), 3L)
 })
 
+test_that("a region view's transcript tracks say no gene was given, not 'this gene' (bug 262, no fixture data)", {
+  skip_no_synth()
+  tx <- function(viz) list(viz = viz, name = viz, height = NULL, data = NULL)
+  svg <- render_view(list(tx("transcripts_all"), tx("transcripts"), tx("transcripts_annotated")))
+  expect_identical(lengths(regmatches(svg, gregexpr(">No gene selected for this region</text>", svg, fixed = TRUE))), 3L)
+  expect_false(grepl("for this gene in view", svg, fixed = TRUE))
+})
+
 test_that("an empty sample keeps the shared range of the others (no fixture data)", {
   skip_no_synth()
   near <- bw_file()

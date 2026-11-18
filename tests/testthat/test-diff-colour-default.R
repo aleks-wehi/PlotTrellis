@@ -2,7 +2,7 @@
 # #0033CC, as in .pt_display_defaults() and test_settings()), so a caller whose settings leave them out (e.g. a script
 # calling render_all() directly) gets the same figure as the app.
 # Compares against test_settings()'s copy of the values (the app's own are
-# in .pt_display_defaults(), R/app.R).
+# in .pt_display_defaults(), R/app-main.R).
 test_that("diff colours fall back to the app's defaults when unset", {
   skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   rows          <- test_rows("mouse")

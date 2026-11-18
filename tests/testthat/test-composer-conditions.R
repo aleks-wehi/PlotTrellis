@@ -1,4 +1,4 @@
-# The composer's condition selection (R/composer-conditions.R) on its own: hand-made track
+# The composer's condition selection (R/app-conditions.R) on its own: hand-made track
 # items (helper-composer-fakes.R), no genome. What the server sends to the track picker
 # (update_rank_list()) and to the condition selects (updateSelectizeInput()) is recorded.
 

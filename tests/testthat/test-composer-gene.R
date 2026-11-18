@@ -1,4 +1,4 @@
-# The composer's gene lookup (R/composer-gene.R) on its own: .pt_resolve_gene_region() is
+# The composer's gene lookup (R/app-gene.R) on its own: .pt_resolve_gene_region() is
 # replaced by a lookup table, so no genome is needed. Each lookup's arguments and the gene
 # box updates (the canonical symbol echoed back) are recorded.
 

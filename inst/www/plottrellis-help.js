@@ -1,4 +1,4 @@
-// Help popovers (R/help_popover.R): the circled-i button beside a field label, in the setup
+// Help popovers (R/app-help-popover.R): the circled-i button beside a field label, in the setup
 // wizard and the composer's Figure settings alike. Bootstrap 3's own popover (bundled with
 // shiny), trigger "manual": hovering shows it, leaving hides it, a click pins it open (so it
 // works on touch and the text can be read at leisure), a second click, Escape or a click

@@ -28,6 +28,19 @@ test_that("the AI prompt names every file extension the app looks for", {
   expect_match(txt, "quant.sf", fixed = TRUE)     # quantdir is the folder holding it
 })
 
+test_that("the AI prompt serves a biologist or a bioinformatician and asks which first", {
+  txt <- prompt_text()
+  expect_match(txt, "biologist or a bioinformatician", fixed = TRUE)
+  expect_match(txt, "Biologist:", fixed = TRUE)
+  expect_match(txt, "Bioinformatician:", fixed = TRUE)
+  expect_match(txt, "ask whether they are a biologist or a\nbioinformatician", fixed = TRUE)  # opening line
+  # The bioinformatician shortcut points at steps that still exist and keeps the checks.
+  expect_match(txt, "(step 7)", fixed = TRUE)
+  for (h in c("\n6. Show the whole allocation", "\n7. Before writing it, check", "\n8. Give the finished"))
+    expect_true(grepl(h, txt, fixed = TRUE), info = h)
+  expect_false(grepl("[^\\x01-\\x7F]", txt, perl = TRUE))  # project rule: ASCII only, no em dash
+})
+
 test_that("both vignettes show the prompt from the shipped file", {
   pkg <- testthat::test_path("..", "..")
   skip_if_not(dir.exists(file.path(pkg, "vignettes")), "vignette sources not available (installed package)")

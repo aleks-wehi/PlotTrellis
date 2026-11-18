@@ -5,25 +5,32 @@ info_hic <- function() list(
 )
 
 settings_hic <- function(dict, entry, settings, track_w, region_params) {
+  sty <- entry$hic_style %||% "rectangle"
   if (is.null(entry$height)) {
-    sty <- entry$hic_style %||% "rectangle"
     entry$height <- settings$hic_height %||%
       (if (sty == "square") track_w else round(track_w / 2, 2))
   }
-  # A colour range with no width (a colour cap of 0) can't be drawn.
-  ov <- settings$zrange
-  if (!is.null(ov) && length(ov) == 2 && !anyNA(ov) && !(ov[2] > ov[1]))
-    .pt_track_stop(if (ov[1] == 0)
-                     sprintf("the Hi-C colour cap must be above 0 (it is %s).",
-                             format(ov[2]))
-                   else sprintf(
-                     "the Hi-C colour range must go up (it is %s to %s).",
-                     format(ov[1]), format(ov[2])
-                   ),
-                   entry$height)
+  # A Colour max that is not one (a script's typo), or a number of 0 or below,
+  # can't be drawn.
+  cap <- .pt_hic_zrange_cap(settings$zrange_cap)
+  if (length(cap) == 1 && is.na(cap))
+    .pt_track_stop(paste0("the Hi-C colour max must be \"max\", \"p95\", ",
+                          "\"p90\" or a number (it is ",
+                          paste(vapply(settings$zrange_cap, format, ""),
+                                collapse = ", "),
+                          ")."), entry$height)
+  if (is.numeric(cap) && !(cap > 0))
+    .pt_track_stop(sprintf("the Hi-C colour cap must be above 0 (it is %s).",
+                           format(cap)), entry$height)
+  # Rectangle draws a strip as high as the track around the view, so it reads
+  # the contacts out to that far beyond each end of the view (as plotgardener
+  # does to draw it): its height over its width, in view widths.
+  ratio <- entry$height / track_w
+  pad <- if (sty == "rectangle")
+    ratio * (region_params$end - region_params$start) else 0
   # A track that fails to load keeps its height (render_all() reads `pt_height`
   # off the error), so the figure's layout doesn't change when it fails.
-  entry <- tryCatch(load_hic(entry, region_params, settings),
+  entry <- tryCatch(load_hic(entry, region_params, settings, pad),
                     error = function(e) {
     e$pt_height <- entry$height
     stop(e)
@@ -35,9 +42,12 @@ settings_hic <- function(dict, entry, settings, track_w, region_params) {
   log_scale <- identical(settings$hic_colour_scale, "log")
   entry$data$log_scale <- log_scale
   counts <- if (isTRUE(entry$data$failed) || is.null(entry$data$matrix))
-    numeric(0) else entry$data$matrix$counts
+    numeric(0) else .pt_hic_drawn_counts(entry$data$matrix, sty,
+                                         region_params$start,
+                                         region_params$end,
+                                         entry$data$resolution, ratio)
   counts <- counts[is.finite(counts)]
-  # A log scale starts at the smallest value above 0 in view (HiGlass's rule),
+  # A log scale starts at the smallest value above 0 drawn (HiGlass's rule),
   # shared like the top.
   if (log_scale && any(counts > 0)) {
     low_key <- .pt_shared_range_key("hic_zlow_", entry)
@@ -45,19 +55,19 @@ settings_hic <- function(dict, entry, settings, track_w, region_params) {
   }
 
   key <- .pt_shared_range_key("hic_zrange_", entry)
-  ov <- settings$zrange
-  if (!is.null(ov) && length(ov) == 2 && !anyNA(ov)) {
-    dict[[key]] <- list(override = ov)
+  if (is.numeric(cap)) {
+    dict[[key]] <- list(override = c(0, cap))
     return(list(dict = dict, entry = entry))
   }
-  # The colour scale's top when no Colour max is set. Linear: the 95th
-  # percentile of the contacts in view, as Juicebox does (the strongest 5% share
-  # the darkest colour); the maximum, plotgardener's default, is a few pixels on
-  # the diagonal, and the rest of the map came out almost white. Log: the
-  # maximum, as HiGlass does (a log scale already spreads the faint contacts
-  # out).
-  this_max <- if (!length(counts)) 0 else if (log_scale) max(counts) else
-    stats::quantile(counts, HIC_AUTO_TOP_QUANTILE, names = FALSE)
+  # The colour scale's top, from the contacts drawn (Colour max setting). Auto
+  # (NULL): on Linear the 95th percentile, as Juicebox does (the strongest 5%
+  # share the darkest colour; the maximum, plotgardener's default, is a few
+  # pixels on the diagonal, and the rest of the map came out almost white); on
+  # Log the maximum, as HiGlass does (a log scale already spreads the faint
+  # contacts out).
+  stat <- if (is.character(cap)) cap else if (log_scale) "max" else "p95"
+  this_max <- if (!length(counts)) 0 else if (stat == "max") max(counts) else
+    stats::quantile(counts, HIC_TOP_QUANTILES[[stat]], names = FALSE)
   cur <- dict[[key]]
   cur_max <- if (is.list(cur)) NULL else cur
   dict[[key]] <- if (is.null(cur_max)) this_max else max(cur_max, this_max)
@@ -155,9 +165,42 @@ render_hic <- function(entry, dict, ctx) {
   if (ctx$is_first) draw_scale_bar(ctx)
 }
 
-# Quantile of the contacts in view that tops the colour scale when no Colour max
-# is set.
-HIC_AUTO_TOP_QUANTILE <- 0.95
+# The Colour max choices that are a quantile of the contacts drawn.
+HIC_TOP_QUANTILES <- c(p95 = 0.95, p90 = 0.90)
+
+# The Hi-C Colour max setting (zrange_cap) as a track reads it: NULL for Auto
+# (also blank, NA, "auto", or {} from an older settings file), "max", "p95" or
+# "p90", or a number (numeric text, as samples.txt and the Colour max box give
+# it, is read as one). `bad` for anything else.
+.pt_hic_zrange_cap <- function(v, bad = NA) {
+  if (is.null(v) || is.list(v)) return(NULL)
+  if (length(v) != 1) return(bad)
+  if (is.na(v)) return(NULL)
+  if (is.numeric(v)) return(if (is.finite(v)) v else bad)
+  v <- tolower(trimws(as.character(v)))
+  if (v %in% c("", "auto", "na")) return(NULL)
+  if (v %in% c("max", names(HIC_TOP_QUANTILES))) return(v)
+  n <- suppressWarnings(as.numeric(v))
+  if (is.finite(n)) n else bad
+}
+
+# The values of the contacts a Hi-C track draws, from the matrix load_hic()
+# read (x <= y: the upper half): Rectangle shows those within `ratio` (its
+# height over its width) view widths of the diagonal whose midpoint is in the
+# view, from a matrix read that far beyond the view; Square every contact of
+# the view's square, those off the diagonal twice (it draws both halves);
+# Triangle the square's upper half. A bin counts as drawn when its centre is.
+.pt_hic_drawn_counts <- function(m, style, start, end, res, ratio) {
+  if (!nrow(m)) return(numeric(0))
+  if (identical(style, "square")) return(c(m$counts, m$counts[m$x != m$y]))
+  if (identical(style, "rectangle")) {
+    mid <- (m$x + m$y + res) / 2
+    d <- m$y - m$x
+    return(m$counts[mid >= start & mid <= end & d >= 0 &
+                      d <= 2 * ratio * (end - start)])
+  }
+  m$counts
+}
 
 # An end of the colour scale as drawn and written into the script: 4 significant
 # digits, rounded up for the top so it is never below the value it stands for (4
@@ -174,4 +217,13 @@ HIC_AUTO_TOP_QUANTILE <- 0.95
   f <- function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
   if (bp >= 1e6) paste(f(bp / 1e6), "Mb") else
     if (bp >= 1e3) paste(f(bp / 1e3), "kb") else paste(f(bp), "bp")
+}
+
+# The top of each Hi-C colour scale a figure drew, from render_all()'s `dict`,
+# named by its shared key (.pt_shared_range_key()), rounded as drawn. A Colour
+# max typed as a number is left out: it is its own top.
+.pt_hic_colour_tops <- function(dict) {
+  v <- Filter(function(x) is.numeric(x) && length(x) == 1 && is.finite(x) &&
+                x > 0, dict[grepl("^hic_zrange_", names(dict))])
+  vapply(v, .pt_hic_round_top, numeric(1))
 }

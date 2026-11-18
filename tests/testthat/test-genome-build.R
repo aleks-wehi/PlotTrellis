@@ -1,4 +1,4 @@
-# A project's first open builds its TxDb from the GTF (ensure_genome_ready(), R/genomes.R).
+# A project's first open builds its TxDb from the GTF (ensure_genome_ready(), R/genome-main.R).
 # That build gives no routine warnings that options(warn = 2) turns into errors, and never
 # leaves a half-written TxDb at the cache path. Uses the bundled example, so needs no fixture
 # data (org.Mm.eg.db only).

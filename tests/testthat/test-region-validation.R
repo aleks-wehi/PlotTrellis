@@ -24,6 +24,10 @@ test_that("pt_figure() rejects an inverted region and a gene flank of -50% or le
                "must be after its start")
   expect_error(pt_figure(proj, region = "chr2:100-3,000,100,000", tracks = "genes"), "must be below")
   expect_s3_class(pt_figure(proj, region = "chr2:103,400,000-103,500,000", tracks = "genes"), "pt_figure")
+  # Bug 265: two regions stop, instead of the first being used.
+  expect_error(pt_figure(proj, region = c("chr2:103,400,000-103,500,000", "chr2:1-2"), tracks = "genes"),
+               "region must be one string")
+  expect_error(pt_figure(proj, region = 103400000, tracks = "genes"), "region must be one string")
   # The gene lookup (also the app's gene box) says why, instead of handing on a backwards region.
   res <- .pt_resolve_gene_region("Elf5", proj$txdb, -0.6, proj$genome$orgdb, proj$genes, proj$genome$genome_label)
   expect_null(res$region)

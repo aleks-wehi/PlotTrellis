@@ -117,7 +117,7 @@ test_that("orgdb decides the gene symbols drawn on the genes track (no fixture d
 })
 
 test_that("orgdb sets the UniProt organism, uniprot_reviewed_only the Swiss-Prot filter (no fixture data)", {
-  # The Gene info panel's link-out, R/gene_info_panel.R gr_extras_ui. The composer passes
+  # The Gene info panel's link-out, R/app-gene-info-panel.R gr_extras_ui. The composer passes
   # both settings straight through; that wiring is the composer's, not tested here.
   q <- function(...) utils::URLdecode(uniprot_search_url("Pax5", ...))
   expect_match(q("org.Mm.eg.db"), "organism_id:10090", fixed = TRUE)

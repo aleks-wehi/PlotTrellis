@@ -1,6 +1,6 @@
 # No package function writes to the user's global environment or attaches a package,
 # and the TxDb and its CDS index are opened or built once per genome per session
-# (.pt_annotation(), R/boilerplate.R).
+# (.pt_annotation(), R/util-boilerplate.R).
 
 # Renders to a throwaway SVG; returns the messages render_all() gave.
 render_messages <- function(items, region, settings) {

@@ -1,4 +1,4 @@
-# The composer's number, coordinate and label formatting (R/utils-format.R), as plain
+# The composer's number, coordinate and label formatting (R/util-format.R), as plain
 # functions: no app, no genome.
 
 test_that(".pt_format_track_label bolds what precedes the first ' \u00B7 '", {

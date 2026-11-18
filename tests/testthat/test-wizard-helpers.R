@@ -1,6 +1,6 @@
-# Unit tests, with edge cases, for the setup wizard's helper functions (R/utils-wizard-checks.R,
-# R/utils-settings.R, R/wizard-ui.R, R/wizard-genome.R, R/wizard-dirty.R) and the
-# settings readers and defaults it builds on (R/app.R). Cases other test files already cover
+# Unit tests, with edge cases, for the setup wizard's helper functions (R/wizard-checks.R,
+# R/util-settings.R, R/wizard-ui.R, R/wizard-genome.R, R/wizard-dirty.R) and the
+# settings readers and defaults it builds on (R/app-main.R). Cases other test files already cover
 # are not repeated here. No fixture data needed.
 #
 # The helpers defined inside wizard_server() are reached through `h`, inside a

@@ -1,4 +1,4 @@
-# The composer's project actions (R/composer-project-actions.R) on their own: no genome, no
+# The composer's project actions (R/app-project-actions.R) on their own: no genome, no
 # fixture data, a temp project folder. The delayed stopApp() is caught, not run.
 
 # A server made of nothing but the project actions, for one project folder.
@@ -39,8 +39,8 @@ test_that("the top bar holds exactly Edit project settings and Close app", {
 })
 
 test_that("the composer wires the project actions to its own paths, in order", {
-  # Guards the positional call in app.R without fixture data: the call's arguments, by name.
-  app_r <- testthat::test_path("..", "..", "R", "app.R")
+  # Guards the positional call in app-main.R without fixture data: the call's arguments, by name.
+  app_r <- testthat::test_path("..", "..", "R", "app-main.R")
   skip_if_not(file.exists(app_r), "source tree not available (installed package)")
   src <- readLines(app_r, warn = FALSE)
   call <- grep(".pt_project_actions_server(", src, fixed = TRUE, value = TRUE)

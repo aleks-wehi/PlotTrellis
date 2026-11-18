@@ -75,7 +75,7 @@ test_that("every composer setting input reaches render_all() and the R script", 
         expect_true(grepl(paste0(k, " = ", deparse(if (k == "fontsize") as.integer(v) else v)),
                           state$rcode, fixed = TRUE), info = k)
     }
-    expect_equal(seen$zrange, c(0, 50))
+    expect_equal(seen$zrange_cap, 50)
     # Saved values are untouched by live changes.
     expect_equal(saved_cfg()$fontsize, 8L)
   })

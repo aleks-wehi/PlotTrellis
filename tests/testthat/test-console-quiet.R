@@ -53,6 +53,19 @@ test_that(".pt_quiet() hides plotgardener grob lines and select() notes, nothing
                             build_msg))
 })
 
+test_that(".pt_quiet() hides plotSignal()'s bin warnings for a short view, no other warning (bug 261)", {
+  shown <- character()
+  withCallingHandlers(.pt_quiet({
+    warning("Too many bins: adjusting to 8000 bins of size 0. To override try binCap = FALSE.", call. = FALSE)
+    warning("Number of bins larger than plot length: adjusting to Inf bins of size 1.", call. = FALSE)
+    warning("PlotTrellis: something else", call. = FALSE)
+  }), warning = function(w) {
+    shown <<- c(shown, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  expect_identical(shown, "PlotTrellis: something else")
+})
+
 test_that("the first-build line gives a time estimate only for a large GTF", {
   small <- tempfile(fileext = ".gtf"); writeLines("x", small)
   big   <- tempfile(fileext = ".gtf"); writeBin(raw(1.1e7), big)

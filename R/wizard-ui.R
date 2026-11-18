@@ -2,7 +2,7 @@
 # it (the Genome, Data folder and Samples sections, Save and Export). The page's
 # own styles are inst/www/wizard.css.
 
-# wiz_help() (the help button beside a label) lives in help_popover.R.
+# wiz_help() (the help button beside a label) lives in app-help-popover.R.
 
 # The messages a failed Save or import shows: one bullet each, never one joined
 # line. `kind` "error" is a red alert; "warn" an amber note (an import that

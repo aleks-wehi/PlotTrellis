@@ -63,7 +63,7 @@ if (!PT_TEST_DATA_AVAILABLE && PT_TEST_MOUSE_AVAILABLE) {
 # The fixture genomes' caches (TxDb, lookups, chromosome sizes for data/annotations/
 # gencode.vM25 and gencode.v46) live in one test project cache, data/test-genome-cache by
 # default (PT_TEST_GENOME_CACHE overrides), kept between runs: a full TxDb build takes minutes.
-# ensure_genome_ready() is idempotent (genomes.R) -- whatever caches are missing get built
+# ensure_genome_ready() is idempotent (genome-main.R) -- whatever caches are missing get built
 # there, once. Caches an older version left beside the fixture GTFs seed it (hard-linked
 # where possible, so a write to a test genome file would change the original too), so the first run neither rebuilds nor fetches chromosome sizes. With no seeds,
 # the first run builds them; run that once before a sharded run.
@@ -236,7 +236,7 @@ test_rows <- function(dataset) {
 
 # region_params for a dataset's default fixture gene, or an explicit
 # gene/flank override. Uses the real, shared gene_to_coords()
-# (gene_lookup.R) directly; it matches the fixture TxDbs' gene ids because
+# (genome-gene-lookup.R) directly; it matches the fixture TxDbs' gene ids because
 # ensure_genome_ready() strips GENCODE version suffixes from a freshly built
 # TxDb's gene table.
 test_region <- function(dataset, gene = NULL, flank_pct = 0.15) {
@@ -261,7 +261,7 @@ test_settings <- function(dataset, overrides = list()) {
     gtf_path = gm$gtf_path, data_dir = fx$data_dir, samples = fx$samples,
     title = "", output_path = tempfile(fileext = ".svg"),
     page_w = 9, font = "DejaVu Sans", fontsize = 8L, chr_fmt = "dot",
-    hic_norm = "KR", hic_max_bins_per_view = 500, zrange = NULL,
+    hic_norm = "KR", hic_max_bins_per_view = 500, zrange_cap = NULL,
     atac_height = 0.85, hic_style = "rectangle", hic_res_mode = "auto",
     diff_colour_lo = "#0033CC", diff_colour_hi = "#CC0000",
     junction_opacity_cap = 2, arc_clip_partial = FALSE, show_track_axes = TRUE,
@@ -271,7 +271,7 @@ test_settings <- function(dataset, overrides = list()) {
 }
 
 # ---- render_all() entry constructors ----------------------------------------
-# What .pt_build_entries() (figure_helpers.R) does for the app, here from a
+# What .pt_build_entries() (api-figure-helpers.R) does for the app, here from a
 # sample_row (test_rows()) instead of the app's track items: converts it
 # into the entry shape render_all() consumes.
 #

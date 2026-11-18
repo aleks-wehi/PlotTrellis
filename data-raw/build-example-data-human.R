@@ -113,7 +113,7 @@ writeLines(c(
   sprintf("A small slice of human (hg38) ENCODE data around %s:%d-%d (PSME1, EMC9, PSME2,",
           CHROM, GENE_WINDOW[1], GENE_WINDOW[2]),
   "RNF31, IRF9 and neighbours), for two cell lines: GM12878 (lymphoblastoid) and K562",
-  "(myeloid leukaemia). Open it with plottrellis_example(); the tracks are called 'atac'",
+  "(myeloid leukaemia). Open it with pt_example(\"human\"); the tracks are called 'atac'",
   "and 'junctions' (plus transcript expression tracks from the quant folders).",
   "",
   "Files",
@@ -138,7 +138,7 @@ writeLines(c(
   "  ENCODE data are released without restriction on use (ENCODE data use policy, public data).",
   "  GENCODE annotation is open (EMBL-EBI terms of use). Please cite ENCODE and GENCODE if you reuse them.",
   "",
-  "Rebuild: data-raw/make-example.R in the package source."
+  "Rebuild: data-raw/build-example-data-human.R in the package source."
 ), file.path(OUT, "README"))
 
 cat("Done. ", system(paste("du -sh", shQuote(file.path("inst", "extdata"))), intern = TRUE), "\n")

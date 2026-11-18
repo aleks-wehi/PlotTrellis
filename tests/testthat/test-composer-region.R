@@ -1,4 +1,4 @@
-# The composer's coordinates block (R/composer-region.R) on its own: a server made of
+# The composer's coordinates block (R/app-region.R) on its own: a server made of
 # nothing but .pt_region_server(), two made-up chromosomes, no genome. The page's input
 # updates are recorded by the mock session (recording_session(), helper-composer-fakes.R);
 # the mock session does not apply them, so each test sets the inputs the browser would.

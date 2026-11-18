@@ -1,4 +1,4 @@
-# The Gene / protein info panel (R/gene_info_panel.R) and the Figure settings layout,
+# The Gene / protein info panel (R/app-gene-info-panel.R) and the Figure settings layout,
 # driving the real composer server headlessly (pattern of test-composer-settings.R).
 # The panel sits on the Output page and follows the RENDERED figure's gene; its
 # UniProt parts show a loading note only when their cache is cold. UniProt is never

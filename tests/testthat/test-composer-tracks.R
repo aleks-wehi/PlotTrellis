@@ -1,4 +1,4 @@
-# The composer's track pool (R/composer-tracks.R) on hand-made track items
+# The composer's track pool (R/app-tracks.R) on hand-made track items
 # (helper-composer-fakes.R): samples A and B, no genome, no data files.
 
 SORTED_ALL <- c("bw_atac_A", "bw_atac_B", "bw_diff_stacked_atac_B_vs_A", "bw_diff_stacked_atac_A_vs_B",

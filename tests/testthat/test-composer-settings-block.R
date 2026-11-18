@@ -1,4 +1,4 @@
-# The composer's Figure settings block (R/composer-settings.R) on its own: render settings
+# The composer's Figure settings block (R/app-settings.R) on its own: render settings
 # made from the defaults, a temporary project_settings.json, no genome. Notifications are
 # recorded. (test-composer-settings.R drives the same block through the whole app.)
 

@@ -12,7 +12,7 @@ test_that("the wizard page has the composer's title bar, with its stylesheet in 
             regexpr('class="container-fluid wiz-page"', page[["html"]], fixed = TRUE))
   # The composer's navbarPage title is the same builder: checked in the source, which only exists
   # in a source tree (not under R CMD check or an installed package).
-  app_src <- testthat::test_path("..", "..", "R", "composer-ui.R")
+  app_src <- testthat::test_path("..", "..", "R", "app-ui.R")
   skip_if_not(file.exists(app_src), "package source not available")
   expect_true(any(grepl("title = .pt_brand()", readLines(app_src, warn = FALSE), fixed = TRUE)))
 })
