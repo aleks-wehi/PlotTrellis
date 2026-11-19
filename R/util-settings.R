@@ -125,7 +125,7 @@
                                 wiz_help("Min bins across view:",
                                          "Auto uses the coarsest bin size that still gives at least this many bins across the view."),
                                 value = cfg$hic_max_bins_per_view %||% 500,
-                                min = 50, max = HIC_MAX_BINS, step = 50)),
+                                min = 10, max = HIC_MAX_BINS, step = 10)),
                conditionalPanel(paste0("input.", prefix,
                                        "hic_res_mode === 'fixed'"),
                  numericInput(paste0(prefix, "hic_resolution"),

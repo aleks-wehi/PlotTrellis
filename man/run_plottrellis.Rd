@@ -21,19 +21,36 @@ app opens the project already there, or the setup wizard if there is none.}
 \item{...}{Passed through to \code{\link[shiny:runApp]{shiny::runApp()}} (e.g. \code{launch.browser}, \code{port}, \code{host}).}
 }
 \value{
-Invisibly, the value the app finally stopped with (\code{"closed"} from Close app).
+Invisibly, the value the app finally stopped with (\code{"closed"} when
+its browser tab was closed).
 }
 \description{
-The usual way to start PlotTrellis: a Shiny app (Compose, then Output on the same page) for building
+The usual way to start PlotTrellis: a Shiny app for building
 plotgardener figures without writing code, and downloading a standalone R script that
 reproduces each one. Opens the setup wizard when \code{project_dir} has no
 \code{project_settings.json} yet (or after Edit project settings), otherwise the composer,
 and switches between the two by itself after Save, Reset or Clear caches, so a first
-run needs no re-launch. Blocks until Close app is used.
+run needs no re-launch. Blocks until the app is stopped.
 }
 \details{
 \code{PlotTrellisApp()} is this function's original name, kept as an alias with the same
 behaviour.
+}
+\section{Stopping the app}{
+
+Close the app's browser tab: the app stops a few seconds after its last tab
+is closed. Reloading the tab, or a lost connection, does not stop it: after
+a lost connection, reload the tab, or stop the app from R (Esc in RStudio,
+Ctrl+C in a terminal).
+\code{options(PlotTrellis.stop_on_close = FALSE)} keeps the app running until R
+is interrupted.
+}
+\section{The classic screen}{
+
+\code{options(PlotTrellis.screen = "classic")}, set before launching, opens the
+app's earlier screen (Compose, then Output on the same page, with a Close
+app button) instead of the main screen. The environment variable
+\code{PLOTTRELLIS_SCREEN=classic} does the same.
 }
 \examples{
 if (interactive()) {

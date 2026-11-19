@@ -1,6 +1,6 @@
 Package: PlotTrellis
 Title: Composable Genomic Track Visualisations for Non-Coders
-Version: 1.1.0
+Version: 1.1.1
 Authors@R: c(
     person("Aleksander", "Pacnik", email = "pacnik.a@wehi.edu.au", role = c("aut", "cre"),
         comment = c(ORCID = "0009-0000-4062-2582")),

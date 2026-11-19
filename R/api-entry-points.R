@@ -179,9 +179,9 @@ plottrellis_wizard <- function(project_dir = .pt_default_dir(), ...) {
 #' app rather than relaunching it. Blocks until the app is stopped.
 #'
 #' @inheritParams run_plottrellis
-#' @return Invisibly, the value the app stopped with: `"closed"` (Close app),
-#'   `"edit_settings"` (Edit project settings) or `"restart"` (Reset project /
-#'   Clear caches).
+#' @return Invisibly, the value the app stopped with: `"closed"` (its browser
+#'   tab was closed, or Close app on the classic screen), `"edit_settings"`
+#'   (Edit project settings) or `"restart"` (Reset project / Clear caches).
 #' @seealso [run_plottrellis()], [parse_samples_txt()]
 #' @examples
 #' if (interactive()) {
@@ -206,16 +206,29 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...) {
 
 #' Launch PlotTrellis
 #'
-#' The usual way to start PlotTrellis: a Shiny app (Compose, then Output on the
-#' same page) for building plotgardener figures without writing code, and
-#' downloading a standalone R script that reproduces each one. Opens the setup
-#' wizard when `project_dir` has no `project_settings.json` yet (or after Edit
-#' project settings), otherwise the composer, and switches between the two by
-#' itself after Save, Reset or Clear caches, so a first run needs no re-launch.
-#' Blocks until Close app is used.
+#' The usual way to start PlotTrellis: a Shiny app for building plotgardener
+#' figures without writing code, and downloading a standalone R script that
+#' reproduces each one. Opens the setup wizard when `project_dir` has no
+#' `project_settings.json` yet (or after Edit project settings), otherwise the
+#' composer, and switches between the two by itself after Save, Reset or Clear
+#' caches, so a first run needs no re-launch. Blocks until the app is stopped.
 #'
 #' `PlotTrellisApp()` is this function's original name, kept as an alias with
 #' the same behaviour.
+#'
+#' @section Stopping the app:
+#' Close the app's browser tab: the app stops a few seconds after its last tab
+#' is closed. Reloading the tab, or a lost connection, does not stop it: after
+#' a lost connection, reload the tab, or stop the app from R (Esc in RStudio,
+#' Ctrl+C in a terminal).
+#' `options(PlotTrellis.stop_on_close = FALSE)` keeps the app running until R
+#' is interrupted.
+#'
+#' @section The classic screen:
+#' `options(PlotTrellis.screen = "classic")`, set before launching, opens the
+#' app's earlier screen (Compose, then Output on the same page, with a Close
+#' app button) instead of the main screen. The environment variable
+#' `PLOTTRELLIS_SCREEN=classic` does the same.
 #'
 #' @param project_dir Directory holding this project's `project_settings.json`
 #'   and its cache/downloaded-script state, or a [pt_project()]. Defaults to a
@@ -227,8 +240,8 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...) {
 #'   setup wizard if there is none.
 #' @param ... Passed through to [shiny::runApp()] (e.g. `launch.browser`,
 #'   `port`, `host`).
-#' @return Invisibly, the value the app finally stopped with (`"closed"` from
-#'   Close app).
+#' @return Invisibly, the value the app finally stopped with (`"closed"` when
+#'   its browser tab was closed).
 #' @seealso [plottrellis_wizard()], [plottrellis_composer()],
 #'   [parse_samples_txt()]
 #' @examples

@@ -14,8 +14,9 @@ in your home directory (created if needed); pass another folder per project.}
 \item{...}{Passed through to \code{\link[shiny:runApp]{shiny::runApp()}} (e.g. \code{launch.browser}, \code{port}, \code{host}).}
 }
 \value{
-Invisibly, the value the app stopped with: \code{"closed"} (Close app),
-\code{"edit_settings"} (Edit project settings) or \code{"restart"} (Reset project / Clear caches).
+Invisibly, the value the app stopped with: \code{"closed"} (its browser
+tab was closed, or Close app on the classic screen), \code{"edit_settings"}
+(Edit project settings) or \code{"restart"} (Reset project / Clear caches).
 }
 \description{
 Opens the composer for a project that already has a \code{project_settings.json} (made by

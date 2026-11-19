@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use PlotTrellis, please cite it using these metadata."
 type: software
 title: "PlotTrellis: Composable Genomic Track Visualisations for Non-Coders"
-version: 1.1.0
+version: 1.1.1
 abstract: >-
   A plotgardener-based genomic track composer that lets biologists build
   common EDA visualisations (coverage, Hi-C, splice junctions, transcript

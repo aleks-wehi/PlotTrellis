@@ -1164,8 +1164,7 @@ knit_print.pt_figure <- function(x, ...) {
 #'
 #' The path of a `samples.txt` shipped with PlotTrellis, for [run_plottrellis()]
 #' or [pt_project()]. Its data is read where it is installed (a project keeps
-#' its caches in its own folder), and the app opens on it with a gene and tracks
-#' already picked.
+#' its caches in its own folder), and the app's gene box suggests its gene.
 #'
 #' - `"mammary"` (the default): mouse mammary basal cells (Basal) vs luminal
 #'   progenitors (LP) (Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat,
@@ -1207,6 +1206,10 @@ pt_example <- function(dataset = c("mammary", "human", "paper")) {
 #' still there, and clears it otherwise. An Import in the wizard replaces it by
 #' the imported samples.txt's start lines (none: no view); the
 #' project_samples.txt copy beside the settings carries it as such lines.
+#'
+#' Only the app's earlier screen (`options(PlotTrellis.screen = "classic")`)
+#' opens on the starting view. The main screen always opens empty, and offers
+#' the view's gene first in its gene box.
 #'
 #' @param proj A [pt_project()].
 #' @param fig A [pt_figure()] of `proj`, made with `gene =` (a `region =` view

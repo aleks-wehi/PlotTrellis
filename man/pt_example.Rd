@@ -15,7 +15,7 @@ The path of the example's \code{samples.txt}.
 \description{
 The path of a \code{samples.txt} shipped with PlotTrellis, for \code{\link[=run_plottrellis]{run_plottrellis()}} or
 \code{\link[=pt_project]{pt_project()}}. Its data is read where it is installed (a project keeps its caches in its
-own folder), and the app opens on it with a gene and tracks already picked.
+own folder), and the app's gene box suggests its gene.
 }
 \details{
 \itemize{

@@ -222,6 +222,10 @@
 
 # Startup: everything loaded once per launch (R/app-context.R).
 ctx <- .pt_composer_context(SETTINGS_JSON, CFG)
+# The main screen (R/app-screen-server.R) unless the classic one is asked for
+# (.pt_screen()); the rest of this function is the classic composer.
+if (identical(.pt_screen(), "new"))
+  return(.pt_main_app(ctx, SETTINGS_JSON, RENDER_POOL))
 # Tests read the app's startup state through the server's environment
 # (environment(app$serverFuncSource())): these names stay as locals here.
 TRACK_ITEMS <- ctx$TRACK_ITEMS

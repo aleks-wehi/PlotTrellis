@@ -23,6 +23,10 @@ code. Saving the app's wizard keeps it while the GTF, the OrgDb and the samples 
 tracks it shows (by name) are all still there, and clears it otherwise. An Import in
 the wizard replaces it by the imported samples.txt's start lines (none: no view); the
 project_samples.txt copy beside the settings carries it as such lines.
+
+Only the app's earlier screen (\code{options(PlotTrellis.screen = "classic")}) opens on the
+starting view. The main screen always opens empty, and offers the view's gene first in
+its gene box.
 }
 \examples{
 proj <- pt_project(file.path(tempdir(), "pt-example-human"), pt_example("human"))

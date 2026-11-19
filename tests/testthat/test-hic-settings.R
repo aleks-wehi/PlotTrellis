@@ -18,6 +18,23 @@ test_that("Auto never picks a bin size giving over 1,000 bins across the view (b
   expect_identical(pick(avail, 5e6, hic_res_mode = "auto", hic_max_bins_per_view = 5000), 5000)
   # No minimum saved (an old settings file): 500.
   expect_identical(pick(avail, 5e6, hic_res_mode = "auto"), 10000)
+  # The lowest minimum the settings box takes, 10, is used as given.
+  expect_identical(pick(avail, 1.2e5, hic_res_mode = "auto", hic_max_bins_per_view = 10), 10000)
+})
+
+test_that("Min bins across view defaults to 500 and its box takes 10 to 1,000", {
+  expect_identical(.pt_display_defaults()$hic_max_bins_per_view, 500)
+  expect_identical(.pt_render_cfg(list(), list(), tempdir())$hic_max_bins_per_view, 500)
+  box <- function(cfg) {
+    html <- as.character(.pt_display_settings_ui(cfg, "s_")$display)
+    regmatches(html, regexpr("<input id=\"s_hic_max_bins_per_view\"[^>]*>", html))
+  }
+  expect_match(box(list()), "value=\"500\"", fixed = TRUE)
+  expect_match(box(list()), "min=\"10\"", fixed = TRUE)
+  expect_match(box(list()), "max=\"1000\"", fixed = TRUE)
+  expect_match(box(list()), "step=\"10\"", fixed = TRUE)
+  # A saved 10 is shown as saved.
+  expect_match(box(list(hic_max_bins_per_view = 10)), "value=\"10\"", fixed = TRUE)
 })
 
 test_that("Finest and Fixed are limited to 1,000 bins across the view too", {

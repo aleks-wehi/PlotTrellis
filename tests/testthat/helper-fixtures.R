@@ -366,7 +366,18 @@ test_fig <- function(track_specs, region_params, settings, perf_id = NULL, modul
     # render that crashed (started, never recorded) from one that finished.
     PERF_TIMES$started <- union(PERF_TIMES$started, perf_id)
     elapsed <- system.time(val <- raw_fig())[["elapsed"]]
-    record_perf(perf_id, module, elapsed)
+    # Only used if the first time is over the ceiling: draws again on a
+    # throwaway device, so the figure the snapshot is taken from is untouched.
+    retime <- function() {
+      dev <- grDevices::dev.cur()
+      grDevices::pdf(NULL)
+      on.exit({
+        grDevices::dev.off()
+        if (dev > 1) grDevices::dev.set(dev)
+      })
+      system.time(raw_fig())[["elapsed"]]
+    }
+    record_perf(perf_id, module, elapsed, retime)
     invisible(val)
   }
 }
@@ -393,12 +404,20 @@ PERF_TIMES$started <- character(0)
 
 # The regression ceiling is a multiple of the recorded baseline seconds, not an
 # absolute ceiling: 2x (a loaded login node can exceed it; a compute node
-# doesn't). Asserted here (inside the helper) rather
+# doesn't). A single slow draw on a busy node is not a regression, though (one
+# 0.1 s baseline once measured 4.4 s), so a render over the ceiling is timed
+# once more and the faster time counts: a real slowdown is slow both times.
+# Asserted here (inside the helper) rather
 # than at each call site -- testthat attributes an expectation raised from
 # inside a helper function to whichever test_that() block is currently
 # executing, the same convention every other assertion helper in this file
 # already relies on.
-record_perf <- function(fixture, module, seconds) {
+perf_seconds_to_judge <- function(seconds, baseline, retime = NULL) {
+  if (is.null(retime) || seconds <= 2 * baseline) return(seconds)
+  again <- tryCatch(retime(), error = function(e) NA_real_)
+  if (is.na(again)) seconds else min(seconds, again)
+}
+record_perf <- function(fixture, module, seconds, retime = NULL) {
   PERF_TIMES$records[[length(PERF_TIMES$records) + 1]] <- list(
     fixture = fixture, module = module, seconds = seconds
   )
@@ -407,11 +426,19 @@ record_perf <- function(fixture, module, seconds) {
   if (!is.null(PERF_BASELINE) && PT_TEST_DATA_AVAILABLE) {
     row <- PERF_BASELINE[PERF_BASELINE$fixture == fixture, ]
     if (nrow(row) == 1) {
+      first <- seconds
+      seconds <- perf_seconds_to_judge(first, row$seconds[1], retime)
+      # Shown in the run's output, so a fixture that is rescued again and again
+      # (e.g. a slow first draw that the warm second one hides) does not go unseen.
+      if (seconds < first) {
+        message(sprintf("perf: fixture '%s' took %.2fs (baseline %.2fs), re-timed %.2fs",
+                        fixture, first, row$seconds[1], seconds))
+      }
       testthat::expect_true(
         seconds <= 2 * row$seconds[1],
         info = sprintf(
-          "fixture '%s' took %.2fs, more than 2x its %.2fs baseline",
-          fixture, seconds, row$seconds[1]
+          "fixture '%s' took %.2fs (first draw %.2fs), more than 2x its %.2fs baseline",
+          fixture, seconds, first, row$seconds[1]
         )
       )
     }

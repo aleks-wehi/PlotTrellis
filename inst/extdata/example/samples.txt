@@ -7,8 +7,9 @@
 #   gtf_path       your genome's GTF, GENCODE or Ensembl (relative to this file, or a full path)
 #   orgdb          your species' OrgDb package, e.g. org.Hs.eg.db for human
 #   genome_label   the UCSC name of your genome build, e.g. hg38
-#   start_gene, start_tracks   optional: the gene and tracks the app opens on (every sample;
-#   start_samples, start_comparison, start_order pick samples as in pt_figure())
+#   start_gene, start_tracks   optional: the gene the app suggests first, and the gene and
+#   tracks its earlier screen opens on (every sample; start_samples, start_comparison,
+#   start_order pick samples as in pt_figure())
 # then list one row per sample. Each column after colour is type:name, and each cell is a
 # path relative to data_root (bw = bigWig, quantdir = a Salmon output folder holding quant.sf).
 # data_root: .

@@ -42,23 +42,25 @@ around the *Elf5*, *Ehf* and *Cat* genes. `pt_example()` is the path of its `sam
 file that lists a project's samples and data. `project_dir` is the folder PlotTrellis keeps the
 project in (any folder; without it, `~/PlotTrellis`).
 
-The app opens on *Elf5* with its tracks picked: click **Generate figure**. Then try *Ehf* or
-*Cat*, or other tracks. R is busy while the app runs: click **Close app** (top right) to stop
-it. Closing the browser tab does not.
+The app opens empty. Click the gene box and pick *Elf5* (it is suggested), pick the samples, add
+tracks, then click **Generate figure**. Then try *Ehf* or *Cat*, or other tracks. R is busy while
+the app runs: close the app's browser tab to stop it.
 
 A second example, human GM12878 and K562 cells around *PSME2*, has splice junctions too: use
 `samples_txt = pt_example("human")` and a new `project_dir` (it needs `org.Hs.eg.db`).
 
-To make your own figure on the **Compose** page, pick how many samples and which ones, then a
-gene or coordinates:
+To make your own figure, type a gene (or switch to **Region** for coordinates), then pick the
+samples:
 
 ```{r compose-screenshot-1, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/sample_and_gene_selection.png")
 ```
 
-Drag tracks into the figure (drag again to reorder) and click **Generate figure**. **Figure
-settings** has the title, fonts, heights and colours. **Output** downloads the figure as an SVG
-or as an R script, and shows the gene's transcripts and protein domains.
+Click tracks under **Add** to put them in the figure (drag to reorder) and click **Generate
+figure**. Every figure you generate stays in the strip under it, to go back to or to compare.
+**Figure settings** has the title, fonts, heights and colours. **SVG** and **R script** download
+the figure and a script that redraws it, and **Gene info** shows the gene's transcripts and
+protein domains. Press **?** for the keyboard shortcuts.
 
 ```{r compose-screenshot-2, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/track_composer.png")
@@ -158,7 +160,7 @@ The header lines:
 - `data_root`: the folder your data is in. The table's paths are relative to it.
 - `gtf_path`, `orgdb`, `genome_label`: your genome (see above).
 - Optional: any app setting, e.g. `# fontsize: 12` (a project's `project_samples.txt` lists the
-  ones changed in the app), and a start view (see [Sharing](#sharing)).
+  ones changed in the app).
 
 The columns:
 
@@ -234,8 +236,7 @@ as `genes` and `transcripts_annotated` need no sample. The rest are drawn for ev
   `pt_stitch(figs, "all_genes.pdf")` (`ncol = 2` for side by side; see `?pt_stitch`).
 - **`pt_script(fig, "Elf5.R")`** writes an R script that redraws the figure, for edits the
   API doesn't offer.
-- **`run_plottrellis(proj)`** opens the project in the app; `pt_preload(proj, fig)` first makes
-  it open on `fig`, ready for someone who doesn't code.
+- **`run_plottrellis(proj)`** opens the project in the app.
 
 # Sharing
 
@@ -251,17 +252,6 @@ They must be able to read your data files and GTF, so keep them on a shared driv
 `data_root` and `gtf_path` as full paths. Their project is their own copy. When you edit your
 `samples.txt`, their next run picks up the edit and replaces the settings they changed in the
 app.
-
-To have the app open on a gene with its tracks picked, as the example does, add:
-
-```
-# start_gene: Elf5
-# start_tracks: atac, transcripts_annotated, genes
-```
-
-The tracks are drawn for every sample. `# start_samples:`, `# start_comparison:` and
-`# start_order:` work like `samples`, `comparison` and `order` in `pt_figure()`
-(comma-separated, `NA` for a track without a sample).
 
 # Troubleshooting
 
