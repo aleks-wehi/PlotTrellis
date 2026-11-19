@@ -90,7 +90,8 @@ scale bar with \code{draw_scale_bar(ctx)}. Default \code{FALSE}.}
 \item{\code{row_panel}}{\code{TRUE}: adjacent tracks of the type draw as one panel
 (below). Default \code{FALSE}.}
 \item{\code{needs_gene}}{\code{TRUE}: it draws only for a gene, not for coordinates;
-the app flags it in a coordinates view. Default \code{FALSE}.}
+the classic screen flags it in a coordinates view, and the screen for
+experienced users does not generate it for a region. Default \code{FALSE}.}
 \item{\code{path_field}}{The track item field holding a per-sample track's data
 path. It reaches the entry as \code{path}; an item made by a module's own
 \verb{detect_<key>()} with no path there (\code{NA}, empty) gives an entry without \code{path}.

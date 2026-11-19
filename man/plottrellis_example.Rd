@@ -12,10 +12,12 @@ The path of the example's \code{samples.txt}.
 \description{
 The path of PlotTrellis's small example project's \code{samples.txt}, ready for
 \code{\link[=parse_samples_txt]{parse_samples_txt()}}; the same file as \code{pt_example("mammary")}. The data is mouse mammary basal cells and
-luminal progenitors (Milevskiy et al. 2023, \emph{Cell Genomics}, GEO GSE227750): ATAC-seq
-coverage and Salmon transcript quantification for each, over the Ehf, Elf5 and Cat genes
-(mm10, GENCODE vM25). Search for Elf5 in the composer: it is almost silent in basal cells
-and highly expressed in luminal progenitors.
+luminal progenitors (Milevskiy et al. 2023, \emph{Cell Genomics}, GEO GSE227750) at five genes, Eya2, Lrrfip1, Acot7,
+Dzip1 and Cxcl14 (mm39, GENCODE vM39), with every data type: RNA-seq
+coverage, splice junctions and transcript expression, ATAC and H3K36me3
+coverage and peaks, IgG and Hi-C. Search for Eya2 in the composer: basal
+cells mostly use its isoform from an upstream promoter, luminal progenitors a
+shorter one.
 }
 \details{
 The example needs the mouse OrgDb package, \code{org.Mm.eg.db}, which PlotTrellis doesn't

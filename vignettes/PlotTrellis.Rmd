@@ -38,33 +38,37 @@ run_plottrellis(project_dir = "PlotTrellis-example", samples_txt = pt_example())
 ```
 
 This opens the bundled example: mouse mammary basal cells (Basal) and luminal progenitors (LP)
-around the *Elf5*, *Ehf* and *Cat* genes. `pt_example()` is the path of its `samples.txt`, the
+at five genes, with RNA-seq, splice junctions, transcript expression, ATAC, H3K36me3 and Hi-C.
+`pt_example()` is the path of its `samples.txt`, the
 file that lists a project's samples and data. `project_dir` is the folder PlotTrellis keeps the
 project in (any folder; without it, `~/PlotTrellis`).
 
-The app opens empty. Click the gene box and pick *Elf5* (it is suggested), pick the samples, add
-tracks, then click **Generate figure**. Then try *Ehf* or *Cat*, or other tracks. R is busy while
-the app runs: close the app's browser tab to stop it.
+The app opens on *Eya2* with its tracks picked: click **Generate figure**. Then try *Lrrfip1*,
+*Acot7*, *Dzip1* or *Cxcl14*, or other tracks. R is busy while the app runs: click **Close app**
+(top right) to stop it. Closing the browser tab does not.
 
-A second example, human GM12878 and K562 cells around *PSME2*, has splice junctions too: use
+A second example, human GM12878 and K562 cells around *PSME2*: use
 `samples_txt = pt_example("human")` and a new `project_dir` (it needs `org.Hs.eg.db`).
 
-To make your own figure, type a gene (or switch to **Region** for coordinates), then pick the
-samples:
+To make your own figure on the **Compose** page, pick how many samples and which ones, then a
+gene or coordinates:
 
 ```{r compose-screenshot-1, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/sample_and_gene_selection.png")
 ```
 
-Click tracks under **Add** to put them in the figure (drag to reorder) and click **Generate
-figure**. Every figure you generate stays in the strip under it, to go back to or to compare.
-**Figure settings** has the title, fonts, heights and colours. **SVG** and **R script** download
-the figure and a script that redraws it, and **Gene info** shows the gene's transcripts and
-protein domains. Press **?** for the keyboard shortcuts.
+Drag tracks into the figure (drag again to reorder) and click **Generate figure**. **Figure
+settings** has the title, fonts, heights and colours. **Output** downloads the figure as an SVG
+or as an R script, and shows the gene's transcripts and protein domains.
 
 ```{r compose-screenshot-2, echo=FALSE, out.width="100%"}
 knitr::include_graphics("figures/track_composer.png")
 ```
+
+`run_plottrellis(project_dir = "PlotTrellis-example", experienced = TRUE)` opens another screen
+on the same project, for experienced users: gene, samples, tracks and figure on one page, with
+keyboard shortcuts, a strip of the figures you generated, and SVG, PNG and JPEG downloads. It
+opens empty, and closing its browser tab stops the app.
 
 Working in R instead? See [Your first figure in code](#your-first-figure-in-code).
 
@@ -130,14 +134,14 @@ The example figure from the app:
 ```{r code-example, eval=FALSE}
 library(PlotTrellis)
 proj <- pt_project(project_dir = "PlotTrellis-example", samples_txt = pt_example())
-fig  <- pt_figure(proj, "Elf5", tracks = c("atac", "transcript_expression", "transcripts_annotated", "genes"))
-pt_save(fig, "Elf5.pdf")   # or .svg, .png
+fig  <- pt_figure(proj, "Eya2", tracks = c("transcript_expression", "junctions", "ATAC", "H3K36me3", "transcripts_annotated", "genes"))
+pt_save(fig, "Eya2.pdf")   # or .svg, .png
 ```
 
-```{r code-example-run, echo=FALSE, fig.alt="Elf5 in mouse mammary basal cells and luminal progenitors: ATAC coverage and transcript expression for each, then the annotated transcripts and the gene."}
+```{r code-example-run, echo=FALSE, fig.alt="Eya2 in mouse mammary basal cells and luminal progenitors: transcript expression, splice junctions, ATAC and H3K36me3 coverage for each, then the annotated transcripts and the gene."}
 library(PlotTrellis)
 proj <- pt_project(project_dir = file.path(tempdir(), "PlotTrellis-example"), samples_txt = pt_example())
-pt_figure(proj, "Elf5", tracks = c("atac", "transcript_expression", "transcripts_annotated", "genes"))
+pt_figure(proj, "Eya2", tracks = c("transcript_expression", "junctions", "ATAC", "H3K36me3", "transcripts_annotated", "genes"))
 ```
 
 # Your own data in code (writing a samples.txt)
@@ -159,6 +163,8 @@ The header lines:
 
 - `data_root`: the folder your data is in. The table's paths are relative to it.
 - `gtf_path`, `orgdb`, `genome_label`: your genome (see above).
+- Optional: `# suggested_genes: CD4, IL7R` lists genes (names or Ensembl ids) for the gene box
+  to suggest before anything is typed (with `experienced = TRUE`).
 - Optional: any app setting, e.g. `# fontsize: 12` (a project's `project_samples.txt` lists the
   ones changed in the app).
 
@@ -222,19 +228,19 @@ as `genes` and `transcripts_annotated` need no sample. The rest are drawn for ev
 
 - **`samples = "LP"`** draws every track for that one sample. A `samples` as long as `tracks`
   gives each track its own, `NA` for tracks that need none:
-  `tracks = c("atac", "atac", "genes"), samples = c("LP", "Basal", NA)`.
+  `tracks = c("ATAC", "ATAC", "genes"), samples = c("LP", "Basal", NA)`.
 - **`comparison = c("Basal", "LP")`** draws those two samples, in that order, and gives
   comparison tracks the first as the reference:
-  `pt_figure(proj, "Elf5", c("atac", "atac_diff", "genes"), comparison = c("Basal", "LP"))`.
+  `pt_figure(proj, "Eya2", c("ATAC", "ATAC_diff", "genes"), comparison = c("Basal", "LP"))`.
 - **`order = "sample"`** groups the tracks by sample instead of by track. Tracks without a
   sample stay where they are written, so put them first or last.
 - **Numbers** work instead of names, e.g. `tracks = c(6, 1), samples = 2`, as listed by
   `pt_tracks(proj)` and `pt_samples(proj)`. They change when `samples.txt` does, so use names
   in scripts you keep.
-- **`region = "chr2:103,400,000-103,460,000"`** instead of a gene shows any coordinates.
+- **`region = "chr2:165,430,000-165,620,000"`** instead of a gene shows any coordinates.
 - **Many genes in one file**: put the figures in a list and call
   `pt_stitch(figs, "all_genes.pdf")` (`ncol = 2` for side by side; see `?pt_stitch`).
-- **`pt_script(fig, "Elf5.R")`** writes an R script that redraws the figure, for edits the
+- **`pt_script(fig, "Eya2.R")`** writes an R script that redraws the figure, for edits the
   API doesn't offer.
 - **`run_plottrellis(proj)`** opens the project in the app.
 

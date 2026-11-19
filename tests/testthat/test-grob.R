@@ -31,8 +31,8 @@ grob_project <- function() {
 test_that("pt_grob() is the figure at its own size; grid.draw() draws it and a pt_figure", {
   skip_if_not_installed("org.Mm.eg.db")
   p <- grob_project()
-  fig <- pt_figure(p$proj, "Elf5", c("atac", "genes"), title = "Locus Elf5")
-  single <- pt_save(fig, file.path(p$dir, "Elf5.svg"))
+  fig <- pt_figure(p$proj, "Eya2", c("ATAC", "genes"), title = "Locus Eya2")
+  single <- pt_save(fig, file.path(p$dir, "Eya2.svg"))
   g <- pt_grob(fig)
   expect_s3_class(g, "pt_grob")
   expect_s3_class(g, "grob")
@@ -52,7 +52,7 @@ test_that("pt_grob() is the figure at its own size; grid.draw() draws it and a p
   }
   grDevices::dev.off()
   expect_equal(sort(svg_texts(f)), sort(rep(svg_texts(single), 2)))
-  expect_equal(diff(title_x(f, "Locus Elf5")[1:2]), 72 * g$width, tolerance = 1e-3)
+  expect_equal(diff(title_x(f, "Locus Eya2")[1:2]), 72 * g$width, tolerance = 1e-3)
   # Settings of a viewport around it do not change its text.
   f <- file.path(p$dir, "cex.svg")
   svglite::svglite(f, width = g$width, height = g$height)
@@ -87,9 +87,9 @@ test_that("pt_grob() is the figure at its own size; grid.draw() draws it and a p
   grDevices::dev.off()
   expect_equal(sort(svg_texts(f)), sort(svg_texts(single)))
 
-  expect_error(pt_grob("Elf5"), "takes a pt_figure")
+  expect_error(pt_grob("Eya2"), "takes a pt_figure")
   local_mocked_bindings(.pt_capture = function(fig, ext, dpi) stop("boom"))
-  expect_error(pt_grob(fig), "Could not draw the figure of Elf5: boom")
+  expect_error(pt_grob(fig), "Could not draw the figure of Eya2: boom")
 })
 
 test_that("a pt_grob composes with ggplot2 in patchwork and cowplot, text kept", {
@@ -98,8 +98,8 @@ test_that("a pt_grob composes with ggplot2 in patchwork and cowplot, text kept",
   skip_if_not_installed("patchwork")
   skip_if_not_installed("cowplot")
   p <- grob_project()
-  fig <- pt_figure(p$proj, "Elf5", c("atac", "genes"), title = "Locus Elf5")
-  single <- pt_save(fig, file.path(p$dir, "Elf5.svg"))
+  fig <- pt_figure(p$proj, "Eya2", c("ATAC", "genes"), title = "Locus Eya2")
+  single <- pt_save(fig, file.path(p$dir, "Eya2.svg"))
   g <- pt_grob(fig)
   scatter <- ggplot2::ggplot(data.frame(x = 1:3, y = 3:1), ggplot2::aes(x, y)) +
     ggplot2::geom_point() + ggplot2::ggtitle("a ggplot beside it")
@@ -116,7 +116,7 @@ test_that("a pt_grob composes with ggplot2 in patchwork and cowplot, text kept",
   f <- file.path(p$dir, "patchwork2.svg")
   ggplot2::ggsave(f, patchwork::wrap_elements(full = g) + patchwork::wrap_elements(full = g),
                   width = 2 * g$width + 0.5, height = g$height + 0.5)
-  expect_gte(diff(title_x(f, "Locus Elf5")[1:2]), 72 * g$width)
+  expect_gte(diff(title_x(f, "Locus Eya2")[1:2]), 72 * g$width)
 
   cw <- cowplot::plot_grid(g, scatter, labels = c("A", "B"), rel_widths = c(g$width, 4))
   f <- file.path(p$dir, "cowplot.svg")

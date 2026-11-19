@@ -24,9 +24,9 @@ tracks it shows (by name) are all still there, and clears it otherwise. An Impor
 the wizard replaces it by the imported samples.txt's start lines (none: no view); the
 project_samples.txt copy beside the settings carries it as such lines.
 
-Only the app's earlier screen (\code{options(PlotTrellis.screen = "classic")}) opens on the
-starting view. The main screen always opens empty, and offers the view's gene first in
-its gene box.
+Only the classic screen opens on the starting view. The screen for experienced users
+(\code{run_plottrellis(experienced = TRUE)}) always opens empty; its gene box offers the
+genes of a samples.txt's \verb{# suggested_genes:} line.
 }
 \examples{
 proj <- pt_project(file.path(tempdir(), "pt-example-human"), pt_example("human"))

@@ -238,15 +238,22 @@ test_that("the track table of both bundled examples is the same", {
   skip_if_not_installed("org.Hs.eg.db")
   mammary <- pinned_tracks(suppressWarnings(pt_project(file.path(tempdir(), "pt-test-script-mammary"),
                                                        pt_example("mammary"))))
+  # Every per-sample track for Basal, then for LP; every comparison both ways.
+  per <- c("RNA", "ATAC", "H3K36me3", "IgG", "HiC", "ATAC_peaks", "H3K36me3_peaks", "junctions", "transcript_expression")
+  per_label <- c(per[-9], "Transcript expression")
+  cmp <- c("RNA_diff", "ATAC_diff", "H3K36me3_diff", "IgG_diff", "junctions_diff", "junctions_diff_tpm")
+  cmp_label <- c(paste(c("RNA", "ATAC", "H3K36me3", "IgG"), "diff (stacked)"), "junctions mirrored diff",
+                 "junctions mirrored diff (TPM-scaled)")
+  pairs <- c("LP vs Basal", "Basal vs LP")
+  pair_label <- c("LP (Cmp) vs Basal (Ref)", "Basal (Cmp) vs LP (Ref)")
   expect_identical(mammary, data.frame(
-    track = c("genes", "protein_domains", "transcripts_all", "transcripts", "transcripts_annotated", "atac",
-              "transcript_expression", "atac", "transcript_expression", "atac_diff", "atac_diff"),
-    sample = c(NA, NA, NA, NA, NA, "Basal", "Basal", "LP", "LP", "LP vs Basal", "Basal vs LP"),
-    kind = c(rep("fixed", 5), rep("sample", 4), rep("comparison", 2)),
+    track = c("genes", "protein_domains", "transcripts_all", "transcripts", "transcripts_annotated",
+              rep(per, 2), rep(cmp, 2)),
+    sample = c(rep(NA, 5), rep(c("Basal", "LP"), each = 9), rep(pairs, each = 6)),
+    kind = c(rep("fixed", 5), rep("sample", 18), rep("comparison", 12)),
     label = c("Gene annotation", "Canonical protein annotation", "Transcripts", "Transcripts (filtered)",
-              "Transcripts annotated (filtered)", "atac \u00B7 Basal", "Transcript expression \u00B7 Basal",
-              "atac \u00B7 LP", "Transcript expression \u00B7 LP", "atac diff (stacked) \u00B7 LP (Cmp) vs Basal (Ref)",
-              "atac diff (stacked) \u00B7 Basal (Cmp) vs LP (Ref)"),
+              "Transcripts annotated (filtered)", paste(per_label, "\u00B7", rep(c("Basal", "LP"), each = 9)),
+              paste(cmp_label, "\u00B7", rep(pair_label, each = 6))),
     stringsAsFactors = FALSE))
   human <- pinned_tracks(suppressWarnings(pt_project(file.path(tempdir(), "pt-test-example-human"), pt_example("human"))))
   expect_identical(human, data.frame(
@@ -437,4 +444,13 @@ test_that("every track type draws a one-track figure without 'track failed'", {
     expect_false(any(grepl("track failed", msgs)), info = key)
     expect_false(any(grepl("track failed", readLines(svg, warn = FALSE))), info = key)
   }
+})
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("a declaration without both module functions is an error", {
+  # Every module but bed has both functions: bed's declaration is then the only orphan.
+  keys <- setdiff(.pt_viz_keys(), "bed")
+  local_mocked_bindings(.pt_viz_keys = function() keys)
+  expect_error(.pt_viz_infos(), "info_bed() is defined but settings_bed() and render_bed() are not both", fixed = TRUE)
 })

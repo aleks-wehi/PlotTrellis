@@ -85,7 +85,8 @@
 #'   \item{`row_panel`}{`TRUE`: adjacent tracks of the type draw as one panel
 #'     (below). Default `FALSE`.}
 #'   \item{`needs_gene`}{`TRUE`: it draws only for a gene, not for coordinates;
-#'     the app flags it in a coordinates view. Default `FALSE`.}
+#'     the classic screen flags it in a coordinates view, and the screen for
+#'     experienced users does not generate it for a region. Default `FALSE`.}
 #'   \item{`path_field`}{The track item field holding a per-sample track's data
 #'     path. It reaches the entry as `path`; an item made by a module's own
 #'     `detect_<key>()` with no path there (`NA`, empty) gives an entry without

@@ -4,11 +4,11 @@ test_that("pt_stitch() stacks figures in one file, as pt_save() draws each", {
   dir <- tempfile("pt-stitch-")
   dir.create(dir)
   proj <- suppressWarnings(pt_project(file.path(dir, "proj"), pt_example()))
-  # Different heights (Cat has fewer transcripts); the genes track's labels take their font
+  # Different heights (Cxcl14 has fewer transcripts); the genes track's labels take their font
   # from a viewport around plotGenes(), which a replay through grid.draw() lost.
   figs <- list()
-  for (g in c("Elf5", "Cat"))
-    figs[[g]] <- pt_figure(proj, g, c("atac", "transcripts_all", "genes"), title = g)
+  for (g in c("Eya2", "Cxcl14"))
+    figs[[g]] <- pt_figure(proj, g, c("ATAC", "transcripts_all", "genes"), title = g)
   singles <- vapply(names(figs), function(g) pt_save(figs[[g]], file.path(dir, paste0(g, ".svg"))), "")
 
   root_wh <- function(f) {
@@ -31,19 +31,18 @@ test_that("pt_stitch() stacks figures in one file, as pt_save() draws each", {
   expect_false(any(grepl("<image", s)))                     # vector, no bitmap
   # The same labels in the same fonts as the two single figures (live text).
   expect_equal(texts(out), sort(c(texts(singles[1]), texts(singles[2]))))
-  expect_true(any(grepl(">Elf5-201<", s)) && any(grepl(">Cat-202<", s)))
-  # Cat below Elf5: its title is lower on the page than Elf5's height. Gene labels can
-  # repeat a title (Cat lies near Elf5, and shows with a narrower font), so the top
-  # Elf5 and the bottom Cat.
+  expect_true(any(grepl(">Eya2-201<", s)) && any(grepl(">Cxcl14-202<", s)))
+  # Cxcl14 below Eya2: its title is lower on the page than Eya2's height. Gene labels can
+  # repeat a title (a gene track labels the gene too), so the top Eya2 and the bottom Cxcl14.
   y_of <- function(label) as.numeric(sub(".* y='([0-9.]+)'.*", "\\1", grep(paste0(">", label, "</text>"), s, value = TRUE)))
-  expect_lt(min(y_of("Elf5")), wh[2, 1])
-  expect_gt(max(y_of("Cat")), wh[2, 1])
+  expect_lt(min(y_of("Eya2")), wh[2, 1])
+  expect_gt(max(y_of("Cxcl14")), wh[2, 1])
 
   # Side by side (ncol = 2): one row, as wide as both, as tall as the taller.
   side <- pt_stitch(figs, file.path(dir, "side.svg"), ncol = 2)
   expect_equal(root_wh(side), c(sum(wh[1, ]), max(wh[2, ])), tolerance = 0.02)
   expect_equal(texts(side), texts(out))
-  expect_gt(as.numeric(sub(".* x='([0-9.]+)'.*", "\\1", grep(">Cat-202</text>", readLines(side), value = TRUE))), wh[1, 1])
+  expect_gt(as.numeric(sub(".* x='([0-9.]+)'.*", "\\1", grep(">Cxcl14-202</text>", readLines(side), value = TRUE))), wh[1, 1])
 
   pdf <- pt_stitch(figs, file.path(dir, "all.pdf"))
   # cairo keeps the page objects in compressed streams: inflate every stream, then search.
@@ -71,10 +70,10 @@ test_that("pt_stitch() stacks figures in one file, as pt_save() draws each", {
   expect_error(pt_stitch(list(figs[[1]], NULL), file.path(dir, "x.pdf")), "item 2 is not one")
   expect_error(pt_stitch(figs, file.path(dir, "no-such-folder", "x.pdf")), "does not exist")
   local_mocked_bindings(.pt_capture = function(fig, ext, dpi) {
-    if (fig$gene == "Cat") stop("boom")
+    if (fig$gene == "Cxcl14") stop("boom")
     structure(grid::gTree(), pt_size = c(9, 60))
   })
-  expect_error(pt_stitch(figs, file.path(dir, "x.pdf")), "Figure 2 \\(Cat\\): boom")
+  expect_error(pt_stitch(figs, file.path(dir, "x.pdf")), "Figure 2 \\(Cxcl14\\): boom")
   # Two 60-inch figures: past cairo's 32767-pixel PNG limit at 300 dpi, fine at 100.
   tall <- list(figs[[1]], figs[[1]])
   expect_error(pt_stitch(tall, file.path(dir, "tall.png")), "Too big for one PNG at 300 dpi")
@@ -89,7 +88,7 @@ test_that("pt_stitch(ncol =) fills rows left to right, each figure top-left in i
   dir <- tempfile("pt-stitch-ncol-")
   dir.create(dir)
   proj <- suppressWarnings(pt_project(file.path(dir, "proj"), pt_example()))
-  fig <- pt_figure(proj, "Elf5", "genes")
+  fig <- pt_figure(proj, "Eya2", "genes")
   figs <- list(fig, fig, fig)
   sizes <- list(c(4, 5), c(3, 2), c(6, 1))   # widths and heights in inches, in order
   drawn <- list()

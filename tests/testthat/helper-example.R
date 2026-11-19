@@ -12,7 +12,7 @@ example_copy <- function(dataset = c("mammary", "human")) {
 # A copied example is outside the package, so its chromosome sizes are not the shipped ones
 # and ensure_genome_ready() would fetch them from UCSC: serves the shipped ones instead.
 local_offline_chrom_sizes <- function(env = parent.frame()) {
-  shipped <- c(mm10 = file.path(dirname(pt_example("mammary")), "gencode.vM25.example_chrom_sizes.rds"),
+  shipped <- c(mm39 = file.path(dirname(pt_example("mammary")), "annotation_chrom_sizes.rds"),
                hg38 = file.path(dirname(pt_example("human")), "annotation_chrom_sizes.rds"))
   local_mocked_bindings(build_chrom_sizes = function(genome_label, out_path) {
     stopifnot(genome_label %in% names(shipped))

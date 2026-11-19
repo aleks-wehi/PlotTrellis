@@ -65,8 +65,8 @@ wizard_server <- function(SETTINGS_JSON, CFG,
   wiz_mode <- reactiveVal(
     if (is_edit) "edit" else if (has_mirror) "import" else NULL
   )
-  # Display settings imported from a samples.txt (the wizard has no inputs for
-  # them): Save writes cfg's values with these on top.
+  # Display settings and suggested genes imported from a samples.txt (the wizard
+  # has no inputs for them): Save writes cfg's values with these on top.
   import_visual <- reactiveVal(list())
   # the lines of the samples.txt last imported in this wizard session
   imported      <- reactiveVal(NULL)

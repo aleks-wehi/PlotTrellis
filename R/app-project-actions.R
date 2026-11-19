@@ -29,9 +29,12 @@
 
 # `unsaved_settings_note` is the composer's zero-argument function returning
 # that warning (it stays defined in the composer closure, where a test reads
-# it); the three paths are the project's.
+# it); the three paths are the project's. `experienced`: TRUE on the screen for
+# experienced users, whose one button for all of this reads "Project settings"
+# and whose dialog also holds the light / dark switch.
 .pt_project_actions_server <- function(input, session, unsaved_settings_note,
-                                       project_dir, settings_json, cache_dir) {
+                                       project_dir, settings_json, cache_dir,
+                                       experienced = FALSE) {
 
   # ── Settings (re-enter wizard) ──────────────────────────────────────────────
   # Editing settings stops this app and restarts into the wizard, a separate app
@@ -42,19 +45,36 @@
   # in it) and, in a collapsed Advanced section, Clear all caches and Reset
   # project configuration.
   observeEvent(input$open_settings, {
-    showModal(modalDialog(
+    folder <- p("Project folder: ", tags$code(project_dir))
+    advanced <- tags$details(id = "settings_advanced",
+      tags$summary(class = "btn btn-default btn-sm", "Advanced"),
+      p("Everything this project keeps (settings and caches) is in its project folder. Your data files are never changed."),
+      actionButton("clear_caches_btn", "Clear all caches...",
+                   class = "btn-warning btn-sm pt-once"),
+      actionButton("reset_project_btn", "Reset project configuration...",
+                   class = "btn-danger btn-sm pt-once")
+    )
+    if (isTRUE(experienced)) showModal(modalDialog(
+      title = "Project settings", easyClose = FALSE,
+      folder,
+      # Light or dark: the page's script (inst/www/main/main.js) sets this switch
+      # to the mode on screen when the dialog shows, and acts on it.
+      div(class = "pt-setrow", span("Appearance"),
+          div(class = "flip", id = "modeFlip", role = "switch", tabindex = "0",
+              `aria-checked` = "false", `aria-label` = "Dark mode",
+              span("Light"), span("Dark"))),
+      p("Edit settings restarts the app into the setup wizard, pre-filled with your current settings. Any in-progress figure/selection in this session will be lost."),
+      unsaved_settings_note(),
+      advanced,
+      footer = tagList(modalButton("Close"),
+                       actionButton("confirm_edit_settings", "Edit settings",
+                                    class = "btn-primary pt-once"))
+    )) else showModal(modalDialog(
       title = "Edit project settings?", easyClose = FALSE,
       p("This restarts the app into the setup wizard, pre-filled with your current settings. Any in-progress figure/selection in this session will be lost."),
       unsaved_settings_note(),
-      p("Project folder: ", tags$code(project_dir)),
-      tags$details(id = "settings_advanced",
-        tags$summary(class = "btn btn-default btn-sm", "Advanced"),
-        p("Everything this project keeps (settings and caches) is in its project folder. Your data files are never changed."),
-        actionButton("clear_caches_btn", "Clear all caches...",
-                     class = "btn-warning btn-sm pt-once"),
-        actionButton("reset_project_btn", "Reset project configuration...",
-                     class = "btn-danger btn-sm pt-once")
-      ),
+      folder,
+      advanced,
       footer = tagList(modalButton("Cancel"),
                        actionButton("confirm_edit_settings", "Continue",
                                     class = "btn-primary pt-once"))

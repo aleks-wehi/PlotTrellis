@@ -78,6 +78,15 @@ test_that("Edit project settings shows the project folder and keeps Clear caches
   topbar <- regmatches(html, regexpr('<div id="topbar-actions">.*?</div>', html))
   expect_match(topbar, "open_settings", fixed = TRUE)
   expect_false(grepl("clear_caches_btn|reset_project_btn", topbar))
+  # The experienced screen's page has one button for it (it sends open_settings); Clear caches and
+  # Reset are only in that dialog there too.
+  main <- suppressMessages(.pt_composer_app(json, .pt_read_settings(json, .pt_default_settings()),
+                                            experienced = TRUE))
+  main_ui <- environment(main$httpHandler)$ui
+  main_html <- htmltools::renderTags(if (is.function(main_ui)) main_ui(NULL) else main_ui)$html
+  expect_match(main_html, 'id="editBtn"', fixed = TRUE)
+  expect_match(main_html, "setInputValue('open_settings'", fixed = TRUE)
+  expect_false(grepl("clear_caches_btn|reset_project_btn", main_html))
 
   shown <- list()
   local_mocked_bindings(showModal = function(ui, ...) shown[[length(shown) + 1]] <<- as.character(ui))

@@ -124,7 +124,7 @@ test_that("a project, a figure and a saved figure attach nothing and leave nothi
     "attached <- search()",
     "objects <- ls(globalenv(), all.names = TRUE)",
     "proj <- pt_project(file.path(getwd(), 'proj'), pt_example('mammary'))",
-    "fig <- pt_figure(proj, 'Elf5', c('genes', 'transcripts', 'atac', 'transcript_expression'), samples = 'Basal')",
+    "fig <- pt_figure(proj, 'Eya2', c('genes', 'transcripts', 'ATAC', 'transcript_expression'), samples = 'Basal')",
     "pt_save(fig, 'figure.svg')",
     "cat('ATTACHED:', setdiff(search(), attached), '\n')",
     "cat('OBJECTS:', setdiff(ls(globalenv(), all.names = TRUE), c(objects, 'objects', 'proj', 'fig', '.Random.seed')), '\n')"

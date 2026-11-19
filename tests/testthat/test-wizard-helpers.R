@@ -370,7 +370,7 @@ test_that(".pt_display_defaults() and .pt_default_settings(): keys, order, the N
   s <- .pt_default_settings()
   expect_identical(names(s), c(.PT_CORE_SETTINGS, names(d)))
   expect_identical(s[.PT_CORE_SETTINGS], list(gtf_path = "", orgdb = "org.Mm.eg.db", genome_label = "mm39",
-                                              data_dir = "", samples = list()))
+                                              data_dir = "", samples = list(), suggested_genes = ""))
   expect_identical(s[names(d)], d)
 })
 
@@ -695,7 +695,7 @@ test_that("wiz_display_settings() and wiz_collect_flat_settings(): the saved set
     expect_identical(ds$font, "Arial")
     session$setInputs(wiz_gtf_path = " /g.gtf ", wiz_orgdb = "", wiz_genome_label = "mm10")
     flat <- h("wiz_collect_flat_settings")()
-    expect_identical(names(flat), c("gtf_path", "orgdb", "genome_label", names(ds)))
+    expect_identical(names(flat), c("gtf_path", "orgdb", "genome_label", "suggested_genes", names(ds)))
     expect_identical(flat$gtf_path, "/g.gtf")
     expect_true("orgdb" %in% names(flat))
     expect_null(flat$orgdb)

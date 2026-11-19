@@ -5,8 +5,8 @@
 # helper-gz-snapshots.R only unpacks the gzipped golden images when the data/
 # fixtures exist; this file's one has to be there without them, so unpack it here.
 local({
-  gz <- test_path("_snaps_gz", "example-data", "example-elf5.svg.gz")
-  svg <- test_path("_snaps", "example-data", "example-elf5.svg")
+  gz <- test_path("_snaps_gz", "example-data", "example-eya2.svg.gz")
+  svg <- test_path("_snaps", "example-data", "example-eya2.svg")
   if (file.exists(gz)) {
     dir.create(dirname(svg), recursive = TRUE, showWarnings = FALSE)
     con <- gzfile(gz, "rt")
@@ -41,63 +41,52 @@ test_that("the example samples.txt imports with no errors or warnings", {
   expect_no_warning(settings <- parse_samples_txt(txt, project_dir = project))
   expect_true(file.exists(file.path(project, "project_settings.json")))
   expect_same_path(settings$data_dir, dir)
-  expect_same_path(settings$gtf_path, file.path(dir, "gencode.vM25.example.gtf.gz"))
+  expect_same_path(settings$gtf_path, file.path(dir, "annotation.gtf.gz"))
   expect_identical(settings$orgdb, "org.Mm.eg.db")
-  expect_identical(settings$genome_label, "mm10")
+  expect_identical(settings$genome_label, "mm39")
   expect_identical(vapply(settings$samples, `[[`, "", "condition"), c("Basal", "LP"))
-  expect_identical(
-    lapply(settings$samples, function(s) vapply(s$data, `[[`, "", "path")),
-    list(c("atac/Basal_ATAC.bw", "quant/Basal_rep1"), c("atac/LP_ATAC.bw", "quant/LP_rep1")))
+  paths <- function(s) c(sprintf(c("rna/%s_RNA.bw", "rna/%s_junctions.bed", "rna/%s_salmon", "atac/%s_ATAC.bw",
+                                   "atac/%s_ATAC_peaks.narrowPeak", "cuttag/%s_H3K36me3.bw",
+                                   "cuttag/%s_H3K36me3_peaks.broadPeak", "cuttag/%s_IgG.bw", "hic/%s_HiC.mcool"), s))
+  expect_identical(lapply(settings$samples, function(s) vapply(s$data, `[[`, "", "path")),
+                   list(paths("Basal"), paths("LP")))
 })
 
-test_that("the example's Elf5 figure renders where it is installed, offline, writing only to the project; golden image", {
+test_that("the example's Eya2 figure renders where it is installed, offline, writing only to the project; golden image", {
   skip_if_not_installed("org.Mm.eg.db")
   before <- example_fingerprint()
   txt <- plottrellis_example()
   project <- tempfile("pt-example-project-")
-  settings <- parse_samples_txt(txt, project_dir = project)
-  cache_dir <- file.path(normalizePath(project), "cache")
   # The shipped chromosome sizes must be used, not fetched from UCSC.
   local_mocked_bindings(build_chrom_sizes = function(...) stop("tried to download chromosome sizes"))
   # txdbmaker's two notices for any GENCODE GTF are expected; anything else still warns.
-  genome <- withCallingHandlers(
-    ensure_genome_ready(settings$gtf_path, settings$orgdb, settings$genome_label, cache_dir = cache_dir),
-    warning = function(w) {
-      if (grepl("\"phase\" metadata column|genome version information", conditionMessage(w)))
-        invokeRestart("muffleWarning")
-    })
+  proj <- withCallingHandlers(pt_project(project, txt), warning = function(w) {
+    if (grepl("\"phase\" metadata column|genome version information", conditionMessage(w)))
+      invokeRestart("muffleWarning")
+  })
+  cache_dir <- file.path(normalizePath(project), "cache")
   # Every genome file is in the project's cache, the chromosome sizes copied from the shipped ones.
+  genome <- proj$genome
   for (f in unlist(genome[c("txdb_path", "tx_name_lookup_path", "tx_meta_lookup_path", "chrom_sizes_path")]))
     expect_true(startsWith(normalizePath(f), normalizePath(file.path(cache_dir, "genome"))), info = f)
   expect_identical(readRDS(genome$chrom_sizes_path),
-                   readRDS(file.path(dirname(txt), "gencode.vM25.example_chrom_sizes.rds")))
+                   readRDS(file.path(dirname(txt), "annotation_chrom_sizes.rds")))
 
-  txdb <- AnnotationDbi::loadDb(genome$txdb_path)
-  coords <- gene_to_coords("Elf5", txdb, flank_pct = settings$gene_flank_pct / 100, orgdb_pkg = genome$orgdb)
-  region <- list(chrom = coords$chrom, start = coords$start, end = coords$end, gene = "Elf5")
-  # The fields the composer's RENDER_CFG adds to the project settings.
-  cfg <- modifyList(settings, list(
-    txdb_path = genome$txdb_path, orgdb_pkg = genome$orgdb, genome_label = genome$genome_label,
-    tx_name_lookup_path = genome$tx_name_lookup_path, tx_meta_lookup_path = genome$tx_meta_lookup_path,
-    title = "", output_path = tempfile(fileext = ".svg"), cache_dir = cache_dir))
-  rows <- load_samples_from_settings(settings$samples, settings$data_dir)
-  names(rows) <- vapply(rows, `[[`, "", "display")
-  specs <- list(
-    single_track("transcripts", NULL),
-    single_track("bw", rows$Basal), single_track("bw", rows$LP),
-    single_track("tpm_usage", rows$Basal), single_track("tpm_usage", rows$LP))
+  # Eya2's promoter switch: the transcripts, ATAC and transcript expression of both samples.
+  fig <- pt_figure(proj, "Eya2", c("transcripts", "ATAC", "transcript_expression"))
+  draw <- function() render_all(fig$entries, fig$region_params, fig$settings)
 
   # Rendered and checked outside vdiffr first: expect_doppelganger() skips when
   # NOT_CRAN is unset, and these checks must run everywhere.
   svg <- tempfile(fileext = ".svg")
   svglite::svglite(svg)
-  render_all(specs, region, cfg)
+  draw()
   grDevices::dev.off()
   text <- paste(readLines(svg, warn = FALSE), collapse = "\n")
-  for (label in c("Elf5-201", "Elf5-207", "Basal", "LP", "Transcript expression"))
+  for (label in c("Eya2-201", "Eya2-202", "Basal", "LP", "Transcript expression"))
     expect_match(text, label, fixed = TRUE)
   expect_identical(example_fingerprint(), before)
 
   skip_if_not_installed("vdiffr")
-  vdiffr::expect_doppelganger("example-elf5", test_fig(specs, region, cfg))
+  vdiffr::expect_doppelganger("example-eya2", draw)
 })

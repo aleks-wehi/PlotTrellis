@@ -29,9 +29,9 @@ test_that("pt_figure() rejects an inverted region and a gene flank of -50% or le
                "region must be one string")
   expect_error(pt_figure(proj, region = 103400000, tracks = "genes"), "region must be one string")
   # The gene lookup (also the app's gene box) says why, instead of handing on a backwards region.
-  res <- .pt_resolve_gene_region("Elf5", proj$txdb, -0.6, proj$genome$orgdb, proj$genes, proj$genome$genome_label)
+  res <- .pt_resolve_gene_region("Eya2", proj$txdb, -0.6, proj$genome$orgdb, proj$genes, proj$genome$genome_label)
   expect_null(res$region)
-  expect_match(res$error, "flank of -60% leaves nothing of Elf5 to show: use a larger flank")
-  expect_false(is.null(.pt_resolve_gene_region("Elf5", proj$txdb, -0.4, proj$genome$orgdb, proj$genes,
+  expect_match(res$error, "flank of -60% leaves nothing of Eya2 to show: use a larger flank")
+  expect_false(is.null(.pt_resolve_gene_region("Eya2", proj$txdb, -0.4, proj$genome$orgdb, proj$genes,
                                                proj$genome$genome_label)$region))
 })

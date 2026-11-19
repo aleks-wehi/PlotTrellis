@@ -4,15 +4,6 @@
 # R/app-settings.R). The page keeps its own state in the browser and asks
 # the session for everything else (R/app-screen-server.R).
 
-# Which screen the app opens with: "new" (this one) or "classic" (the composer
-# of R/app-ui.R, kept as the fallback and as what the older tests drive).
-# options(PlotTrellis.screen = ) wins over the PLOTTRELLIS_SCREEN environment
-# variable, which a launcher script can set without touching R code.
-.pt_screen <- function() {
-  x <- getOption("PlotTrellis.screen", Sys.getenv("PLOTTRELLIS_SCREEN", "new"))
-  if (identical(x, "classic")) "classic" else "new"
-}
-
 # A file of the main screen (inst/www/main/).
 .pt_main_www <- function(file)
   system.file("www", "main", file, package = "PlotTrellis", mustWork = TRUE)

@@ -1167,19 +1167,16 @@ knit_print.pt_figure <- function(x, ...) {
 #' its caches in its own folder), and the app's gene box suggests its gene.
 #'
 #' - `"mammary"` (the default): mouse mammary basal cells (Basal) vs luminal
-#'   progenitors (LP) (Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat,
-#'   mm10: ATAC and transcript expression. Elf5 is almost silent in Basal and
-#'   highly expressed in LP. Needs `org.Mm.eg.db`.
+#'   progenitors (LP) (Milevskiy et al. 2023, GEO GSE227750) at five genes
+#'   (Eya2, Lrrfip1, Acot7, Dzip1, Cxcl14), mm39, with every data type:
+#'   RNA-seq coverage, splice junctions and transcript expression, ATAC and
+#'   H3K36me3 (with its IgG control) coverage and peaks, and Hi-C (Omni-C).
+#'   Basal cells mostly use Eya2's isoform from an upstream promoter, LP a
+#'   shorter one. Needs `org.Mm.eg.db`.
 #' - `"human"`: ENCODE GM12878 vs K562 at PSME1/PSME2, hg38: ATAC, splice
 #'   junctions and transcript expression. Needs `org.Hs.eg.db`.
-#' - `"paper"`: the PlotTrellis paper's example, the same Basal and LP cells
-#'   (Milevskiy et al. 2023) at five genes (Eya2, Lrrfip1, Acot7, Dzip1,
-#'   Cxcl14), mm39, with every data type: RNA-seq coverage, splice junctions
-#'   and transcript expression, ATAC and H3K36me3 (with its IgG control)
-#'   coverage and peaks, and Hi-C (Omni-C). Opens on Eya2. Needs
-#'   `org.Mm.eg.db`.
 #'
-#' @param dataset `"mammary"`, `"human"` or `"paper"`.
+#' @param dataset `"mammary"` or `"human"`.
 #' @return The path of the example's `samples.txt`.
 #' @examples
 #' pt_example()
@@ -1188,11 +1185,10 @@ knit_print.pt_figure <- function(x, ...) {
 #'                 samples_txt = pt_example())
 #' }
 #' @export
-pt_example <- function(dataset = c("mammary", "human", "paper")) {
+pt_example <- function(dataset = c("mammary", "human")) {
   dataset <- match.arg(dataset)
   system.file("extdata",
-              switch(dataset, mammary = "example", human = "example-human",
-                     paper = "example-paper"),
+              if (dataset == "mammary") "example" else "example-human",
               "samples.txt", package = "PlotTrellis", mustWork = TRUE)
 }
 
@@ -1207,9 +1203,10 @@ pt_example <- function(dataset = c("mammary", "human", "paper")) {
 #' the imported samples.txt's start lines (none: no view); the
 #' project_samples.txt copy beside the settings carries it as such lines.
 #'
-#' Only the app's earlier screen (`options(PlotTrellis.screen = "classic")`)
-#' opens on the starting view. The main screen always opens empty, and offers
-#' the view's gene first in its gene box.
+#' Only the classic screen opens on the starting view. The screen for
+#' experienced users (`run_plottrellis(experienced = TRUE)`) always opens
+#' empty; its gene box offers the genes of a samples.txt's
+#' `# suggested_genes:` line.
 #'
 #' @param proj A [pt_project()].
 #' @param fig A [pt_figure()] of `proj`, made with `gene =` (a `region =` view

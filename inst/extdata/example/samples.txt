@@ -1,23 +1,27 @@
 # PlotTrellis example project. Mouse mammary basal cells (Basal) and luminal progenitors (LP)
-# from Milevskiy et al. 2023, Cell Genomics (GEO GSE227750), cut down to the Ehf, Elf5 and Cat
-# genes on chr2 (mm10). Search for Elf5: almost silent in Basal, highly expressed in LP.
+# from Milevskiy et al. 2023, Cell Genomics (GEO GSE227750), every data type, cut down to five
+# genes (mm39): Eya2, Lrrfip1, Acot7, Dzip1 and Cxcl14. See README for the source of each file.
 #
 # To set up your own project, copy this file and change:
 #   data_root      the folder your data files are in (relative to this file, or a full path)
 #   gtf_path       your genome's GTF, GENCODE or Ensembl (relative to this file, or a full path)
 #   orgdb          your species' OrgDb package, e.g. org.Hs.eg.db for human
 #   genome_label   the UCSC name of your genome build, e.g. hg38
-#   start_gene, start_tracks   optional: the gene the app suggests first, and the gene and
-#   tracks its earlier screen opens on (every sample; start_samples, start_comparison,
-#   start_order pick samples as in pt_figure())
+#   start_gene, start_tracks   optional: the gene and tracks the app opens on (every sample;
+#   start_samples, start_comparison, start_order pick samples as in pt_figure())
+#   suggested_genes   optional: genes (names or Ensembl ids) the gene box suggests before
+#   anything is typed, with experienced = TRUE
 # then list one row per sample. Each column after colour is type:name, and each cell is a
-# path relative to data_root (bw = bigWig, quantdir = a Salmon output folder holding quant.sf).
+# path relative to data_root (bw = bigWig, paired-end = splice junctions, quantdir = a Salmon
+# output folder holding quant.sf, bed = peaks, hic = Hi-C).
 # data_root: .
-# gtf_path: gencode.vM25.example.gtf.gz
+# gtf_path: annotation.gtf.gz
 # orgdb: org.Mm.eg.db
-# genome_label: mm10
-# start_gene: Elf5
-# start_tracks: atac, transcript_expression, transcripts_annotated, genes
-condition	colour	bw:atac	quantdir:Quant
-Basal	#b31e1e	atac/Basal_ATAC.bw	quant/Basal_rep1
-LP	#4b7538	atac/LP_ATAC.bw	quant/LP_rep1
+# genome_label: mm39
+# start_gene: Eya2
+# start_tracks: genes, transcripts_annotated, RNA, junctions, transcript_expression, ATAC, ATAC_peaks, H3K36me3, HiC
+# start_comparison: Basal, LP
+# suggested_genes: Eya2, Lrrfip1, Acot7, Dzip1, Cxcl14
+condition	colour	bw:RNA	paired-end:junctions	quantdir:salmon	bw:ATAC	bed:ATAC_peaks	bw:H3K36me3	bed:H3K36me3_peaks	bw:IgG	hic:HiC
+Basal	#b31e1e	rna/Basal_RNA.bw	rna/Basal_junctions.bed	rna/Basal_salmon	atac/Basal_ATAC.bw	atac/Basal_ATAC_peaks.narrowPeak	cuttag/Basal_H3K36me3.bw	cuttag/Basal_H3K36me3_peaks.broadPeak	cuttag/Basal_IgG.bw	hic/Basal_HiC.mcool
+LP	#4b7538	rna/LP_RNA.bw	rna/LP_junctions.bed	rna/LP_salmon	atac/LP_ATAC.bw	atac/LP_ATAC_peaks.narrowPeak	cuttag/LP_H3K36me3.bw	cuttag/LP_H3K36me3_peaks.broadPeak	cuttag/LP_IgG.bw	hic/LP_HiC.mcool

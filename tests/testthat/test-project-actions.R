@@ -96,3 +96,62 @@ test_that("Close app stops with 'closed', so run_plottrellis() does not relaunch
   expect_false(grepl("not saved", r$shown[[1]], fixed = TRUE))
   expect_identical(r$stops, 'stopApp(returnValue = "closed")')
 })
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("the app's server wires the project actions to its own paths, in order", {
+  # Guards the positional call in app-screen-server.R without fixture data: the call's arguments, by name.
+  app_r <- testthat::test_path("..", "..", "R", "app-screen-server.R")
+  skip_if_not(file.exists(app_r), "source tree not available (installed package)")
+  src <- paste(trimws(readLines(app_r, warn = FALSE)), collapse = " ")
+  call <- regmatches(src, gregexpr("\\.pt_project_actions_server\\([^)]*\\)", src))[[1]]
+  expect_length(call, 1)
+  expect_identical(call, paste(".pt_project_actions_server(input, session, unsaved_settings_note,",
+                               "ctx$PROJECT_DIR, SETTINGS_JSON, ctx$CACHE_DIR, experienced = TRUE)"))
+})
+
+test_that("the settings dialog is the classic one, or the experienced screen's with the light / dark switch", {
+  dialog <- function(...) {
+    shown <- NULL
+    local_mocked_bindings(showModal = function(ui, ...) shown <<- as.character(ui))
+    shiny::testServer(function(input, output, session)
+      .pt_project_actions_server(input, session, function() NULL, "/p/proj", "/p/proj/project_settings.json",
+                                 "/p/proj/cache", ...), {
+      session$setInputs(open_settings = 1)
+    })
+    shown
+  }
+  classic <- dialog()
+  expect_match(classic, "Edit project settings?", fixed = TRUE)
+  expect_match(classic, ">Continue<", fixed = TRUE)
+  expect_match(classic, ">Cancel<", fixed = TRUE)
+  expect_false(grepl("modeFlip", classic, fixed = TRUE))
+  expect_identical(dialog(experienced = FALSE), classic)
+  main <- dialog(experienced = TRUE)
+  expect_match(main, ">Project settings<", fixed = TRUE)
+  expect_false(grepl("Edit project settings?", main, fixed = TRUE))
+  expect_match(main, 'id="modeFlip" role="switch"', fixed = TRUE)
+  expect_match(main, ">Edit settings<", fixed = TRUE)
+  expect_match(main, ">Close<", fixed = TRUE)
+  expect_false(grepl("Continue", main, fixed = TRUE))
+  # both name the project folder and keep Clear caches and Reset under a closed Advanced
+  for (html in list(classic, main)) {
+    expect_match(html, "<code>/p/proj</code>", fixed = TRUE)
+    expect_match(html, '<details id="settings_advanced">', fixed = TRUE)
+    expect_match(html, "clear_caches_btn", fixed = TRUE)
+    expect_match(html, "reset_project_btn", fixed = TRUE)
+    expect_match(html, "confirm_edit_settings", fixed = TRUE)
+  }
+})
+
+test_that("Edit project settings and Clear all caches show no unsaved note when the Figure settings are saved", {
+  proj <- new_project(); on.exit(unlink(proj, recursive = TRUE), add = TRUE)
+  r <- drive(proj, dirty = FALSE, function(session) {
+    session$setInputs(open_settings = 1)
+    session$setInputs(clear_caches_btn = 1)
+  })
+  expect_length(r$shown, 2)
+  expect_false(grepl("not saved", r$shown[[1]], fixed = TRUE))
+  expect_false(grepl("not saved", r$shown[[2]], fixed = TRUE))
+  expect_length(r$stops, 0)
+})

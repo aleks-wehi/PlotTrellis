@@ -4,10 +4,10 @@
 \alias{pt_example}
 \title{Example samples.txt}
 \usage{
-pt_example(dataset = c("mammary", "human", "paper"))
+pt_example(dataset = c("mammary", "human"))
 }
 \arguments{
-\item{dataset}{\code{"mammary"}, \code{"human"} or \code{"paper"}.}
+\item{dataset}{\code{"mammary"} or \code{"human"}.}
 }
 \value{
 The path of the example's \code{samples.txt}.
@@ -19,17 +19,15 @@ own folder), and the app's gene box suggests its gene.
 }
 \details{
 \itemize{
-\item \code{"mammary"} (the default): mouse mammary basal cells (Basal) vs luminal progenitors (LP)
-(Milevskiy et al. 2023, GEO GSE227750) at Ehf/Elf5/Cat, mm10: ATAC and transcript expression.
-Elf5 is almost silent in Basal and highly expressed in LP. Needs \code{org.Mm.eg.db}.
+\item \code{"mammary"} (the default): mouse mammary basal cells (Basal) vs luminal
+progenitors (LP) (Milevskiy et al. 2023, GEO GSE227750) at five genes
+(Eya2, Lrrfip1, Acot7, Dzip1, Cxcl14), mm39, with every data type:
+RNA-seq coverage, splice junctions and transcript expression, ATAC and
+H3K36me3 (with its IgG control) coverage and peaks, and Hi-C (Omni-C).
+Basal cells mostly use Eya2's isoform from an upstream promoter, LP a
+shorter one. Needs \code{org.Mm.eg.db}.
 \item \code{"human"}: ENCODE GM12878 vs K562 at PSME1/PSME2, hg38: ATAC, splice junctions and
 transcript expression. Needs \code{org.Hs.eg.db}.
-\item \code{"paper"}: the PlotTrellis paper's example, the same Basal and LP cells
-(Milevskiy et al. 2023) at five genes (Eya2, Lrrfip1, Acot7, Dzip1,
-Cxcl14), mm39, with every data type: RNA-seq coverage, splice junctions
-and transcript expression, ATAC and H3K36me3 (with its IgG control)
-coverage and peaks, and Hi-C (Omni-C). Opens on Eya2. Needs
-\code{org.Mm.eg.db}.
 }
 }
 \examples{

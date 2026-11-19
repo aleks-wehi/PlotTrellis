@@ -1162,7 +1162,7 @@ test_that("a good first Save writes the settings and the samples copy, says so, 
   })
   saved <- jsonlite::fromJSON(ch_json(proj), simplifyDataFrame = FALSE)
   expect_identical(names(saved), c(
-    "data_dir", "samples", "gtf_path", "orgdb", "genome_label", "font", "fontsize", "page_w", "chr_fmt",
+    "data_dir", "samples", "gtf_path", "orgdb", "genome_label", "suggested_genes", "font", "fontsize", "page_w", "chr_fmt",
     "show_track_axes", "show_title", "show_scale_bar", "hic_norm", "hic_style", "hic_colour_scale", "zrange_cap", "atac_height",
     "hic_height", "hic_res_mode", "hic_max_bins_per_view", "hic_resolution", "diff_colour_lo", "diff_colour_hi",
     "junction_opacity_cap", "min_junction_support", "reference_colour", "comparison_colour", "gene_flank_pct",

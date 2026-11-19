@@ -69,30 +69,46 @@
 }
 
 # Species, build and annotation joined by middle dots ("Mouse, mm10, GENCODE
-# vM25"), for the page's header.
+# vM25"), for the page's header. The annotation is the GTF file's name; one
+# that says nothing ("annotation.gtf.gz") is left out.
 .pt_main_genome_text <- function(ctx) {
   species <- c(org.Mm.eg.db = "Mouse", org.Hs.eg.db = "Human")[ctx$ORGDB_PKG]
   if (is.na(species)) species <- ctx$ORGDB_PKG
   gtf <- sub("\\.annotation.*$|\\.gtf.*$", "",
              basename(ctx$CFG$gtf_path %||% ""))
   gtf <- sub("^gencode\\.", "GENCODE ", gtf)
+  if (tolower(gtf) == "annotation") gtf <- ""
   paste(c(unname(species), ctx$GENOME$genome_label, if (nzchar(gtf)) gtf),
         collapse = " \u00B7 ")
 }
 
-# Genes offered before anything is typed: the start view's gene, then the named
-# protein-coding genes nearest to it, up to 8. The package keeps no list of
-# well-known genes per species, so a project without a start gene suggests none.
-.pt_main_suggested <- function(ctx) {
-  sym <- ctx$START_VIEW$gene
-  if (length(sym) != 1 || is.na(sym) || !nzchar(sym)) return(character(0))
+# The project's suggested genes (its suggested_genes setting, a samples.txt's
+# `# suggested_genes:` line: gene symbols in any case, Ensembl ids or the GTF's
+# own gene names, comma-separated) as list(rows, unknown): the index rows of the
+# ones this annotation has, in the order written, each once, with `sym` the
+# name the gene box shows and takes (its symbol, else its GTF name); and the
+# entries it does not have.
+.pt_main_suggested_rows <- function(ctx) {
+  want <- unlist(strsplit(paste(unlist(ctx$CFG$suggested_genes), collapse = ","),
+                          ",", fixed = TRUE))
+  want <- trimws(want)
+  want <- want[!is.na(want) & nzchar(want) & !duplicated(toupper(want))]
   g <- .pt_main_gene_index(ctx)$genes
-  i <- match(sym, g$sym)
-  if (is.na(i)) return(character(0))
-  near <- g[g$chr == g$chr[i] & g$coding & !is.na(g$sym) & g$sym != sym, ]
-  d <- pmax(0, near$s - g$e[i], g$s[i] - near$e)
-  unique(c(sym, head(near$sym[order(d, near$sym, method = "radix")], 7)))
+  id <- sub("\\.[0-9]+$", "", toupper(want))
+  i <- match(toupper(want), toupper(g$sym))
+  i[is.na(i)] <- match(id, toupper(sub("\\.[0-9]+$", "", g$ens)))[is.na(i)]
+  i[is.na(i)] <- match(toupper(want), toupper(g$display))[is.na(i)]
+  rows <- g[unique(i[!is.na(i)]), ]
+  rows$sym <- rows$display
+  # A name is listed once (two genes of one name: the first written), as
+  # picking a row looks its gene up by that name.
+  list(rows = rows[!duplicated(rows$sym), ], unknown = want[is.na(i)])
 }
+
+# Genes offered before anything is typed: the project's suggested genes, the
+# first 8. A project without any suggests none.
+.pt_main_suggested <- function(ctx)
+  utils::head(.pt_main_suggested_rows(ctx)$rows$sym, 8)
 
 # One entry per track type, in TRACK_ITEMS order (per-sample types in detection
 # order, then annotations, then comparisons). id is the track name pt_tracks()
@@ -123,8 +139,7 @@
 
 # GET /api/project minus id: genome text, suggested genes, samples (name,
 # colour, in sample order), track types and chromosome lengths. The page always
-# opens empty: a project's start view (pt_preload(), a samples.txt's start
-# lines) only names the gene the search box suggests first.
+# opens empty.
 .pt_main_project <- function(ctx) {
   cols <- ctx$DEFAULT_SAMPLE_COLS
   list(genome = .pt_main_genome_text(ctx),
@@ -141,11 +156,11 @@
 # protein-coding, then shorter symbols. An empty q gives the suggested genes.
 .pt_main_search <- function(ctx, q) {
   g <- .pt_main_gene_index(ctx)$genes
-  g <- g[!is.na(g$sym), ]
   q <- trimws(q %||% "")
   if (!nzchar(q)) {
-    hit <- g[match(.pt_main_suggested(ctx), g$sym), ]
+    hit <- .pt_main_suggested_rows(ctx)$rows
   } else {
+    g <- g[!is.na(g$sym), ]
     hit <- g[startsWith(toupper(g$sym), toupper(q)), ]
     if (grepl("^ENS", q, ignore.case = TRUE))
       hit <- rbind(hit, g[startsWith(g$ens, toupper(q)), ])
@@ -176,7 +191,7 @@
   c(as.list(g[i, ]), list(symbol = q$symbol))
 }
 
-# "chr2:103,400,000-103,460,000" -> list(chr, s, e), else NULL.
+# "chr2:165,430,000-165,620,000" -> list(chr, s, e), else NULL.
 .pt_main_parse_region <- function(q) {
   m <- regmatches(q, regexec(
     "^\\s*([^:\\s]+)\\s*:\\s*([0-9,.]+)\\s*-\\s*([0-9,.]+)\\s*$", q,
@@ -189,8 +204,7 @@
 
 # A chromosome's length, NA for one the project does not have. A chromosome
 # with genes but no entry in the chromosome sizes (a scaffold) counts as
-# reaching its last gene's end, so its genes can still be drawn, as on the
-# classic screen.
+# reaching its last gene's end, so its genes can still be drawn.
 .pt_main_chr_length <- function(ctx, chr) {
   if (!is.character(chr) || length(chr) != 1 || is.na(chr)) return(NA_real_)
   if (chr %in% names(ctx$CHR_LENGTHS))
@@ -206,7 +220,7 @@
 .pt_main_locus <- function(ctx, q, cfg = ctx$RENDER_CFG) {
   q <- trimws(q %||% "")
   if (!nzchar(q))
-    .pt_main_stop("Type a gene or a region such as chr2:103,400,000-103,460,000.")
+    .pt_main_stop("Type a gene or a region such as chr2:165,430,000-165,620,000.")
   r <- .pt_main_parse_region(q)
   if (!is.null(r)) {
     len <- .pt_main_chr_length(ctx, r$chr)
@@ -226,8 +240,12 @@
   }
   g <- .pt_main_gene_row(ctx, q)
   if (!is.null(g$error)) .pt_main_stop(g$error)
-  res <- .pt_resolve_gene_region(q, ctx$txdb,
-                                 (cfg$gene_flank_pct %||% 15) / 100,
+  # A flank that is not a number (a client that sent text): the project's saved
+  # one, else the default, not an R error shown to the user.
+  flank <- Find(function(x) is.numeric(x) && length(x) == 1 && is.finite(x),
+                list(cfg$gene_flank_pct, ctx$RENDER_CFG$gene_flank_pct),
+                nomatch = .pt_default_settings()$gene_flank_pct)
+  res <- .pt_resolve_gene_region(q, ctx$txdb, flank / 100,
                                  ctx$ORGDB_PKG, ctx$ALL_GENES,
                                  ctx$GENOME$genome_label)
   if (!is.null(res$error)) .pt_main_stop(res$error)

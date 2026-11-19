@@ -6,13 +6,13 @@ test_that("pt_figure(comparison =) warns when no track needs a sample, and not o
   proj <- suppressWarnings(suppressMessages(pt_project(dir, pt_example())))
   samples <- pt_samples(proj)$name
 
-  expect_warning(fig <- pt_figure(proj, "Elf5", c("genes", "transcripts"), comparison = rev(samples)),
+  expect_warning(fig <- pt_figure(proj, "Eya2", c("genes", "transcripts"), comparison = rev(samples)),
                  "comparison has no effect")
   # Same figure as without it.
-  expect_identical(fig$keys, pt_figure(proj, "Elf5", c("genes", "transcripts"))$keys)
+  expect_identical(fig$keys, pt_figure(proj, "Eya2", c("genes", "transcripts"))$keys)
   # By track number, as in the bug report.
-  expect_warning(pt_figure(proj, "Elf5", c(1, 2), comparison = c(2, 1)), "comparison has no effect")
+  expect_warning(pt_figure(proj, "Eya2", c(1, 2), comparison = c(2, 1)), "comparison has no effect")
 
   # A track that needs a sample uses it: no warning.
-  expect_no_warning(pt_figure(proj, "Elf5", c("atac", "genes"), comparison = samples))
+  expect_no_warning(pt_figure(proj, "Eya2", c("ATAC", "genes"), comparison = samples))
 })

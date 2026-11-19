@@ -1,7 +1,7 @@
 # The setup wizard's live GTF and OrgDb checks (W29) and its help buttons. No fixture data:
 # the bundled example GTF and small temp files only, so these run on R-universe too.
 
-example_gtf <- system.file("extdata", "example", "gencode.vM25.example.gtf.gz", package = "PlotTrellis")
+example_gtf <- system.file("extdata", "example", "annotation.gtf.gz", package = "PlotTrellis")
 
 # A tiny GTF written with the given gene_id attribute values, one gene line each.
 write_gtf <- function(gene_ids, header = character(0), ext = ".gtf") {
@@ -17,7 +17,7 @@ test_that("wiz_gtf_check() recognises the bundled GENCODE GTF and names the spec
   chk <- wiz_gtf_check(example_gtf)
   expect_identical(chk$state, "ok")
   expect_match(chk$text, "GENCODE")
-  expect_match(chk$text, "GRCm38")
+  expect_match(chk$text, "GRCm39")
   expect_match(chk$text, "mouse")
   expect_identical(chk$species$orgdb, "org.Mm.eg.db")
 })
@@ -91,13 +91,13 @@ test_that("the wizard's live status lines render from the inputs (debounced path
   dir.create(dirname(json))
   defaults <- .pt_default_settings()
   shiny::testServer(wizard_server(json, defaults, defaults), {
-    session$setInputs(wiz_gtf_path = example_gtf, wiz_orgdb = "org.Xx.eg.db", wiz_genome_label = "mm39")
+    session$setInputs(wiz_gtf_path = example_gtf, wiz_orgdb = "org.Xx.eg.db", wiz_genome_label = "mm10")
     session$elapse(500)
     expect_match(as.character(output$wiz_gtf_status$html), "GENCODE GTF", fixed = TRUE)
     expect_match(as.character(output$wiz_orgdb_status$html), "Not installed", fixed = TRUE)
-    # The example GTF is GRCm38: mm39 is the wrong label for it.
-    expect_match(as.character(output$wiz_genome_label_status$html), "UCSC name is mm10", fixed = TRUE)
-    session$setInputs(wiz_genome_label = "mm10")
+    # The example GTF is GRCm39: mm10 is the wrong label for it.
+    expect_match(as.character(output$wiz_genome_label_status$html), "UCSC name is mm39", fixed = TRUE)
+    session$setInputs(wiz_genome_label = "mm39")
     expect_match(as.character(output$wiz_genome_label_status$html), "Matches the GTF", fixed = TRUE)
   })
 })
@@ -113,7 +113,7 @@ test_that("the genome label's placeholder follows the GTF's build (bug 218)", {
   shiny::testServer(wizard_server(json, defaults, defaults), {
     session$setInputs(wiz_gtf_path = example_gtf)
     session$elapse(500)
-    expect_identical(tail(hints, 1), "mm10")  # the example GTF is GRCm38
+    expect_identical(tail(hints, 1), "mm39")  # the example GTF is GRCm39
     session$setInputs(wiz_gtf_path = write_gtf("ENSG00000000003.15", header = "#!genome-build GRCh38.p14"))
     session$elapse(500)
     expect_identical(tail(hints, 1), "hg38")
@@ -203,6 +203,11 @@ test_that("wiz_help() is a popover button carrying its text, not a title tooltip
   app_src <- testthat::test_path("..", "..", "R", "app-ui.R")
   skip_if_not(file.exists(app_src), "package source not available")
   expect_true(any(grepl(".pt_help_assets()", readLines(app_src, warn = FALSE), fixed = TRUE)))
+  # And the experienced screen's page (.pt_main_ui(), which builds it from no project data).
+  app_page <- unlist(htmltools::renderTags(.pt_main_ui(list()))[c("head", "html")])
+  app_page <- paste(app_page, collapse = "\n")
+  expect_match(app_page, "pt-help-pinned", fixed = TRUE)
+  expect_match(app_page, ".popover.pt-help-popover", fixed = TRUE)
 })
 
 test_that("import warnings are a note, not an alert; Save errors are an alert", {

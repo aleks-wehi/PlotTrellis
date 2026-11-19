@@ -2,7 +2,7 @@
 # are core (set only in the wizard) and which are display settings, the display
 # settings' inputs (the composer's Figure settings panel) and reading them back,
 # and writing a project's project_settings.json with its project_samples.txt
-# copy, and the start view a re-saved project keeps.
+# copy.
 
 # A colour swatch with no shiny.js binding (type="color"): oninput reports
 # changes, and the inline script reports the shown value on render, so a
@@ -18,11 +18,12 @@
                               jsonlite::toJSON(value, auto_unbox = TRUE))))
 }
 
-# Core settings: what identifies and locates the project's data. Set only in the
-# wizard; every other .pt_default_settings() key is a display setting,
-# adjustable live in the composer.
+# Core settings: what identifies and locates the project's data, set only in
+# the wizard, and the genes the experienced screen's gene box suggests, set only
+# by a samples.txt (`# suggested_genes:`). Every other .pt_default_settings()
+# key is a display setting, adjustable live in the app.
 .PT_CORE_SETTINGS <- c("gtf_path", "orgdb", "genome_label", "data_dir",
-                       "samples")
+                       "samples", "suggested_genes")
 
 # Inputs for every display setting, ids paste0(prefix, key), initial values from
 # cfg: the composer's Figure settings panel. Returns list(display =, diff =):

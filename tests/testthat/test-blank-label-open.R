@@ -9,7 +9,7 @@ test_that("opening a project with a blank genome label stops with 'Genome label 
   suppressWarnings(suppressMessages(pt_project(proj, pt_example())))
   json <- file.path(proj, "project_settings.json")
   settings <- jsonlite::fromJSON(json, simplifyDataFrame = FALSE)
-  expect_identical(settings$genome_label, "mm10")  # the label the edits below blank out
+  expect_identical(settings$genome_label, "mm39")  # the label the edits below blank out
 
   for (blank in list("", "  ", NULL)) {
     edited <- settings

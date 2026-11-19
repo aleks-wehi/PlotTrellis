@@ -21,22 +21,6 @@ catch_modals <- function(env = parent.frame()) {
 
 status_html <- function(out) if (is.null(out)) "" else paste(as.character(out$html), collapse = "")
 
-test_that("the collected settings: the genome fields (blank is NULL), then cfg's display settings with imported ones on top", {
-  cfg <- utils::modifyList(.pt_default_settings(), list(fontsize = 14, reference_colour = "#123456"))
-  shiny::testServer(export_app(NULL, visual = list(fontsize = 11), cfg = cfg), {
-    session$setInputs(wiz_gtf_path = " /x/genes.gtf.gz ", wiz_orgdb = "", wiz_genome_label = "mm10")
-    flat <- res$wiz_collect_flat_settings()
-    expect_identical(names(flat)[1:3], c("gtf_path", "orgdb", "genome_label"))
-    expect_identical(flat$gtf_path, "/x/genes.gtf.gz")
-    expect_null(flat$orgdb)
-    expect_identical(flat$genome_label, "mm10")
-    expect_equal(flat$fontsize, 11)                 # imported, over cfg's 14
-    expect_identical(flat$reference_colour, "#123456")  # cfg's
-    expect_setequal(names(flat)[-(1:3)], setdiff(names(.pt_default_settings()), .PT_CORE_SETTINGS))
-    expect_identical(res$wiz_display_settings(), flat[-(1:3)])
-  })
-})
-
 test_that("the export dialog offers samples.txt in the data folder, or a blank path with none", {
   got <- catch_modals()
   shiny::testServer(export_app("/data/proj"), session$setInputs(wiz_export_samples = 1))
@@ -73,5 +57,23 @@ test_that("an Export that can't be written says why", {
     suppressWarnings(session$setInputs(wiz_export_path = file.path(tempdir(), "no-such-folder", "s.txt"),
                                        wiz_confirm_export = 1))
     expect_match(status_html(output$wiz_export_status), "wiz-error.*Failed to write:")
+  })
+})
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("the collected settings: the genome fields (blank is NULL), the suggested genes, then cfg's display settings with imported ones on top", {
+  cfg <- utils::modifyList(.pt_default_settings(), list(fontsize = 14, reference_colour = "#123456"))
+  shiny::testServer(export_app(NULL, visual = list(fontsize = 11), cfg = cfg), {
+    session$setInputs(wiz_gtf_path = " /x/genes.gtf.gz ", wiz_orgdb = "", wiz_genome_label = "mm10")
+    flat <- res$wiz_collect_flat_settings()
+    expect_identical(names(flat)[1:4], c("gtf_path", "orgdb", "genome_label", "suggested_genes"))
+    expect_identical(flat$gtf_path, "/x/genes.gtf.gz")
+    expect_null(flat$orgdb)
+    expect_identical(flat$genome_label, "mm10")
+    expect_equal(flat$fontsize, 11)                 # imported, over cfg's 14
+    expect_identical(flat$reference_colour, "#123456")  # cfg's
+    expect_setequal(names(flat)[-(1:4)], setdiff(names(.pt_default_settings()), .PT_CORE_SETTINGS))
+    expect_identical(res$wiz_display_settings(), flat[-(1:4)])
   })
 })

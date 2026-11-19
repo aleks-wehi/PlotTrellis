@@ -45,9 +45,9 @@ test_that("a missing quant.sf fails only that sample's expression row; the trans
   stopifnot(file.rename(copy, file.path(long, "example")))
   txt <- file.path(long, "example", "samples.txt")
   local_offline_chrom_sizes()
-  unlink(file.path(dirname(txt), "quant", "LP_rep1", "quant.sf"))
+  unlink(file.path(dirname(txt), "rna", "LP_salmon", "quant.sf"))
   proj <- suppressMessages(suppressWarnings(pt_project(proj_dir, txt)))
-  fig <- pt_figure(proj, "Elf5", c("transcripts", "transcript_expression"))
+  fig <- pt_figure(proj, "Eya2", c("transcripts", "transcript_expression"))
   out <- tempfile(fileext = ".svg")
   suppressMessages(pt_save(fig, out))
   svg <- paste(readLines(out, warn = FALSE), collapse = "\n")
@@ -55,9 +55,9 @@ test_that("a missing quant.sf fails only that sample's expression row; the trans
   # transcripts track drew. Before the fix the transcripts track failed too.
   expect_identical(lengths(regmatches(svg, gregexpr("failed", svg, fixed = TRUE))), 1L)
   expect_match(svg, "quant.sf", fixed = TRUE)
-  # Only LP_rep1's quant.sf was deleted, so the one failed row is LP's, and the drawn message
+  # Only LP_salmon's quant.sf was deleted, so the one failed row is LP's, and the drawn message
   # names its folder even when the data folder's path is long.
-  expect_match(svg, "LP_rep1", fixed = TRUE)
+  expect_match(svg, "LP_salmon", fixed = TRUE)
   expect_match(svg, "Transcripts (filtered)", fixed = TRUE)
-  expect_match(svg, "Elf5-207", fixed = TRUE)   # named from Basal, the readable sample
+  expect_match(svg, "Eya2-202", fixed = TRUE)   # Basal's main isoform: named from Basal, the readable sample
 })

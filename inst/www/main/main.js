@@ -15,6 +15,7 @@ let api = {
   locus(text) { return rpc('locus', { q: text }); },
   nearby(chr, s, e) { return rpc('nearby', { chr, s: Math.round(s), e: Math.round(e) }); },
   render(req) { return rpc('render', req); },
+  raster(job, format) { return rpc('raster', { job, format }); },
   cancel() { return rpc('cancel'); },
   geneinfo(gene) { return rpc('geneinfo', { gene }); }
 };
@@ -33,7 +34,7 @@ const SPAN_MIN = 1000, SPAN_MAX = 5000000;
 
 async function reset(which) {
   if (P && S) SAVED[P.id] = S;
-  document.body.classList.add('loading'); byId('genome').textContent = 'Loading project\u2026'; byId('gene').disabled = true;
+  document.body.classList.add('loading'); byId('genome').hidden = false; byId('genome').textContent = 'Loading project\u2026'; byId('gene').disabled = true;
   P = await api.project(which);
   if (!P || P.error) { byId('genome').textContent = 'The project could not be loaded: ' + (P && P.error || 'no answer'); return; }
   document.body.classList.remove('loading'); byId('gene').disabled = false;
@@ -45,7 +46,7 @@ async function reset(which) {
     exp: {}, hist: [], recent: [], sugg: [], suggAt: 0, lastGene: '', set: { key: SETKEY } };
   S.busy = false; S.err = null; S.drawn = S.hist.find(h => h.id === sig()) || null;
   byId('gene').value = S.locus && S.locus.gene || ''; byId('range').value = ''; byId('gene').placeholder = P.suggested[0] || 'Gene'; mirror();
-  byId('genome').textContent = P.genome;
+  byId('genome').hidden = true;
   document.body.classList.toggle('many', P.samples.length > 8);
   ['roles', 'samples', 'tracks', 'right', 'hist'].forEach(id => { byId(id).hidden = true; }); byId('stage').dataset.key = '';
   setRegion(S.region); render(); if (S.locus) loadNearby();
@@ -125,7 +126,7 @@ function changed(mutate) { const b4 = S.fig.slice(); if (mutate) mutate();
 function toast(msg) { const t = byId('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200); }
 
 const dot = c => `<span class="dot" style="background:${/^[#\w(),.%\s-]+$/.test(c || '') ? c : 'transparent'}"></span>`;   // a colour, never markup
-const label = t => `<b>${esc(t.name)}</b>${t.sub ? `<span class="sub">${t.col ? dot(t.col) : ''}<span class="l2">${esc(t.T.kind === 'sample' ? sn(t.sub) : t.sub)}</span></span>` : '<span class="sub"></span>'}`;
+const label = t => `<b${t.sub ? '' : ' class="solo"'}>${esc(t.name)}</b>${t.sub ? `<span class="sub">${t.col ? dot(t.col) : ''}<span class="l2">${esc(t.T.kind === 'sample' ? sn(t.sub) : t.sub)}</span></span>` : ''}`;
 const tchip = (keys, html, cls = '') => `<button class="tchip ${cls}" aria-pressed="${pressed(keys)}" data-g="${reg(keys)}">${html}</button>`;
 
 /* ------------------------------------------------------------------ the Add half
@@ -165,30 +166,30 @@ function restoreFocus(fk) { const now = document.activeElement; if (!fk || (now 
 /* ------------------------------------------------------------------ saved figures
    S.hist holds the figures drawn this session, newest first; S.drawn is the one on screen (or null).
    An entry: { id, no, label, sub, at, title, svg, html, script, stem, thumb, state }.
-   reopen(i) puts figure i back on screen with its choice; forget(i) drops it; download(name, text, type) saves a file.
-   #hist is the row under the canvas: the filmstrip fills it; its flick and compare overlays are added to the body. */
+   reopen(i) puts figure i back on screen with its choice; forget(i) deletes it; download(name, text, type) saves a file.
+   #hist is the row under the canvas: the filmstrip fills it; its flick overlay is added to the body. */
 function forget(i) { const gone = S.hist.splice(i, 1)[0]; if (gone === S.drawn) S.drawn = null; render(); }
 // The filmstrip. Click a card: its figure opens (pointing at a card shows nothing). Hold Space: the canvas flicks to the figure shown
-// before this one (dashed edge). A card's two-pane button puts it beside the figure on screen.
-// While a figure is being drawn no saved figure can be opened, compared, stepped to or flicked to: the cards are disabled until it ends.
-// Pin cards to keep them; the bin drops every unpinned card but the one on screen (undo for a few seconds); the arrow saves all pinned as one zip.
+// before this one (dashed edge). A card's one button deletes it; deleting the one on screen leaves Generate on the canvas.
+// While a figure is being drawn no saved figure can be opened, stepped to or flicked to: the cards are disabled until it ends.
 // Cards of one gene stand together under the gene's name. The fold button shrinks the strip to a bar of dots (remembered per project).
-let gsOn = false, gsFlick = false, gsOther = null, gsLast = null, gsCmp = null, gsUndo = null, gsFoldMem = {}, gsCur = null, gsDropT = 0;
+let gsOn = false, gsFlick = false, gsOther = null, gsLast = null, gsFoldMem = {}, gsCur = null;
 const gsI = {
-  pin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5.5 1.8h5l-.8 4.4 2.3 2.4H4l2.3-2.4zM8 8.6v5.6"/></svg>',
-  pair: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.8" y="2.5" width="5.4" height="11" rx="1"/><rect x="8.8" y="2.5" width="5.4" height="11" rx="1"/></svg>',
   x: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
   down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6 8 10.5 12.5 6"/></svg>',
   up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10 8 5.5l4.5 4.5"/></svg>',
-  bin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11M6.5 4.5V2.8h3v1.7M4 4.5l.7 9h6.6l.7-9"/></svg>',
-  undo: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3 2.5 6l3 3"/><path d="M2.8 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>',
-  save: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>',
-  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>',
-  rows: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="12" height="5" rx="1"/><rect x="2" y="9" width="12" height="5" rx="1"/></svg>',
-  cols: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="5" height="12" rx="1"/><rect x="9" y="2" width="5" height="12" rx="1"/></svg>' };
+  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>' };
 const gsById = id => S.hist.find(h => h.id === id) || null;
-const gsIdx = id => S.hist.findIndex(h => h.id === id);
-const gsSvg = (h, fill) => h.html.replace(/class="fig pop"/, fill ? '' : 'class="gs-fig"');
+const gsSvg = h => h.html.replace(/class="fig pop"/, 'class="gs-fig"');
+// A card's picture is the figure drawn once onto a small canvas, kept as a PNG. Not the SVG itself: as a picture each SVG is a
+// whole document of its own, and its text went through the strip's markup on every redraw, so 40 big figures (Hi-C) held
+// millions of nodes and made every click slow. The card's picture is set in place when it is ready; no redraw.
+function gsThumb(h) { const u = URL.createObjectURL(new Blob([h.svg], { type: 'image/svg+xml' })), img = new Image();
+  const done = src => { URL.revokeObjectURL(u); h.thumb = src; const el = document.querySelector(`#hist .gs-c[data-gsid="${CSS.escape(h.id)}"] img`); if (el) el.src = src; };
+  img.onload = () => { try { const c = document.createElement('canvas'); c.width = 276; c.height = Math.max(1, Math.round(276 * (img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.6)));
+      const g = c.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height); done(c.toDataURL('image/png')); }
+    catch (e) { done('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(h.svg)); } };   // a canvas that cannot be read: the SVG as before
+  img.onerror = () => done(''); img.src = u; }
 function gsFolded() { if (!(P.id in gsFoldMem)) { try { gsFoldMem[P.id] = localStorage.getItem('gsFold:' + P.id) === '1'; } catch (e) { gsFoldMem[P.id] = false; } } return gsFoldMem[P.id]; }
 function gsSetFold(v) { gsFoldMem[P.id] = v; try { localStorage.setItem('gsFold:' + P.id, v ? '1' : '0'); } catch (e) {} }
 // Oldest on the left; one group per gene (or region), groups in the order they first appeared.
@@ -199,75 +200,37 @@ function gsPlace(el) { const b = byId('stage').getBoundingClientRect(); Object.a
 function gsShowTemp() { const el = gsOv('gs-peek'), id = gsFlick ? gsOther || (gsLast && gsLast.id) : null, h = id && gsById(id);
   if (!gsOn || !h || h === S.drawn || S.busy || byId('right').hidden) { el.hidden = true; el.dataset.id = ''; return; }
   if (el.dataset.id !== h.id) { el.dataset.id = h.id; el.innerHTML = `<span class="gs-tag">${gsI.eye}${h.no} ${esc(h.label)} \u00B7 ${esc(h.sub)}</span>` + gsSvg(h); }
+  const fitH = FITH && S.tab === 'figure', f = el.querySelector('svg.gs-fig'); el.classList.toggle('fit-h', fitH);
+  if (f) { if (fitH) f.setAttribute('preserveAspectRatio', 'xMidYMin meet'); else f.removeAttribute('preserveAspectRatio'); }
   gsPlace(el); el.hidden = false; }
-function gsMarkB() { document.querySelectorAll('#hist .gs-c').forEach(c => c.classList.toggle('gs-b', !!gsCmp && c.dataset.gsid === gsCmp.b)); }
-// Side by side or one above the other: whichever draws the figures bigger, unless chosen.
-function gsDrawCmp() { const el = gsOv('gs-cmp'), a = gsCmp && gsById(gsCmp.a), b = gsCmp && gsById(gsCmp.b);
-  if (!gsOn || !a || !b || byId('right').hidden || S.tab !== 'figure') { el.hidden = true; return; }
-  gsPlace(el); const r = el.getBoundingClientRect(), vb = s => { const m = /viewBox="([\d.\s-]+)"/.exec(s); const v = m ? m[1].trim().split(/\s+/).map(Number) : [0, 0, 1000, 600]; return v[2] / v[3]; }, asp = vb(a.html);
-  if (!gsCmp.dir) gsCmp.dir = 'h';   // side by side is the usual; the button stacks them
-  el.classList.toggle('gs-side', gsCmp.dir === 'h');
-  el.innerHTML = [a, b].map(h => `<button class="gs-pane${h === S.drawn ? ' cur' : ''}" data-gsopen="${esc(h.id)}" title="${esc(h.title)}"><span class="gs-tag">${h.no} ${esc(h.label)}</span>${gsSvg(h, true)}</button>`).join('')
-    + `<div class="gs-ctl"><button data-gsdir aria-label="${gsCmp.dir === 'v' ? 'Side by side' : 'One above the other'}" title="${gsCmp.dir === 'v' ? 'Side by side' : 'One above the other'}">${gsCmp.dir === 'v' ? gsI.cols : gsI.rows}</button><button data-gsclose aria-label="Close" title="Close (Esc)">${gsI.x}</button></div>`;
-  el.hidden = false; }
 function gsCard(h) { const cur = h === S.drawn, i = S.hist.indexOf(h);
-  return `<div class="gs-c${cur ? ' cur' : ''}${gsCmp && gsCmp.b === h.id ? ' gs-b' : ''}" data-gsid="${esc(h.id)}"><button class="gs-th" data-open="${i}" title="${esc(h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}><img alt="" src="${h.thumb}"></button><span class="gs-no">${h.no}</span>`
-    + `<span class="gs-tl"><button data-gspin class="${h.gsPin ? 'gs-pinned' : ''}" aria-pressed="${!!h.gsPin}" aria-label="Pin" title="${h.gsPin ? 'Pinned' : 'Pin'}">${gsI.pin}</button>${cur ? '' : `<button data-gspair aria-label="Compare with the figure on screen" title="Compare"${S.busy ? ' disabled' : ''}>${gsI.pair}</button>`}<button data-hx="${i}" aria-label="Forget ${esc(h.title)}" title="Forget">${gsI.x}</button></span>`
-    + `<span class="gs-m"><span class="trunc">${esc((h.at ? h.at + ' · ' : '') + h.sub)}</span>${cur ? `<button data-hs="${i}" title="Save SVG">SVG</button><button data-hr="${i}" title="Save R script">R</button>` : ''}</span></div>`; }
-function gsDraw() { const hb = byId('hist'), fold = gsFolded(), n = S.hist.length, pins = S.hist.filter(h => h.gsPin), loose = S.hist.some(h => !h.gsPin && h !== S.drawn);
+  return `<div class="gs-c${cur ? ' cur' : ''}" data-gsid="${esc(h.id)}"><button class="gs-th" data-open="${i}" title="${esc(h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}><img alt="" src="${h.thumb}"></button><span class="gs-no">${h.no}</span>`
+    + `<button class="gs-x" data-hx="${i}" aria-label="Delete ${esc(h.title)}" title="Delete">${gsI.x}</button>`
+    + `<span class="gs-m"><span class="trunc">${esc((h.at ? h.at + ' · ' : '') + h.sub)}</span></span></div>`; }
+function gsDraw() { const hb = byId('hist'), fold = gsFolded(), n = S.hist.length;
   document.body.classList.toggle('gs-fold', fold);
-  const save = `<button class="gs-ib gs-go${pins.length ? '' : ' gs-hide'}" data-gssave aria-label="Save all pinned" title="Save all pinned (SVG + R, one zip)">${gsI.save}<sup>${pins.length}</sup></button>`;
   if (fold) { hb.innerHTML = `<div class="gs-bar"><button class="gs-ib" data-gsfold aria-label="Show the saved figures" title="Show">${gsI.up}</button><span class="gs-n">${n}</span>`
-      + gsGroups().map(g => `<span class="gs-dg">${g.hs.map(h => `<button class="gs-dot${h === S.drawn ? ' cur' : ''}${h.gsPin ? ' gs-p' : ''}" data-gsid="${esc(h.id)}" data-open="${S.hist.indexOf(h)}" title="${esc(h.no + '. ' + h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}></button>`).join('')}</span>`).join('') + save + '</div>'; return; }
-  const drop = gsUndo ? `<button class="gs-ib gs-go" data-gsundo aria-label="Undo" title="Bring back ${gsUndo.length}">${gsI.undo}</button>`
-    : `<button class="gs-ib${pins.length && loose ? '' : ' gs-hide'}" data-gsdrop aria-label="Drop all but pinned" title="Drop all but pinned">${gsI.bin}</button>`;
-  hb.innerHTML = `<div class="gs-h"><button class="gs-ib" data-gsfold aria-label="Fold the saved figures" title="Fold"${n ? '' : ' disabled'}>${gsI.down}</button><span class="gs-n" title="Figures this session. Click one to open, hold Space to flick.">${n || ''}</span>${drop}${save}</div>`
+      + gsGroups().map(g => `<span class="gs-dg">${g.hs.map(h => `<button class="gs-dot${h === S.drawn ? ' cur' : ''}" data-gsid="${esc(h.id)}" data-open="${S.hist.indexOf(h)}" title="${esc(h.no + '. ' + h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}></button>`).join('')}</span>`).join('') + '</div>'; return; }
+  hb.innerHTML = `<div class="gs-h"><button class="gs-ib" data-gsfold aria-label="Fold the saved figures" title="Fold"${n ? '' : ' disabled'}>${gsI.down}</button><span class="gs-n" title="Figures this session. Click one to open, hold Space to flick.">${n || ''}</span></div>`
     + (n ? gsGroups().map(g => `<div class="gs-g"><span class="gs-gl trunc" title="${esc(g.label)}">${esc(g.label)}</span><div class="gs-row">${g.hs.map(gsCard).join('')}</div></div>`).join('') : '<div class="gs-empty" title="Figures you draw land here"></div>');
   // keep the newest card, or the one just opened, in view
   const want = S.hist[0] && hb.dataset.gsTop !== S.hist[0].id ? S.hist[0] : S.drawn !== gsCur ? S.drawn : null; if (S.hist[0]) hb.dataset.gsTop = S.hist[0].id; gsCur = S.drawn;
   const c = want && hb.querySelector(`.gs-c[data-gsid="${CSS.escape(want.id)}"]`);
-  if (c) { const r = hb.getBoundingClientRect(), b = c.getBoundingClientRect(), left = r.left + 66; if (b.left < left) hb.scrollLeft -= left - b.left; else if (b.right > r.right - 4) hb.scrollLeft += b.right - r.right + 4; } }
-// One zip, stored (no compression), so all pinned figures come out in one file.
-function gsZip(files) { const enc = new TextEncoder(), T = gsZip.t || (gsZip.t = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; }));
-  const crc = d => { let c = 0xFFFFFFFF; for (const x of d) c = T[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
-  const parts = [], cen = []; let off = 0;
-  for (const f of files) { const name = enc.encode(f.name), data = enc.encode(f.text), c = crc(data), loc = new DataView(new ArrayBuffer(30)), ce = new DataView(new ArrayBuffer(46));
-    [[0, 0x04034b50, 4], [4, 20, 2], [14, c, 4], [18, data.length, 4], [22, data.length, 4], [26, name.length, 2]].forEach(([o, v, s]) => s === 4 ? loc.setUint32(o, v, true) : loc.setUint16(o, v, true));
-    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [16, c, 4], [20, data.length, 4], [24, data.length, 4], [28, name.length, 2], [42, off, 4]].forEach(([o, v, s]) => s === 4 ? ce.setUint32(o, v, true) : ce.setUint16(o, v, true));
-    parts.push(new Uint8Array(loc.buffer), name, data); cen.push(new Uint8Array(ce.buffer), name); off += 30 + name.length + data.length; }
-  const size = cen.reduce((s, p) => s + p.length, 0), end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, size, true); end.setUint32(16, off, true);
-  return new Blob([...parts, ...cen, new Uint8Array(end.buffer)], { type: 'application/zip' }); }
-function gsSavePinned() { const pins = S.hist.filter(h => h.gsPin).reverse(), seen = new Set(), files = [];
-  for (const h of pins) { let st = h.stem; if (seen.has(st)) st += '-' + h.no; seen.add(st); files.push({ name: st + '.svg', text: h.svg }, { name: st + '.R', text: h.script }); }
-  download('PlotTrellis_pinned_' + pins.length + '.zip', gsZip(files), 'application/zip'); }
-byId('hist').addEventListener('click', e => { if (!gsOn) return; const b = e.target.closest('button'); if (!b) return; const d = b.dataset, c = b.closest('[data-gsid]'), h = c && gsById(c.dataset.gsid);
-  if (d.gsfold != null) { gsSetFold(!gsFolded()); render(); }
-  else if (d.gspin != null && h) { h.gsPin = !h.gsPin; gsDraw(); }
-  else if (d.gspair != null && h) { if (S.busy) return; const a = S.drawn || gsById(gsOther !== h.id && gsOther) || S.hist.find(x => x !== h); if (!a) return; gsCmp = { a: a.id, b: h.id, dir: null }; gsDrawCmp(); gsMarkB(); }
-  else if (d.gsdrop != null) { const keep = h => h.gsPin || h === S.drawn; gsUndo = S.hist.filter(x => !keep(x)); S.hist = S.hist.filter(keep); clearTimeout(gsDropT);
-    gsDropT = setTimeout(() => { gsUndo = null; if (gsOn) gsDraw(); }, 6000); render(); }
-  else if (d.gsundo != null && gsUndo) { S.hist = [...S.hist, ...gsUndo].sort((x, y) => y.no - x.no); gsUndo = null; clearTimeout(gsDropT); render(); }
-  else if (d.gssave != null) gsSavePinned(); });
-document.addEventListener('click', e => { if (!gsOn || !gsCmp) return; const b = e.target.closest('#gs-cmp button'); if (!b) return;
-  if (b.dataset.gsopen) { const i = gsIdx(b.dataset.gsopen); if (i >= 0) reopen(i); }
-  else if (b.dataset.gsdir != null) { gsCmp.dir = gsCmp.dir === 'v' ? 'h' : 'v'; gsDrawCmp(); }
-  else if (b.dataset.gsclose != null) { gsCmp = null; gsDrawCmp(); gsMarkB(); } });
+  if (c) { const r = hb.getBoundingClientRect(), b = c.getBoundingClientRect(), left = r.left + 36; if (b.left < left) hb.scrollLeft -= left - b.left; else if (b.right > r.right - 4) hb.scrollLeft += b.right - r.right + 4; } }
+byId('hist').addEventListener('click', e => { if (gsOn && e.target.closest('[data-gsfold]')) { gsSetFold(!gsFolded()); render(); } });
 // Space held: flick to the other figure; released: back. Only where Space would not press a button or type.
 const gsSpaceOk = e => { const a = document.activeElement, t = e.target; return gsOn && S.hist.length && !S.busy && !document.querySelector('dialog[open], .modal.in') && !(t.matches && t.matches('input, select, textarea'))
   && !(t.closest && t.closest('#ptSettings, .modal, summary'))
   && (!a || a === document.body || !!a.closest('#hist, #stage') || !a.matches('button, [role="switch"], [tabindex]')); };
-window.addEventListener('keydown', e => { if (e.key === ' ' && gsSpaceOk(e)) { e.preventDefault(); e.stopPropagation(); if (!e.repeat && !gsFlick) { gsFlick = true; gsShowTemp(); } }
-  else if (e.key === 'Escape' && gsOn && gsCmp && !document.querySelector('dialog[open]')) { gsCmp = null; gsDrawCmp(); gsMarkB(); } }, true);
+window.addEventListener('keydown', e => { if (e.key === ' ' && gsSpaceOk(e)) { e.preventDefault(); e.stopPropagation(); if (!e.repeat && !gsFlick) { gsFlick = true; gsShowTemp(); } } }, true);
 window.addEventListener('keyup', e => { if (e.key === ' ' && gsFlick) { e.preventDefault(); gsFlick = false; gsShowTemp(); } }, true);
 window.addEventListener('blur', () => { if (gsFlick) { gsFlick = false; gsShowTemp(); } });
-window.addEventListener('resize', () => { if (!gsOn) return; gsShowTemp(); gsDrawCmp(); });
+window.addEventListener('resize', () => { if (gsOn) gsShowTemp(); });
 // Runs on every redraw.
 function gsRender() {
   gsOn = true; document.body.classList.add('gs-on');
-  if (S.drawn && S.drawn !== gsLast) { if (gsLast && gsById(gsLast.id)) gsOther = gsLast.id; gsLast = S.drawn; }
-  if (gsCmp && (!S.drawn || (S.drawn.id !== gsCmp.a && S.drawn.id !== gsCmp.b) || !gsById(gsCmp.a) || !gsById(gsCmp.b))) gsCmp = null;   // a new choice closes the comparison
-  gsDraw(); gsShowTemp(); gsDrawCmp();
+  if (S.drawn && S.drawn !== gsLast) { if (gsLast && gsLast.id !== S.drawn.id && gsById(gsLast.id)) gsOther = gsLast.id; gsLast = S.drawn; }
+  gsDraw(); gsShowTemp();
 }
 // "Enter draws": shown in the box that has the keyboard, when its content is what is on screen and there is a figure to draw.
 function enterHint() { if (!S) return; const box = S.region ? byId('range') : byId('gene'), same = S.locus && (S.region || box.value.trim().toLowerCase() === String(S.locus.gene || '').toLowerCase());
@@ -324,7 +287,9 @@ function render() {
     else if (S.drawn) st.innerHTML = S.drawn.html;
     else if (!inF.length) st.innerHTML = '<div class="centre">' + THINT + '</div>';
     else st.innerHTML = `<div class="centre">${S.fail ? `<div class="err">${esc(S.fail)}</div>` : ''}<button class="gen pop" id="gen">Generate figure</button><span class="keys"><kbd>Ctrl</kbd> <kbd>Enter</kbd></span></div>`; }
-  byId('dlSvg').disabled = byId('dlR').disabled = !S.drawn;
+  // Download: while a PNG or JPEG is being drawn the button is its Cancel (where the server can stop a draw)
+  { const b = byId('dlBtn'); b.disabled = dlBusy ? !api.cancel : !S.drawn; b.classList.toggle('busy', !!dlBusy);
+    byId('dlLbl').textContent = !dlBusy ? 'Download' : api.cancel ? 'Cancel ' + dlWhat : 'Drawing ' + dlWhat + '\u2026'; if (!S.drawn || dlBusy) dlMenu(false); }
   st.classList.toggle('blank', fig && !S.drawn); applyFit();
   // figures drawn this session
   gsRender();
@@ -393,6 +358,7 @@ function fitSvg(svg) { const d = new DOMParser().parseFromString(svg, 'image/svg
 async function generate() {
   if (!S.locus || !shown().length || (S.drawn && S.drawn.id === sig()) || S.busy) return;
   { const hit = S.hist.find(h => h.id === sig()); if (hit) { S.drawn = hit; return render(); } }   // drawn before this session: it comes straight back
+  if (dlBusy) return toast('The ' + dlWhat + ' is still being drawn.');
   // Everything the picture, its label and its file name need is fixed here, before the wait: a change made while it draws must not leak in.
   const S0 = S, seq0 = setSeq, L = S.locus, v = { ...S.view }, picked = [...S.picked], names = picked.map(sn).join(', '), who = picked.length > 2 ? (names.length <= 30 ? names : picked.length + ' samples') : picked.length === 2 ? pairShort() : picked[0] || 'annotation only';   // a card says what tells it apart, in few words
   const state = JSON.parse(JSON.stringify({ region: S.region, locus: L, view: v, picked, fig: S.fig, set: S.set, hand: S.hand || [], rm: S.rm || [], exp: S.exp }));
@@ -413,8 +379,10 @@ async function generate() {
   const moved = L.gene && L.view && (v.s !== L.view.s || v.e !== L.view.e);
   const entry = { id, no: S0.count, at: moved ? (v.s / 1e6).toFixed(2) + ' Mb' : '', label: L.gene || `${L.chr}:${(v.s / 1e6).toFixed(2)} Mb`, sub: `${who} \u00B7 ${fmtSpan(v.e - v.s)}`,
     title: `${L.gene ? L.gene + ', ' : ''}${L.chr}:${fmt(v.s)}-${fmt(v.e)}, ${picked.join(picked.length === 2 ? ' vs ' : ', ')}, ${snap.items.length} tracks`,
-    svg: out.svg, html: fitSvg(out.svg), script: out.script || '', stem: snap.stem, state, thumb: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out.svg) };
-  S0.hist = [entry, ...S0.hist.filter(h => h.id !== id)]; while (S0.hist.length > 40) S0.hist.splice(S0.hist.at(-1) === S0.drawn ? -2 : -1, 1);
+    svg: out.svg, html: fitSvg(out.svg), script: out.script || '', job: out.job, stem: snap.stem, state, thumb: '' }; gsThumb(entry);
+  S0.hist = [entry, ...S0.hist.filter(h => h.id !== id)];
+  // Over 40, the oldest go, but never the one on screen.
+  for (let i = S0.hist.length - 1; S0.hist.length > 40 && i > 0; i--) if (S0.hist[i] !== S0.drawn) S0.hist.splice(i, 1);
   if (L.gene && !S0.recent.includes(L.gene)) S0.recent.unshift(L.gene);
   if (S === S0 && sig() === id) S.drawn = entry;   // the choice may have moved on while it was drawing: then it only joins the strip
   else if (S === S0 && took) { const now = sig(); S.drawn = S.hist.find(h => h.id === now) || null; }   // the settings moved under another choice: what is on screen is looked up again
@@ -423,6 +391,39 @@ async function generate() {
 function reopen(i) { if (S.busy) return; const h = S.hist[i]; Object.assign(S, JSON.parse(JSON.stringify(h.state))); S.set = { key: SETKEY };   // the settings are the panel's, not the old figure's
   setRegion(S.region); byId('gene').value = S.locus.gene || ''; if (S.locus.gene) S.lastGene = S.locus.gene; mirror();
   S.tab = 'figure'; S.err = null; S.gap = null; S.was = null; S.drawn = h; S.fail = null; render(); loadNearby(); }
+/* ------------------------------------------------------------------ downloads */
+// Where the browser has a save dialog (Chrome, Edge) the user picks the folder and the name. Elsewhere (Firefox, Safari), or where
+// the dialog is refused (the page inside another site's frame), the browser downloads the file as it always did. The dialog is asked
+// for at the click, before anything slow: a browser opens it only straight after a click or a key. Closing it saves nothing and says
+// nothing. make() gives the content (text or a Blob) and may take a while.
+// A figure's SVG as a file to take away: without svglite's text width lock (textLength), which the page keeps so text has
+// R's widths in any font, and which would squeeze an edited label to its old width (R/viz-svg.R).
+const svgFile = svg => svg.replace(/<text\b[^>]*>/g, t => t.replace(/ textLength='[^']*' lengthAdjust='[^']*'/g, ''));
+const KIND = { svg: ['SVG image', 'image/svg+xml', ['.svg']], png: ['PNG image', 'image/png', ['.png']], jpg: ['JPEG image', 'image/jpeg', ['.jpg', '.jpeg']], R: ['R script', 'text/plain', ['.R']] };
+async function saveFile(name, kind, make) {
+  const [what, type, exts] = KIND[kind]; let file = null;
+  if (window.showSaveFilePicker) { try { file = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: what, accept: { [type]: exts } }] }); }
+    catch (e) { if (e && e.name === 'AbortError') return; file = null; } }
+  let data = null, why = '';
+  try { data = await make(); } catch (e) { why = String(e && e.message || e); }
+  if (data == null) { if (file && file.remove) { try { if ((await file.getFile()).size === 0) await file.remove(); } catch (e) {} }   // an empty file the dialog made is not left behind; a file chosen to be replaced is left as it was
+    return toast(why || 'Nothing to save.'); }
+  if (!file) return download(name, data, type);
+  try { const w = await file.createWritable(); await w.write(data instanceof Blob ? data : new Blob([data], { type })); await w.close(); toast('Saved ' + midCut(file.name, 54)); }
+  catch (e) { toast('Could not save ' + midCut(file.name, 40) + '.'); }
+}
+// A PNG or JPEG is drawn again by R, from the request the server remembers for this figure, so it has the settings the figure was
+// drawn with. One at a time, and not while a figure is being generated (R draws one thing at a time): the Download button is
+// the draw's Cancel meanwhile, and Generate waits.
+let dlBusy = 0, dlWhat = '';
+async function raster(h, format, label) {
+  if (!h.job || !api.raster) throw new Error('Generate this figure again to save it as ' + label + '.');
+  dlBusy++; dlWhat = label; render(); toast('Drawing the ' + label + '\u2026');
+  let out; try { out = await api.raster(h.job, format); } catch (e) { out = { error: String(e.message || e) }; } finally { dlBusy--; render(); }
+  if (out.error || !out.data) throw new Error(typeof out.error === 'string' ? out.error : 'Nothing came back.');
+  const bin = atob(out.data), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: KIND[format === 'png' ? 'png' : 'jpg'][1] }); }
+function dlMenu(on) { const m = byId('dlMenu'); if (m.hidden === !on) return; m.hidden = !on; byId('dlBtn').setAttribute('aria-expanded', String(on)); if (on) byId('dlSvg').focus(); }
 function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast('Downloaded ' + midCut(name, 54)); }
 
 /* ------------------------------------------------------------------ the search box */
@@ -448,7 +449,7 @@ function regionText() { let t = byId('range').value.replace(/\s/g, ''); if (!t) 
   const m = t.match(/^([^:]+):(.+)$/), c = m && [...byId('chr').options].find(o => o.value.toLowerCase() === m[1].toLowerCase());
   if (c) t = m[2];
   else if (m && /^[\d,]+-[\d,]+$/.test(m[2])) { S.err = `No chromosome '${m[1]}' in this project.`; toast(S.err); render(); return false; }
-  if (!/^[\d,]+-[\d,]+$/.test(t)) { S.err = 'A range looks like 103,400,000-103,460,000.'; toast(S.err); render(); return false; }
+  if (!/^[\d,]+-[\d,]+$/.test(t)) { S.err = 'A range looks like 165,430,000-165,620,000.'; toast(S.err); render(); return false; }
   if (c) { byId('chr').value = c.value; byId('range').value = t; }
   return byId('chr').value + ':' + t; }
 let commitSeq = 0;
@@ -479,13 +480,21 @@ function onFlip(el, fn) { const set = on => { if ((el.getAttribute('aria-checked
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); set(false); } else if (e.key === 'ArrowRight') { e.preventDefault(); set(true); } }); }
 // Fit width (the figure as wide as its box, scrolling when it is tall) or fit height (the whole figure inside the box, at the
 // top, centred). Only how the figure is shown: downloads and saved figures are the same either way. Kept in the browser, as light and dark are.
-let FITH = false; try { FITH = localStorage.getItem('pt-fit') === 'height'; } catch (e) {}
+let FITH = true; try { FITH = localStorage.getItem('pt-fit') !== 'width'; } catch (e) {}
 function applyFit() { const st = byId('stage'), on = FITH && !!S && S.tab === 'figure', f = st.querySelector('svg.fig'); st.classList.toggle('fit-h', on);
   if (f) { if (on) f.setAttribute('preserveAspectRatio', 'xMidYMin meet'); else f.removeAttribute('preserveAspectRatio'); } }
 setFlip(byId('fitFlip'), FITH);
 onFlip(byId('fitFlip'), on => { FITH = on; try { localStorage.setItem('pt-fit', on ? 'height' : 'width'); } catch (e) {} applyFit(); });
 function setRegion(on) { S.region = on; setFlip(byId('locusFlip'), on); byId('gene').hidden = on; byId('chr').hidden = !on; byId('range').hidden = !on; closeSugg(); }
-onFlip(byId('modeFlip'), on => { document.documentElement.setAttribute('data-pt-mode', on ? 'dark' : 'light'); try { localStorage.setItem('pt-mode', on ? 'dark' : 'light'); } catch (e) {} });
+// Light or dark is chosen in the Project settings dialog (R/app-project-actions.R). R draws that dialog anew each time it is
+// opened, so its switch is found when it is used, and set to the mode on screen when the dialog shows.
+const isDark = () => document.documentElement.getAttribute('data-pt-mode') === 'dark';
+function setMode(dark) { document.documentElement.setAttribute('data-pt-mode', dark ? 'dark' : 'light'); try { localStorage.setItem('pt-mode', dark ? 'dark' : 'light'); } catch (e) {}
+  const f = byId('modeFlip'); if (f) setFlip(f, dark); }
+document.addEventListener('click', e => { if (e.target.closest('#modeFlip')) setMode(!isDark()); });
+document.addEventListener('keydown', e => { if (!e.target.closest || !e.target.closest('#modeFlip') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setMode(!isDark()); } else if (e.key === 'ArrowLeft') { e.preventDefault(); setMode(false); } else if (e.key === 'ArrowRight') { e.preventDefault(); setMode(true); } });
+if (window.jQuery) window.jQuery(document).on('show.bs.modal', () => { const f = byId('modeFlip'); if (f) setFlip(f, isDark()); });
 // Gene or Region only changes which boxes show. Region starts from the window on screen and nothing is redrawn until a range is entered;
 // back on Gene the box says the gene on screen (after a typed region: the gene before it, which is gone back to).
 onFlip(byId('locusFlip'), async on => { setRegion(on); S.err = null;
@@ -584,14 +593,30 @@ window.addEventListener('pointerup', () => { if (!drag || !dragRow()) return; co
   const k = d.row.dataset.k; changed(() => { let i = 0; S.fig = S.fig.map(x => order.includes(x) ? order[i++] : x); byHand(k); }); const el = inRows().find(r => r.dataset.k === k); el && el.focus(); });
 
 byId('stage').addEventListener('click', e => { if (e.target.id === 'gen') generate(); });
-byId('dlSvg').addEventListener('click', () => download(S.drawn.stem + '.svg', S.drawn.svg, 'image/svg+xml'));
+byId('dlBtn').addEventListener('click', () => { if (dlBusy) { if (api.cancel) api.cancel(); return; } dlMenu(byId('dlMenu').hidden); });
+byId('dlMenu').addEventListener('click', e => { const b = e.target.closest('button'), h = S.drawn; if (!b) return;
+  if (!byId('dlMenu').hidden) { dlMenu(false); byId('dlBtn').focus(); }
+  if (!h) return;   // the figure on screen at the click is the one saved, whatever is chosen meanwhile
+  if (b.id === 'dlSvg') return saveFile(h.stem + '.svg', 'svg', () => svgFile(h.svg));
+  if (b.id === 'dlRs') return saveFile(h.stem + '.R', 'R', () => h.script);
+  const png = b.id === 'dlPng', label = png ? 'PNG' : 'JPEG';
+  // What is known already is said now, not after a place for the file was chosen.
+  if (dlBusy) return toast('The ' + dlWhat + ' is still being drawn.');
+  if (S.busy) return toast('Wait for the figure being drawn.');
+  if (!h.job || !api.raster) return toast('Generate this figure again to save it as ' + label + '.');
+  saveFile(h.stem + (png ? '.png' : '.jpg'), png ? 'png' : 'jpg', () => raster(h, png ? 'png' : 'jpeg', label)); });
+byId('dlMenu').addEventListener('keydown', e => { const items = [...byId('dlMenu').querySelectorAll('button')], i = items.indexOf(document.activeElement);
+  if (e.ctrlKey || e.metaKey) return;   // Ctrl+S and Ctrl+Enter work from here too
+  e.stopPropagation();   // the page's single-key shortcuts are not for a menu
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus(); }
+  else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); }
+  else if (e.key === 'Escape') { e.preventDefault(); dlMenu(false); byId('dlBtn').focus(); }
+  else if (e.key === 'Tab') dlMenu(false); });
+document.addEventListener('click', e => { if (!e.target.closest('#dl')) dlMenu(false); });
 document.addEventListener('click', e => { if (e.target.closest('#cancelBtn') && api.cancel) api.cancel(); });
-byId('dlR').addEventListener('click', () => download(S.drawn.stem + '.R', S.drawn.script, 'text/plain'));
 byId('hist').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
-  if (d.open && S.busy) return;
-  if (d.open && S.hist[+d.open] === S.drawn) { S.drawn = null; render(); }   // a click on the one on screen takes it off the canvas (its choice stays)
-  else if (d.open) reopen(+d.open); else if (d.hs) download(S.hist[+d.hs].stem + '.svg', S.hist[+d.hs].svg, 'image/svg+xml');
-  else if (d.hr) download(S.hist[+d.hr].stem + '.R', S.hist[+d.hr].script, 'text/plain'); else if (d.hx) { forget(+d.hx);
+  if (d.open) { if (S.hist[+d.open] !== S.drawn) reopen(+d.open); }   // the one on screen is open already: a click on it changes nothing
+  else if (d.hx) { forget(+d.hx);
     const th = [...document.querySelectorAll('#hist [data-open]')]; (th.find(x => +x.dataset.open === Math.min(+d.hx, S.hist.length - 1)) || byId('setBtn')).focus(); } });
 for (const id of ['gene', 'range']) for (const ev of ['focus', 'blur', 'input']) byId(id).addEventListener(ev, () => setTimeout(enterHint, 0));
 // Splitters. In figure / Add: neither half goes under 130 px. Tracks / canvas: the left column stays between 280 px and 45% of the window (at most 640 px).
@@ -636,7 +661,7 @@ document.addEventListener('keydown', async e => {
 });
 document.documentElement.dataset.hover = 'select';   // every hover is light terracotta
 { let m = q.get('mode'); if (!m) { try { m = localStorage.getItem('pt-mode'); } catch (e) {} }
-  if (m === 'dark') { setFlip(byId('modeFlip'), true); document.documentElement.setAttribute('data-pt-mode', 'dark'); } }
+  if (m === 'dark') document.documentElement.setAttribute('data-pt-mode', 'dark'); }
 
 /* ------------------------------------------------------------------ the app around the page
    PT is what the Shiny side (R/app-screen-server.R) and a test page call. */

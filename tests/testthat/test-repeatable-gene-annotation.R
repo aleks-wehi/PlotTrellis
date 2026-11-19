@@ -34,8 +34,8 @@ repeat_project <- function() suppressWarnings(pt_project(REPEAT_DIR, pt_example(
 
 test_that("several Gene annotations reach the entries, the script and the start view", {
   proj <- repeat_project()
-  fig <- pt_figure(proj, "Elf5", c("genes", "atac", "genes", "atac", "genes"), samples = c(NA, "Basal", NA, "LP", NA))
-  expect_equal(fig$keys, c("genes", "bw_atac_Basal", "genes", "bw_atac_LP", "genes"))
+  fig <- pt_figure(proj, "Eya2", c("genes", "ATAC", "genes", "ATAC", "genes"), samples = c(NA, "Basal", NA, "LP", NA))
+  expect_equal(fig$keys, c("genes", "bw_ATAC_Basal", "genes", "bw_ATAC_LP", "genes"))
   expect_equal(vapply(fig$entries, `[[`, character(1), "viz"), c("genes", "bw", "genes", "bw", "genes"))
   script <- readLines(pt_script(fig, tempfile(fileext = ".R")))
   expect_equal(sum(grepl("viz = \"genes\"", script, fixed = TRUE)), 3)
@@ -79,22 +79,33 @@ test_that("a start view with several Gene annotations restores them, Available k
   json <- file.path(proj$dir, "project_settings.json")
   before <- readLines(json)
   on.exit(writeLines(before, json), add = TRUE)
-  pt_preload(proj, pt_figure(proj, "Elf5", c("genes", "atac", "genes", "atac", "genes"), samples = c(NA, "Basal", NA, "LP", NA)))
+  pt_preload(proj, pt_figure(proj, "Eya2", c("genes", "ATAC", "genes", "ATAC", "genes"), samples = c(NA, "Basal", NA, "LP", NA)))
   l <- composer_lists(json, list(view_mode = "two", sel_reference = "Basal", sel_comparison = "LP"))
-  expect_equal(l$figure_tracks, c("genes", "bw_atac_Basal", "genes", "bw_atac_LP", "genes"))
+  expect_equal(l$figure_tracks, c("genes", "bw_ATAC_Basal", "genes", "bw_ATAC_LP", "genes"))
   expect_equal(sum(l$available_tracks == "genes"), 1)
-  expect_false(any(c("bw_atac_Basal", "bw_atac_LP") %in% l$available_tracks))
+  expect_false(any(c("bw_ATAC_Basal", "bw_ATAC_LP") %in% l$available_tracks))
   # Only Gene annotation repeats: any other track repeated in the start view (a
   # pt_figure() can repeat one) is restored once.
-  pt_preload(proj, pt_figure(proj, "Elf5", c("genes", "atac", "atac", "atac", "genes", "protein_domains", "protein_domains"),
+  pt_preload(proj, pt_figure(proj, "Eya2", c("genes", "ATAC", "ATAC", "ATAC", "genes", "protein_domains", "protein_domains"),
                              samples = c(NA, "Basal", "LP", "Basal", NA, NA, NA)))
   l <- composer_lists(json, list(view_mode = "two", sel_reference = "Basal", sel_comparison = "LP"))
-  expect_equal(l$figure_tracks, c("genes", "bw_atac_Basal", "bw_atac_LP", "genes", "protein_domains"))
-  expect_false(any(c("bw_atac_Basal", "protein_domains") %in% l$available_tracks))
+  expect_equal(l$figure_tracks, c("genes", "bw_ATAC_Basal", "bw_ATAC_LP", "genes", "protein_domains"))
+  expect_false(any(c("bw_ATAC_Basal", "protein_domains") %in% l$available_tracks))
   # Multi (written directly: the example has 2 samples, so pt_preload() picks Two).
-  .pt_write_start_view(proj$dir, "compose", character(0), "Elf5", c("bw_atac_LP", "genes", "bw_atac_Basal", "genes"))
+  .pt_write_start_view(proj$dir, "compose", character(0), "Eya2", c("bw_ATAC_LP", "genes", "bw_ATAC_Basal", "genes"))
   l <- composer_lists(json, list(view_mode = "compose"))
-  expect_equal(l$figure_tracks, c("bw_atac_LP", "genes", "bw_atac_Basal", "genes"))
+  expect_equal(l$figure_tracks, c("bw_ATAC_LP", "genes", "bw_ATAC_Basal", "genes"))
   expect_equal(sum(l$available_tracks == "genes"), 1)
-  expect_false(any(c("bw_atac_Basal", "bw_atac_LP") %in% l$available_tracks))
+  expect_false(any(c("bw_ATAC_Basal", "bw_ATAC_LP") %in% l$available_tracks))
+})
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("several Gene annotations reach the entries and the script", {
+  proj <- repeat_project()
+  fig <- pt_figure(proj, "Eya2", c("genes", "ATAC", "genes", "ATAC", "genes"), samples = c(NA, "Basal", NA, "LP", NA))
+  expect_equal(fig$keys, c("genes", "bw_ATAC_Basal", "genes", "bw_ATAC_LP", "genes"))
+  expect_equal(vapply(fig$entries, `[[`, character(1), "viz"), c("genes", "bw", "genes", "bw", "genes"))
+  script <- readLines(pt_script(fig, tempfile(fileext = ".R")))
+  expect_equal(sum(grepl("viz = \"genes\"", script, fixed = TRUE)), 3)
 })

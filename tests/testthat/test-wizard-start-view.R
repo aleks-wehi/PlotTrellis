@@ -136,7 +136,7 @@ test_that("project_samples.txt carries the start view, so rebuilding the project
   p <- suppressMessages(suppressWarnings(pt_project(proj, pt_example())))
   json <- file.path(proj, "project_settings.json")
   cmp <- pt_tracks(p)$track[pt_tracks(p)$kind == "comparison"][1]
-  for (fig in list(NULL, pt_figure(p, "Elf5", c("genes", "atac", cmp), comparison = c("Basal", "LP")))) {
+  for (fig in list(NULL, pt_figure(p, "Eya2", c("genes", "ATAC", cmp), comparison = c("Basal", "LP")))) {
     if (!is.null(fig)) pt_preload(p, fig)
     s <- jsonlite::read_json(json)
     expect_false(is.null(s$start_view))

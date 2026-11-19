@@ -1,10 +1,10 @@
 Package: PlotTrellis
 Title: Composable Genomic Track Visualisations for Non-Coders
-Version: 1.1.1
+Version: 1.2.0
 Authors@R: c(
     person("Aleksander", "Pacnik", email = "pacnik.a@wehi.edu.au", role = c("aut", "cre"),
         comment = c(ORCID = "0009-0000-4062-2582")),
-    person("Lebedev", "Konstantin", role = "cph",
+    person("Konstantin", "Lebedev", role = "cph",
         comment = "SortableJS library, inst/www/track-lists/Sortable.min.js"),
     person("Andrie", "de Vries", role = "cph",
         comment = "code adapted from the sortable package, inst/www/track-lists/"),

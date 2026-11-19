@@ -8,7 +8,27 @@
 # previous figure stays on the page. The first render after a Cancel waits for
 # the fresh process to load its packages.
 
-# Draws one figure to settings$output_path as a tidied SVG file. Returns
+# The device a render writes settings$output_path with, by the file's
+# extension: a .png or .jpg on white (the app's PNG and JPEG downloads; the PNG
+# device is the one pt_save() uses), else an SVG.
+.pt_render_device <- function(path) switch(
+  tolower(tools::file_ext(path)),
+  png = function(w, h) grDevices::png(path, width = w, height = h,
+                                      units = "in", res = .pt_raster_dpi(w, h)),
+  jpg = , jpeg = function(w, h) grDevices::jpeg(path, width = w, height = h,
+                                                units = "in",
+                                                res = .pt_raster_dpi(w, h),
+                                                quality = 90),
+  function(w, h) svglite::svglite(path, width = w, height = h)
+)
+
+# The resolution of a PNG or JPEG of a w x h inch figure: 300 dpi, or as much
+# as fits for a figure over 109 inches a side (an image is at most 32767 pixels
+# a side; the device stops with "invalid value" beyond that).
+.pt_raster_dpi <- function(w, h) min(300, floor(32767 / max(w, h)))
+
+# Draws one figure to settings$output_path: a tidied SVG file, or a PNG or JPEG
+# when the path ends in .png or .jpg (.pt_render_device()). Returns
 # list(hic_tops =) (.pt_hic_colour_tops(), for the downloaded script), or the
 # error message when the whole figure failed (a single failing track is drawn as
 # its own in-figure message by render_all(), not reported here). Run in the
@@ -19,11 +39,12 @@
     # .pt_quiet(): plotgardener prints a "text[text2]"-style line per grob,
     # hundreds per figure.
     dict <- .pt_quiet(render_all(entries, region_params, settings,
-                                 device_fn = function(w, h) svglite::svglite(
-                                   settings$output_path, width = w, height = h
+                                 device_fn = .pt_render_device(
+                                   settings$output_path
                                  )))
     if (dev.cur() != dev_before) dev.off()
-    .pt_tidy_svg(settings$output_path, unlock_text = FALSE)
+    if (tolower(tools::file_ext(settings$output_path)) == "svg")
+      .pt_tidy_svg(settings$output_path, unlock_text = FALSE)
     list(hic_tops = .pt_hic_colour_tops(dict))
   }, error = function(e) {
     if (dev.cur() != dev_before) try(dev.off(), silent = TRUE)
@@ -280,9 +301,10 @@
 # The app's render processes: take() hands a session the process started at
 # launch, or the one an earlier session gave back, else a new one; give_back()
 # keeps a session's process for the next session unless a render is still
-# running in it (at most one is kept).
-.pt_render_pool <- function() {
-  kept <- .pt_render_worker()
+# running in it (at most one is kept). With start = FALSE the first process is
+# started by warm() (or the first take()) instead of now.
+.pt_render_pool <- function(start = TRUE) {
+  kept <- if (start) .pt_render_worker()
   # a session can end after the app has stopped: its process is then closed
   closed <- FALSE
   list(
@@ -290,6 +312,10 @@
       w <- kept
       kept <<- NULL
       if (is.null(w)) .pt_render_worker() else w
+    },
+    warm = function() {
+      if (!closed && is.null(kept)) kept <<- .pt_render_worker()
+      invisible()
     },
     give_back = function(w) {
       if (!closed && is.null(kept) && !w$rendering()) kept <<- w else w$close()

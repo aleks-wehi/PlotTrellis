@@ -2,7 +2,7 @@
 # xml2 (an external package, Suggests) stitches the SVGs into one grid. Same code as the
 # chunk handed to the owner (solutions/review/W89/chunk.R in the monorepo; change both
 # together), only writing into a temporary folder, with a transcripts track so that the
-# figures differ in height (Cat has fewer transcripts).
+# figures differ in height (Cxcl14 has fewer transcripts).
 test_that("a loop of pt_save() SVGs stitches into one vector SVG with xml2", {
   skip_if_not_installed("xml2")
   skip_if_not_installed("org.Mm.eg.db")
@@ -11,10 +11,10 @@ test_that("a loop of pt_save() SVGs stitches into one vector SVG with xml2", {
   dir <- tempfile("pt-many-genes-")
   dir.create(dir)
   proj <- suppressWarnings(pt_project(file.path(dir, "my-project"), pt_example()))
-  genes <- c("Elf5", "Ehf", "Cat")
+  genes <- c("Eya2", "Acot7", "Cxcl14")
   svgs <- c()
   for (g in genes)
-    svgs[g] <- pt_save(pt_figure(proj, g, c("atac", "transcripts_all", "genes"), title = g), file.path(dir, paste0(g, ".svg")))
+    svgs[g] <- pt_save(pt_figure(proj, g, c("ATAC", "transcripts_all", "genes"), title = g), file.path(dir, paste0(g, ".svg")))
   expect_true(all(file.exists(svgs)))   # every gene's own SVG is kept
 
   figs <- lapply(svgs, read_xml); ncol <- min(2, length(figs))

@@ -141,3 +141,15 @@ test_that("no start view, or one that is not a list, gives NULL", {
   cfg$start_view <- "compose"
   expect_null(suppressMessages(.pt_composer_context(ex$json, cfg))$START_VIEW)
 })
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("the example's samples, colours and track items agree", {
+  ctx <- example_ctx()$ctx
+  samples <- vapply(ctx$SAMPLES_DF, `[[`, "", "display")
+  expect_true(length(samples) >= 2)
+  expect_identical(names(ctx$DEFAULT_SAMPLE_COLS), samples)
+  expect_identical(ctx$TRACK_ITEMS, c(build_track_items(ctx$SAMPLES_DF), build_comparison_track_items(ctx$SAMPLES_DF)))
+  expect_true("genes" %in% names(ctx$TRACK_ITEMS))
+  expect_identical(ctx$GENE_REQUIRED_TYPES, .pt_gene_required_types())
+})

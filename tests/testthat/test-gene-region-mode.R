@@ -9,17 +9,17 @@ test_that("Gene, Coordinates, then Gene again keeps the gene box's error or Foun
   app <- .pt_composer_app(json, .pt_read_settings(json, .pt_default_settings()))
   shiny::testServer(app, {
     box <- function() paste(as.character(output$gene_result_ui$html))
-    session$setInputs(view_mode = "compose", region_mode = "gene", gene_name = "Elf5")
+    session$setInputs(view_mode = "compose", region_mode = "gene", gene_name = "Eya2")
     expect_match(box(), "Found")
     session$setInputs(region_mode = "coords")
     session$setInputs(region_mode = "gene")
     expect_match(box(), "Found")
     # An invalid flank: the gene is cut away, an error instead of a region.
     session$setInputs(s_gene_flank_pct = -60)
-    expect_match(box(), "leaves nothing of Elf5")
+    expect_match(box(), "leaves nothing of Eya2")
     session$setInputs(region_mode = "coords")
     session$setInputs(region_mode = "gene")
-    expect_match(box(), "leaves nothing of Elf5")
+    expect_match(box(), "leaves nothing of Eya2")
     # A gene that isn't there, likewise.
     session$setInputs(s_gene_flank_pct = 15, gene_name = "Nofoundgene")
     expect_match(box(), "not found")

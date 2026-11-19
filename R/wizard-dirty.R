@@ -41,7 +41,7 @@
                          "uniprot_reviewed_only", "arc_clip_partial",
                          "show_title", "show_scale_bar", "junction_height",
                          "diff_shared_alpha", "gtf_path", "orgdb",
-                         "genome_label")]
+                         "genome_label", "suggested_genes")]
     )
   } else NULL
 

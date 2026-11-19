@@ -5,11 +5,13 @@
 # "CCDS" tag only says exists. Built by ensure_genome_ready() the first time a
 # genome is used.
 
-build_tx_meta_lookup <- function(gtf_path, out_path) {
+# `lines` as for build_tx_name_lookup().
+build_tx_meta_lookup <- function(
+    gtf_path, out_path,
+    lines = .pt_gtf_feature_lines(gtf_path, "transcript")) {
   # Portable base-R prefilter (no zgrep dependency) -- see
-  # build_tx_name_lookup()'s comment for the same tradeoff (~90s vs ~13s,
-  # one-time per genome, not per render).
-  lines <- readLines(gzfile(gtf_path))
+  # build_tx_name_lookup()'s comment for the same tradeoff (one-time per
+  # genome, not per render).
   lines <- lines[grepl("\ttranscript\t", lines, fixed = TRUE)]
   fields <- strsplit(lines, "\t")
   attrs <- vapply(fields, `[`, character(1), 9)
@@ -45,6 +47,6 @@ build_tx_meta_lookup <- function(gtf_path, out_path) {
   meta <- data.frame(transcript_type = transcript_type, tag = tag,
                      ccds_id = ccds_id,
                      stringsAsFactors = FALSE, row.names = tx_id_stripped)
-  saveRDS(meta, out_path)
+  .pt_save_rds(meta, out_path)
   invisible(meta)
 }

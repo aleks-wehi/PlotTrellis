@@ -1295,7 +1295,9 @@ test_that("Save writes the settings, updates saved_cfg and confirms", {
   })
   after <- jsonlite::read_json(cp$json)
   expect_equal(after$fontsize, 12)
-  for (k in .PT_CORE_SETTINGS) expect_identical(after[[k]], before[[k]], info = k)
+  # Core keys as they were; one the file lacked (suggested_genes here) is written as its default.
+  for (k in .PT_CORE_SETTINGS)
+    expect_identical(after[[k]], before[[k]] %||% .pt_default_settings()[[k]], info = k)
   expect_true(file.exists(file.path(cp$proj, "project_samples.txt")))
 })
 

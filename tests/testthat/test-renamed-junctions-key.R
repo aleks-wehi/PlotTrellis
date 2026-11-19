@@ -83,3 +83,18 @@ test_that("a pt_project kept from before the rename draws its junction tracks, a
   expect_identical(unlist(view$tracks), "junctions_junctions_GM12878")
 })
 
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("a pt_project kept from before the rename draws its junction tracks", {
+  skip_if_not_installed("org.Hs.eg.db")
+  proj <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-renamed-key"), pt_example("human")))
+  old <- old_project(proj)
+  expect_true("sashimi_junctions_GM12878" %in% names(old$items))
+  region <- "chr14:24,140,000-24,150,000"
+  fig <- pt_figure(proj, region = region, tracks = "junctions", samples = "GM12878")
+  old_fig <- pt_figure(old, region = region, tracks = "junctions", samples = "GM12878")
+  expect_identical(old_fig$entries, fig$entries)
+  expect_false(is.null(old_fig$entries[[1]]$path))
+  expect_identical(old_fig$keys, fig$keys)
+})

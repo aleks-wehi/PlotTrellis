@@ -244,10 +244,10 @@ test_that("a sample's missing quant.sf leaves the other samples' Transcript expr
   skip_on_cran()  # builds the example's TxDb
   txt <- example_copy("mammary")
   local_offline_chrom_sizes()
-  file.rename(file.path(dirname(txt), "quant", "LP_rep1", "quant.sf"), file.path(dirname(txt), "quant", "LP_rep1", "moved.sf"))
+  file.rename(file.path(dirname(txt), "rna", "LP_salmon", "quant.sf"), file.path(dirname(txt), "rna", "LP_salmon", "moved.sf"))
   proj <- suppressWarnings(suppressMessages(pt_project(tempfile("w59-project-"), txt)))
   svg <- tempfile(fileext = ".svg")
-  suppressWarnings(suppressMessages(pt_save(pt_figure(proj, "Elf5", c("transcript_counts", "genes"), samples = "Basal"), svg)))
+  suppressWarnings(suppressMessages(pt_save(pt_figure(proj, "Eya2", c("transcript_expression", "genes"), samples = "Basal"), svg)))
   text <- paste(readLines(svg), collapse = "\n")
   # The transcripts shown are picked from the readable samples, so a figure of Basal alone
   # draws with no failure; LP's own row names the file (test-missing-quant.R).

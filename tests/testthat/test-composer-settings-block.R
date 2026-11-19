@@ -168,3 +168,22 @@ test_that("Revert re-renders from the saved settings, dropping unsaved panel val
     expect_false(fs$settings_dirty())
   })
 })
+
+# ---- added since ---------------------------------------------------------------------------
+
+test_that("every settings group is a collapsed subsection and every s_<key> input is rendered", {
+  json <- new_settings_json(); on.exit(unlink(dirname(json), recursive = TRUE), add = TRUE)
+  drive_settings(json, {
+    html <- ui_html(output$display_settings_ui)
+    groups <- regmatches(html, gregexpr('<details class="pt-settings-group"[^>]*>\\s*<summary[^>]*>[^<]*', html))[[1]]
+    expect_equal(sub(".*>", "", groups),
+                 c("Layout &amp; display", "Coverage tracks (BigWig: ATAC / ChIP-seq / CUT&amp;RUN / RNA-seq)",
+                   "Hi-C", "Junction / arc tracks", "Gene view", "Comparison (diff) tracks"))
+    expect_false(any(grepl(" open", groups, fixed = TRUE)))  # all collapsed
+    for (k in fs$display_keys)
+      expect_true(grepl(sprintf('id="s_%s"', k), html, fixed = TRUE), info = k)
+    # The title is not a setting: setting it leaves the settings clean.
+    session$setInputs(plot_title = "My title")
+    expect_false(fs$settings_dirty())
+  })
+})

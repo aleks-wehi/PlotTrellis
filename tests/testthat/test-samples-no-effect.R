@@ -5,15 +5,15 @@ test_that("pt_figure(samples =) warns when no track needs a sample, and not othe
   on.exit(unlink(dir, recursive = TRUE), add = TRUE)
   proj <- suppressWarnings(suppressMessages(pt_project(dir, pt_example())))
 
-  expect_warning(fig <- pt_figure(proj, "Elf5", c("genes", "transcripts"), samples = "LP"),
+  expect_warning(fig <- pt_figure(proj, "Eya2", c("genes", "transcripts"), samples = "LP"),
                  "samples has no effect")
-  expect_identical(fig$keys, pt_figure(proj, "Elf5", c("genes", "transcripts"))$keys)
+  expect_identical(fig$keys, pt_figure(proj, "Eya2", c("genes", "transcripts"))$keys)
   # One entry per track (NA for tracks without a sample) is just as ineffective.
-  expect_warning(pt_figure(proj, "Elf5", c("genes", "transcripts"), samples = c(NA, NA)), "samples has no effect")
+  expect_warning(pt_figure(proj, "Eya2", c("genes", "transcripts"), samples = c(NA, NA)), "samples has no effect")
   # By track and sample number.
-  expect_warning(pt_figure(proj, "Elf5", c(1, 4), samples = 2), "samples has no effect")
+  expect_warning(pt_figure(proj, "Eya2", c(1, 4), samples = 2), "samples has no effect")
 
   # A track that needs a sample uses it: no warning.
-  expect_no_warning(pt_figure(proj, "Elf5", c("atac", "genes"), samples = "LP"))
-  expect_no_warning(pt_figure(proj, "Elf5", c("atac", "genes"), samples = c("LP", NA)))
+  expect_no_warning(pt_figure(proj, "Eya2", c("ATAC", "genes"), samples = "LP"))
+  expect_no_warning(pt_figure(proj, "Eya2", c("ATAC", "genes"), samples = c("LP", NA)))
 })

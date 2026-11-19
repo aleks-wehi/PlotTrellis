@@ -209,7 +209,10 @@ test_that("live changes never touch the project files; Save writes only the non-
   old  <- jsonlite::fromJSON(paste(before, collapse = "\n"), simplifyDataFrame = FALSE)
   json <- jsonlite::fromJSON(cp$json, simplifyDataFrame = FALSE)
   for (k in names(SETTING_TEST_VALUES)) expect_equal(json[[k]], SETTING_TEST_VALUES[[k]], info = k)
-  for (k in .PT_CORE_SETTINGS) expect_identical(json[[k]], old[[k]], info = k)
+  # Core keys as they were; one the file lacked (suggested_genes here) is written as its default.
+  for (k in .PT_CORE_SETTINGS)
+    expect_identical(json[[k]], old[[k]] %||% .pt_default_settings()[[k]], info = k)
+  expect_null(old$suggested_genes)
   # The saved file reads back as the same settings, and the samples.txt copy carries them.
   cfg <- .pt_read_settings(cp$json, .pt_default_settings())
   for (k in names(SETTING_TEST_VALUES)) expect_equal(cfg[[k]], SETTING_TEST_VALUES[[k]], info = k)

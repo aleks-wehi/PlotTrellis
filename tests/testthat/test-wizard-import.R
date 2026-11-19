@@ -36,6 +36,7 @@ test_that("a blank path or a missing file is said, and nothing is imported", {
     expect_match(status_html(output$wiz_import_status), "No such file:", fixed = TRUE)
     expect_length(wiz_samples(), 0)
     expect_null(imported())
+    expect_identical(import_visual(), list())
   })
 })
 
@@ -49,6 +50,7 @@ test_that("a file with errors imports nothing and lists them", {
     expect_match(status_html(output$wiz_import_status), "Nothing imported. The file has these problems:", fixed = TRUE)
     expect_length(wiz_samples(), 0)
     expect_null(imported())
+    expect_identical(import_visual(), list())
   })
   expect_length(ls(sent), 0)
 })

@@ -191,7 +191,12 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir) {
   # already cached).
   if (is.null(genome_label) || !nchar(genome_label)) genome_label <- orgdb
 
-  files <- .pt_genome_files(gtf_path, cache_dir)
+  # A whole-genome build needs several GB, which an R process keeps after
+  # freeing it: built in a separate R process, so this session does not keep
+  # it.
+  files <- if (.pt_genome_build_in_child(gtf_path, cache_dir))
+    .pt_genome_files_child(gtf_path, cache_dir)
+  else .pt_genome_files(gtf_path, cache_dir)
 
   # Chromosome lengths: not derivable from the GTF itself (see
   # genome-build-chrom-sizes.R's header comment), so this cache always comes from
@@ -227,7 +232,8 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir) {
 .pt_genome_files <- function(gtf_path, cache_dir) {
   rebuilt <- FALSE
 
-  txdb_path <- .genome_cache_path(gtf_path, "_txdb.sqlite", cache_dir)
+  paths <- .pt_genome_paths(gtf_path, cache_dir)
+  txdb_path <- paths$txdb_path
   if (!file.exists(txdb_path)) {
     message(.pt_txdb_build_message(gtf_path))
     txdb <- .pt_make_txdb(gtf_path)
@@ -292,29 +298,135 @@ ensure_genome_ready <- function(gtf_path, orgdb, genome_label, cache_dir) {
   }
   .pt_txdb_ucsc_chroms(txdb_path)
 
-  tx_name_lookup_path <- .genome_cache_path(gtf_path, "_tx_names.rds",
-                                            cache_dir)
-  if (!file.exists(tx_name_lookup_path)) {
-    build_tx_name_lookup(gtf_path, tx_name_lookup_path)
-    rebuilt <- TRUE
-  }
+  if (.pt_genome_lookups(gtf_path, paths)) rebuilt <- TRUE
 
-  tx_meta_lookup_path <- .genome_cache_path(gtf_path, "_tx_meta.rds", cache_dir)
-  if (!file.exists(tx_meta_lookup_path)) {
-    build_tx_meta_lookup(gtf_path, tx_meta_lookup_path)
-    rebuilt <- TRUE
-  }
+  list(txdb_path = txdb_path, tx_name_lookup_path = paths$tx_name_lookup_path,
+       tx_meta_lookup_path = paths$tx_meta_lookup_path, rebuilt = rebuilt)
+}
 
-  gene_names_path <- .pt_gene_names_file(txdb_path)
-  if (!file.exists(gene_names_path)) {
+# The transcript name, transcript meta and gene name lookups at `paths`
+# (.pt_genome_paths()): the missing ones are built from one read of the GTF
+# that keeps only the lines they use. TRUE when any was built.
+.pt_genome_lookups <- function(gtf_path, paths) {
+  need <- !file.exists(c(paths$tx_name_lookup_path, paths$tx_meta_lookup_path,
+                         paths$gene_names_path))
+  if (need[3])
     message("Reading the gene names in ", basename(gtf_path),
             " (once per GTF file)...")
-    build_gene_name_lookup(gtf_path, gene_names_path)
-    rebuilt <- TRUE
-  }
+  if (!any(need)) return(FALSE)
+  lines <- .pt_gtf_feature_lines(
+    gtf_path, c(if (need[1] || need[2]) "transcript", if (need[3]) "gene"))
+  if (need[1])
+    build_tx_name_lookup(gtf_path, paths$tx_name_lookup_path, lines)
+  if (need[2])
+    build_tx_meta_lookup(gtf_path, paths$tx_meta_lookup_path, lines)
+  if (need[3]) build_gene_name_lookup(gtf_path, paths$gene_names_path, lines)
+  TRUE
+}
 
-  list(txdb_path = txdb_path, tx_name_lookup_path = tx_name_lookup_path,
-       tx_meta_lookup_path = tx_meta_lookup_path, rebuilt = rebuilt)
+# The paths of the genome caches .pt_genome_files() builds for gtf_path in
+# cache_dir.
+.pt_genome_paths <- function(gtf_path, cache_dir) {
+  txdb_path <- .genome_cache_path(gtf_path, "_txdb.sqlite", cache_dir)
+  list(txdb_path = txdb_path,
+       tx_name_lookup_path = .genome_cache_path(gtf_path, "_tx_names.rds",
+                                                cache_dir),
+       tx_meta_lookup_path = .genome_cache_path(gtf_path, "_tx_meta.rds",
+                                                cache_dir),
+       gene_names_path = .pt_gene_names_file(txdb_path))
+}
+
+# TRUE when every cache .pt_genome_files() builds for gtf_path is in cache_dir.
+.pt_genome_cached <- function(gtf_path, cache_dir) {
+  is.character(gtf_path) && length(gtf_path) == 1 && file.exists(gtf_path) &&
+    all(file.exists(unlist(.pt_genome_paths(gtf_path, cache_dir))))
+}
+
+# Whether ensure_genome_ready() builds the genome caches in a separate R
+# process: only for a GTF over 10 MB (a whole genome's; the build then needs
+# several GB) with a cache missing. A small GTF (the examples') builds in about
+# a second, faster than a new R process starts.
+.pt_genome_build_in_child <- function(gtf_path, cache_dir) {
+  isTRUE(file.size(gtf_path) > 1e7) && !.pt_genome_cached(gtf_path, cache_dir)
+}
+
+# .pt_genome_files() run in a new R process (callr), which ends when it is
+# done, so the memory the build used goes with it. The process loads
+# this package as the render process does (.pt_worker_source()) and the same
+# library paths. Its messages are shown here as they come, its warnings and
+# errors are given here as they were; a process that dies (out of memory,
+# killed) is an error saying so. Interrupting R stops it.
+.pt_genome_files_child <- function(gtf_path, cache_dir) {
+  # The line the process prints once the package is loaded: what it prints
+  # before (package loading's own notes, which this session showed when it
+  # loaded the same packages) is not shown.
+  ready <- "PlotTrellis: genome build starting"
+  build <- function(load, src, gtf_path, cache_dir, ready) {
+    # Conditions are sent back with their message, class and function name
+    # only: a call's arguments or a traceback can hold objects (a database
+    # connection) that do not survive the trip.
+    plain <- function(cnd) structure(class = class(cnd), list(
+      message = conditionMessage(cnd),
+      call = if (is.call(cnd$call) && is.name(cnd$call[[1]])) cnd$call[1]))
+    warnings <- list()
+    tryCatch({
+      suppressWarnings(suppressMessages(load(src)))
+      cat(ready, "\n", sep = "", file = stderr())
+      ns <- asNamespace("PlotTrellis")
+      withCallingHandlers({
+        # The lookups first, while this process is small: built after the
+        # TxDb they add to the memory the TxDb build leaves behind (GENCODE
+        # vM39: 10.8 GB at the peak with this session, against 8.2 GB).
+        lookups <- ns$.pt_genome_lookups(gtf_path,
+                                         ns$.pt_genome_paths(gtf_path,
+                                                             cache_dir))
+        files <- ns$.pt_genome_files(gtf_path, cache_dir)
+        files$rebuilt <- files$rebuilt || lookups
+        list(files = files, warnings = warnings)
+      }, warning = function(w) {
+        warnings[[length(warnings) + 1]] <<- plain(w)
+        invokeRestart("muffleWarning")
+      })
+    }, error = function(e) list(error = plain(e), warnings = warnings))
+  }
+  environment(build) <- baseenv()
+  load <- .pt_worker_load
+  environment(load) <- baseenv()
+  started <- FALSE
+  # Each line the process prints, as a message here as it comes. R's own
+  # "stack imbalance" notes (printed by a package's compiled code, seen when
+  # loading Bioconductor packages in a callr process) are not PlotTrellis's.
+  relay <- function(line) {
+    if (!started) started <<- identical(line, ready)
+    else if (!startsWith(line, "Warning: stack imbalance in ")) message(line)
+  }
+  proc <- callr::r_bg(build,
+                       list(load, .pt_worker_source(), gtf_path, cache_dir,
+                            ready),
+                       user_profile = FALSE, stdout = "|", stderr = "2>&1")
+  # Stopped if this session is interrupted (Esc, Ctrl+C) or errors.
+  on.exit(proc$kill(), add = TRUE)
+  # Waited for in R's own sleep, which an interrupt reaches; processx's wait
+  # and poll do not let one through. Once it has ended, its output is read to
+  # the end (for at most 5 s more).
+  after <- 0
+  repeat {
+    alive <- proc$is_alive()
+    for (line in proc$read_output_lines()) relay(line)
+    if (!alive && (!proc$is_incomplete_output() || (after <- after + 1) > 25))
+      break
+    Sys.sleep(0.2)
+  }
+  res <- tryCatch(proc$get_result(), callr_error = function(e)
+    stop("PlotTrellis could not build the genome cache from ", gtf_path,
+         ": the R process building it stopped before it finished (out of ",
+         "memory, or killed). The first open of a whole-genome GTF needs an ",
+         "R session with at least 10 GB of memory: start one that size and ",
+         "try again. It is built once per project; 8 GB is enough after ",
+         "that.", call. = FALSE))
+  for (w in res$warnings) warning(w)
+  if (!is.null(res$error)) stop(res$error)
+  res$files
 }
 
 # The genome files a downloaded script draws from: the project's cached TxDb

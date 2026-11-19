@@ -1,13 +1,9 @@
 <div id="ptApp">
 <header class="ptnav">
-  <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDQwIDEyMDAiPgo8dGl0bGU+UGxvdFRyZWxsaXM8L3RpdGxlPgo8ZGVmcz48Y2xpcFBhdGggaWQ9InB0LW1hcmstaGV4Ij48cG9seWdvbiBwb2ludHM9IjUyMCwwIDEwNDAsMzAwIDEwNDAsOTAwIDUyMCwxMjAwIDAsOTAwIDAsMzAwIi8+PC9jbGlwUGF0aD48L2RlZnM+Cjxwb2x5Z29uIHBvaW50cz0iNTIwLDE0IDEwMjgsMzA3IDEwMjgsODkzIDUyMCwxMTg2IDEyLDg5MyAxMiwzMDciIGZpbGw9IiNFMDdBNEYiIHN0cm9rZT0iI0UwN0E0RiIgc3Ryb2tlLXdpZHRoPSIyNCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8cG9seWdvbiBwb2ludHM9IjUyMCwxMjggOTI5LDM2NCA5MjksODM2IDUyMCwxMDcyIDExMSw4MzYgMTExLDM2NCIgZmlsbD0iIzFGM0EyRSIvPgo8cGF0aCBkPSJNMzE4LDg1MCBBMjAyLDMzMCAwIDAgMSA3MjIsODUwIiBmaWxsPSJub25lIiBzdHJva2U9IiNGMkVCRDkiIHN0cm9rZS13aWR0aD0iOTIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8ZyBjbGlwLXBhdGg9InVybCgjcHQtbWFyay1oZXgpIj4KPHBhdGggZD0iTTYwLDgxMiBDMjQwLDgxMiAyNjIsNTkwIDQyMCw0ODYgQzU2MCwzOTQgNjgwLDQ4MCA3NzAsMzUwIiBmaWxsPSJub25lIiBzdHJva2U9IiM4REJGNkEiIHN0cm9rZS13aWR0aD0iNzIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyNDgsNjg4KSByb3RhdGUoLTExOSkiIGQ9Ik0wLDAgQzU5LC05MSAxNjQsLTgwIDIzNSwwIEMxNjQsODAgNTksOTEgMCwwIFoiIGZpbGw9IiM4REJGNkEiLz4KPHBhdGggdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNTcwLDQzNykgcm90YXRlKC02OCkiIGQ9Ik0wLDAgQzU0LC04NCAxNTAsLTc0IDIxNSwwIEMxNTAsNzQgNTQsODQgMCwwIFoiIGZpbGw9IiM4REJGNkEiLz4KPHBhdGggdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzcwLDM1MCkgcm90YXRlKC05MykiIGQ9Ik0wLDAgQzQ2LC03MCAxMzAsLTYyIDE4NSwwIEMxMzAsNjIgNDYsNzAgMCwwIFoiIGZpbGw9IiM4REJGNkEiLz4KPHBhdGggdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNzcwLDM1MCkgcm90YXRlKC0xNSkiIGQ9Ik0wLDAgQzQ2LC03MCAxMzAsLTYyIDE4NSwwIEMxMzAsNjIgNDYsNzAgMCwwIFoiIGZpbGw9IiM4REJGNkEiLz4KPC9nPgo8L3N2Zz4K" alt=""><span class="brand-name">PlotTrellis</span><span class="brand-ver" id="ptVer"></span></div>
-  <span class="genome" id="genome" title="Genome and annotation of this project"></span>
+  <div class="brand"><span class="brand-name">PlotTrellis</span><span class="brand-ver" id="ptVer"></span></div>
+  <span class="genome" id="genome" role="status"></span>
   <div class="nav-actions">
-    <div class="flip" id="modeFlip" role="switch" tabindex="0" aria-checked="false" aria-label="Dark mode">
-      <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3"/></svg></span>
-      <span><svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.5 1.5a6.5 6.5 0 1 0 4 9.6A5.5 5.5 0 0 1 10.5 1.5z"/></svg></span>
-    </div>
-    <button class="nbtn" id="editBtn">Edit project settings</button>
+    <button class="nbtn" id="editBtn">Project settings</button>
   </div>
 </header>
 
@@ -19,7 +15,7 @@
       <select class="field" id="chr" aria-label="Chromosome" hidden></select>
       <div class="search">
         <input class="field" id="gene" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="sugg" aria-label="Gene. Press slash to jump here." autofocus>
-        <input class="field" id="range" placeholder="103,400,000-103,460,000" autocomplete="off" aria-label="Start and end" hidden>
+        <input class="field" id="range" placeholder="165,430,000-165,620,000" autocomplete="off" aria-label="Start and end" hidden>
         <span class="ehint" id="ehint" aria-hidden="true" hidden><kbd>Enter</kbd> draws</span>
         <button class="clear" id="clear" aria-label="Clear" title="Clear" hidden>&#10005;</button>
         <ul class="sugg" id="sugg" role="listbox" aria-label="Genes" hidden></ul>
@@ -32,9 +28,9 @@
 
 <main class="main">
   <aside class="tracks" id="tracks" hidden>
-    <div class="half"><h2><span>In figure</span><small class="hid" id="hidN" tabindex="0" hidden></small><button class="sbtn" id="clearAll">Clear all<span class="hk2" aria-hidden="true"><kbd class="hk">Shift</kbd><kbd class="hk">0</kbd></span></button></h2><div class="list" id="inList" role="list"></div></div>
+    <div class="half"><h2><span>In figure</span><small class="hid" id="hidN" tabindex="0" hidden></small><button class="sbtn" id="clearAll">Clear all</button></h2><div class="list" id="inList" role="list"></div></div>
     <div class="split split-h" id="splitH" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="Drag to give In figure or Add more height" title="Drag to resize"></div>
-    <div class="half" id="addHalf"><h2><span>Add</span><button class="sbtn" id="addAll">Add all<span class="hk2" aria-hidden="true"><kbd class="hk">Shift</kbd><kbd class="hk">A</kbd></span></button></h2><div class="list" id="addList"></div></div>
+    <div class="half" id="addHalf"><h2><span>Add</span><button class="sbtn" id="addAll">Add all</button></h2><div class="list" id="addList"></div></div>
   </aside>
   <div class="split split-v" id="splitV" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to give the tracks or the figure more width" title="Drag to resize"></div>
   <section class="right" id="right" hidden>
@@ -44,9 +40,9 @@
         <span title="Fit width"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h12M5 5 2 8l3 3M11 5l3 3-3 3"/></svg></span>
         <span title="Fit height"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v12M5 5l3-3 3 3M5 11l3 3 3-3"/></svg></span>
       </div>
-      <button class="tbtn" id="setBtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h7M12 4h2M2 8h2M7 8h7M2 12h8M13 12h1"/><circle cx="10.5" cy="4" r="1.5"/><circle cx="5.5" cy="8" r="1.5"/><circle cx="11.5" cy="12" r="1.5"/></svg>Figure settings</button>
-      <button class="tbtn" id="dlSvg"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>SVG</button>
-      <button class="tbtn" id="dlR"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>R script</button>
+      <button class="tbtn" id="setBtn">Figure settings</button>
+      <span class="dl" id="dl"><button class="tbtn" id="dlBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="dlMenu"><span id="dlLbl">Download</span><svg class="caret" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></button>
+        <div class="dlmenu" id="dlMenu" role="menu" aria-label="Download the figure as" hidden><button role="menuitem" id="dlSvg" tabindex="-1">SVG<small>vector</small></button><button role="menuitem" id="dlPng" tabindex="-1">PNG<small>300 dpi</small></button><button role="menuitem" id="dlJpg" tabindex="-1">JPEG<small>300 dpi</small></button><button role="menuitem" id="dlRs" tabindex="-1">R script<small>code</small></button></div></span>
       <button class="tbtn sq" id="keysBtn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
     </div>
     <div class="where" id="where" role="toolbar" aria-label="Zoom and move"></div>

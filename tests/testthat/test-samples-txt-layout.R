@@ -62,8 +62,8 @@ test_that("parse_samples_txt() (and so pt_project()) gives the layout warning on
   dir <- dirname(pt_example("mammary"))
   shipped <- list.files(dir, recursive = TRUE, all.files = TRUE)
   per_sample <- c(
-    paste("# data_root:", dir), paste("# gtf_path:", file.path(dir, "gencode.vM25.example.gtf.gz")),
-    "# orgdb: org.Mm.eg.db", "# genome_label: mm10",
+    paste("# data_root:", dir), paste("# gtf_path:", file.path(dir, "annotation.gtf.gz")),
+    "# orgdb: org.Mm.eg.db", "# genome_label: mm39",
     "condition\tbw:Basal atac\tbw:LP atac",
     "Basal\tatac/Basal_ATAC.bw\t",
     "LP\t\tatac/LP_ATAC.bw")

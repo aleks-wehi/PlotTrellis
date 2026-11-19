@@ -213,6 +213,74 @@ test_that("run_plottrellis() opens the wizard after Reset deletes the settings",
   expect_identical(out$result, "closed")
 })
 
+test_that("run_plottrellis() opens the classic screen unless experienced = TRUE, which also holds after a trip to the wizard", {
+  dir <- tempfile("pt-loop-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  json <- file.path(dir, "project_settings.json")
+  writeLines("{}", json)
+  got <- list()
+  answers <- c("closed", "edit_settings", "closed", "closed")
+  testthat::local_mocked_bindings(
+    plottrellis_wizard   = function(project_dir, ...) "restart",
+    plottrellis_composer = function(project_dir, ...) {
+      got[[length(got) + 1]] <<- list(...)
+      answers[length(got)]
+    })
+  expect_identical(run_plottrellis(dir), "closed")
+  expect_identical(run_plottrellis(dir, experienced = TRUE, port = 1), "closed")
+  expect_identical(got, list(list(experienced = FALSE),
+                             list(experienced = TRUE, port = 1), list(experienced = TRUE, port = 1)))
+  # the original name passes it on too
+  expect_identical(PlotTrellisApp(dir, experienced = TRUE), "closed")
+  expect_identical(got[[4]], list(experienced = TRUE))
+})
+
+test_that("experienced must be TRUE or FALSE: anything else stops before a project is touched", {
+  dir <- file.path(tempfile("pt-exp-"), "project")
+  for (bad in list(NA, "TRUE", 1, 8080, NULL, c(TRUE, FALSE))) {
+    expect_error(run_plottrellis(dir, experienced = bad), "`experienced` must be TRUE or FALSE", fixed = TRUE)
+    expect_error(plottrellis_composer(dir, experienced = bad), "`experienced` must be TRUE or FALSE", fixed = TRUE)
+  }
+  expect_false(dir.exists(dirname(dir)))
+})
+
+test_that("an unnamed extra argument still goes on to shiny::runApp() as in 1.1.1; experienced is given by name", {
+  dir <- tempfile("pt-pos-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  jsonlite::write_json(list(gtf_path = file.path(dirname(pt_example()), "annotation.gtf.gz"),
+                            orgdb = "org.Mm.eg.db", genome_label = "mm10"),
+                       file.path(dir, "project_settings.json"), auto_unbox = TRUE)
+  screens <- logical(0)
+  ran <- list()
+  testthat::local_mocked_bindings(
+    .pt_render_pool = function(...) list(close = function() NULL, warm = function() NULL),
+    .pt_composer_app = function(SETTINGS_JSON, CFG, RENDER_POOL, experienced) {
+      screens <<- c(screens, experienced)
+      "the app"
+    })
+  # shiny::runApp(appDir, port, ...): what an unnamed argument after the app is matched to
+  testthat::local_mocked_bindings(runApp = function(appDir, port = NULL, ...) {
+    ran[[length(ran) + 1]] <<- c(list(port = port), list(...))
+    "closed"
+  }, .package = "shiny")
+  # run_plottrellis(project_dir, samples_txt, <port>) and plottrellis_composer(project_dir, <port>)
+  expect_identical(run_plottrellis(dir, NULL, 8080), "closed")
+  expect_identical(plottrellis_composer(dir, 8081), "closed")
+  expect_identical(ran, list(list(port = 8080), list(port = 8081)))
+  expect_identical(screens, c(FALSE, FALSE))
+  # TRUE by position is no screen choice either: it goes where a port would
+  expect_identical(plottrellis_composer(dir, TRUE), "closed")
+  expect_identical(ran[[3]], list(port = TRUE))
+  expect_identical(screens[3], FALSE)
+  # by name, with an unnamed port beside it and with named arguments
+  expect_identical(run_plottrellis(dir, NULL, 8082, experienced = TRUE), "closed")
+  expect_identical(plottrellis_composer(dir, experienced = TRUE, launch.browser = FALSE), "closed")
+  expect_identical(ran[4:5], list(list(port = 8082), list(port = NULL, launch.browser = FALSE)))
+  expect_identical(screens[4:5], c(TRUE, TRUE))
+})
+
 test_that("PlotTrellisApp() passes everything through to run_plottrellis()", {
   got <- NULL
   testthat::local_mocked_bindings(run_plottrellis = function(...) { got <<- list(...); "closed" })
@@ -317,4 +385,46 @@ test_that("parse_samples_txt() warns when an auto setting isn't a finite number"
 test_that("parse_samples_txt() says which genome fields came from the defaults", {
   p <- make_samples_project(c("# data_root: data", "# gtf_path: genes.gtf"))
   expect_message(parse_samples_txt(p$txt, project_dir = tempfile("pt-out-")), "orgdb = org.Mm.eg.db")
+})
+
+test_that("the composer starts its render process after the genome cache is built, at once when it is there (bug 272)", {
+  dir <- tempfile("pt-pool-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  gtf <- file.path(dirname(pt_example()), "annotation.gtf.gz")
+  jsonlite::write_json(list(gtf_path = gtf, orgdb = "org.Mm.eg.db", genome_label = "mm10"),
+                       file.path(dir, "project_settings.json"), auto_unbox = TRUE)
+  events <- character(0)
+  screens <- logical(0)
+  testthat::local_mocked_bindings(
+    .pt_render_worker = function(...) {
+      events <<- c(events, "render process")
+      list(close = function() NULL, rendering = function() FALSE)
+    },
+    # the app's startup builds the genome cache
+    .pt_composer_app = function(SETTINGS_JSON, CFG, RENDER_POOL, experienced) {
+      suppressMessages(.pt_genome_files(CFG$gtf_path, file.path(dir, "cache")))
+      events <<- c(events, "app")
+      screens <<- c(screens, experienced)
+      "the app"
+    })
+  testthat::local_mocked_bindings(runApp = function(appDir, ...) {
+    events <<- c(events, "run")
+    "closed"
+  }, .package = "shiny")
+  expect_false(.pt_genome_cached(gtf, file.path(dir, "cache")))
+  expect_identical(plottrellis_composer(dir), "closed")
+  expect_identical(events, c("app", "render process", "run"))
+  events <- character(0)
+  expect_identical(plottrellis_composer(dir), "closed")
+  expect_identical(events, c("render process", "app", "run"))
+  # The same order on the screen for experienced users, from an empty cache and a built one.
+  unlink(file.path(dir, "cache"), recursive = TRUE)
+  events <- character(0)
+  expect_identical(plottrellis_composer(dir, experienced = TRUE), "closed")
+  expect_identical(events, c("app", "render process", "run"))
+  events <- character(0)
+  expect_identical(plottrellis_composer(dir, experienced = TRUE), "closed")
+  expect_identical(events, c("render process", "app", "run"))
+  expect_identical(screens, c(FALSE, FALSE, TRUE, TRUE))
 })

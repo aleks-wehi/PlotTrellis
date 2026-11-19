@@ -100,7 +100,11 @@
     # import_samples_txt() and export_samples_txt() use; `condition` alone
     # identifies a sample, so a replicate is a separate entry with its own
     # condition.
-    samples      = list()
+    samples      = list(),
+    # The genes the experienced screen's gene box offers before anything is
+    # typed: gene symbols or Ensembl ids, comma-separated, as a samples.txt's
+    # `# suggested_genes:` line gives them. Blank: none.
+    suggested_genes = ""
   ),
   .pt_display_defaults()
 )
@@ -214,17 +218,19 @@
 
 # Builds (does not run) the composer app for one project. Its startup below
 # (genome migration, TxDb load, ...) runs on each call.
-.pt_composer_app <- function(SETTINGS_JSON, CFG, RENDER_POOL = NULL) {
+.pt_composer_app <- function(SETTINGS_JSON, CFG, RENDER_POOL = NULL,
+                             experienced = FALSE) {
 
 # CFG/SETTINGS_JSON come from .pt_project(), see R/api-entry-points.R. RENDER_POOL:
 # the launcher's render processes (.pt_render_pool(), R/viz-render-worker.R), or
-# NULL: one per session.
+# NULL: one per session. experienced: TRUE for the screen for experienced users
+# (run_plottrellis()'s argument).
 
 # Startup: everything loaded once per launch (R/app-context.R).
 ctx <- .pt_composer_context(SETTINGS_JSON, CFG)
-# The main screen (R/app-screen-server.R) unless the classic one is asked for
-# (.pt_screen()); the rest of this function is the classic composer.
-if (identical(.pt_screen(), "new"))
+# The screen for experienced users (R/app-screen-server.R) when asked for; the
+# rest of this function is the classic composer.
+if (isTRUE(experienced))
   return(.pt_main_app(ctx, SETTINGS_JSON, RENDER_POOL))
 # Tests read the app's startup state through the server's environment
 # (environment(app$serverFuncSource())): these names stay as locals here.

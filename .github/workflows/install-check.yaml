@@ -64,7 +64,8 @@ jobs:
           cat(R.version.string, "\n")
           print(.libPaths())
           ip <- installed.packages()
-          extra <- ip[is.na(ip[, "Priority"]), "Package"]
+          # R for Windows ships "translations" (message catalogues) with no Priority: not a user package.
+          extra <- setdiff(ip[is.na(ip[, "Priority"]), "Package"], "translations")
           if (length(extra)) stop("Library is not empty: ", paste(extra, collapse = ", "))
           print(Sys.which(c("make", "gcc", "g++")))
           if (nzchar(Sys.which(Sys.getenv("MAKE", "make")))) stop("R can still find a make program")
@@ -117,8 +118,8 @@ jobs:
           if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) BiocManager::install("org.Mm.eg.db", update = FALSE)
           library(PlotTrellis)
           proj <- pt_project(project_dir = file.path(tempdir(), "PlotTrellis-example"), samples_txt = pt_example())
-          fig <- pt_figure(proj, "Elf5", tracks = c("atac", "transcript_expression", "transcripts_annotated", "genes"))
-          out <- file.path(tempdir(), "Elf5.png")
+          fig <- pt_figure(proj, "Eya2", tracks = c("ATAC", "transcript_expression", "transcripts_annotated", "genes"))
+          out <- file.path(tempdir(), "Eya2.png")
           pt_save(fig, out)
           size <- file.size(out)
           cat("Saved", out, size, "bytes\n")

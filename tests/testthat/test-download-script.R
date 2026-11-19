@@ -262,7 +262,7 @@ test_that("the bundled example's script runs alone with Rscript and draws pt_sav
   # A coverage track first (it draws the scale bar) and two Transcript expression tracks (they
   # fold into one panel): both come from the track types' declarations, which the script
   # must carry.
-  fig <- pt_figure(proj, "Elf5", c("atac", "genes", "transcript_expression", "transcript_expression"),
+  fig <- pt_figure(proj, "Eya2", c("ATAC", "genes", "transcript_expression", "transcript_expression"),
                    samples = c("Basal", NA, "Basal", "LP"))
   api_svg <- tempfile(fileext = ".svg")
   pt_save(fig, api_svg)
@@ -272,7 +272,7 @@ test_that("the bundled example's script runs alone with Rscript and draws pt_sav
   script <- pt_script(fig, file.path(run_dir, "figure.R"))
   head <- readLines(script, n = 15)
   expect_true(any(grepl(paste("PlotTrellis", utils::packageVersion("PlotTrellis")), head, fixed = TRUE)))
-  expect_true(any(grepl("Elf5", head, fixed = TRUE)))
+  expect_true(any(grepl("Eya2", head, fixed = TRUE)))
 
   old <- setwd(run_dir)
   on.exit(setwd(old), add = TRUE)
@@ -321,7 +321,7 @@ test_that("a script run where the project's genome cache is gone builds it from 
   skip_on_cran()
   skip_if_not_installed("org.Mm.eg.db")
   proj <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-script-nocache"), pt_example("mammary")))
-  fig <- pt_figure(proj, "Elf5", c("atac", "genes", "transcripts", "transcript_expression"),
+  fig <- pt_figure(proj, "Eya2", c("ATAC", "genes", "transcripts", "transcript_expression"),
                    samples = c("Basal", NA, NA, "LP"))
   api_svg <- tempfile(fileext = ".svg")
   pt_save(fig, api_svg)
@@ -340,7 +340,7 @@ test_that("a script run where the project's genome cache is gone builds it from 
   run <- function() system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", "figure.R"),
                             stdout = TRUE, stderr = TRUE,
                             env = paste0("R_LIBS=", paste(.libPaths(), collapse = .Platform$path.sep)))
-  svg <- file.path(run_dir, "plottrellis_Elf5.svg")
+  svg <- file.path(run_dir, "plottrellis_Eya2.svg")
   for (i in 1:2) {
     unlink(svg)
     out <- run()

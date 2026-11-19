@@ -1,8 +1,8 @@
 # The setup wizard's Import a samples.txt box: one block of wizard_server(). An
 # import fills the committed samples (`wiz_samples`), the data folder and genome
 # fields, and keeps the file's lines (`imported`, for its start view) and its
-# display settings (`import_visual`) for Save. `DEFAULT_SETTINGS` says which
-# `# key: value` lines are settings.
+# display settings and suggested genes (`import_visual`) for Save.
+# `DEFAULT_SETTINGS` says which `# key: value` lines are settings.
 .pt_wizard_import_server <- function(input, output, session, wiz_samples,
                                      imported, import_visual,
                                      DEFAULT_SETTINGS) {
@@ -44,12 +44,14 @@
     imported(readLines(path, warn = FALSE))
 
     # Apply any `# <key>: value` overrides: the genome fields onto their inputs,
-    # the display settings into import_visual() for Save. Numbers for the
-    # NULL-default ("auto") keys are converted the way parse_samples_txt() does.
+    # the display settings and the suggested genes into import_visual() for
+    # Save. Numbers for the NULL-default ("auto") keys are converted the way
+    # parse_samples_txt() does.
     coerced <- .pt_coerce_auto_overrides(res$overrides, DEFAULT_SETTINGS)
     ov <- coerced$overrides
     res$warnings <- c(res$layout_warning, res$warnings, coerced$ignored)
-    visual_keys <- setdiff(names(DEFAULT_SETTINGS), .PT_CORE_SETTINGS)
+    visual_keys <- c(setdiff(names(DEFAULT_SETTINGS), .PT_CORE_SETTINGS),
+                     "suggested_genes")
     import_visual(ov[intersect(names(ov), visual_keys)])
     if (!is.null(ov$gtf_path))
       updateTextInput(session, "wiz_gtf_path", value = ov$gtf_path)

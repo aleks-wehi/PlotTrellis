@@ -96,16 +96,16 @@ test_that("a gene the OrgDb has no symbol for opens by its GTF gene_name or gene
     expect_gt(nrow(tx), 0)
   }
   # Mouse: GTF names newer than org.Mm.eg.db, by name (any case) or ID (any version)
-  opens(mm, "Gm37220", "Gm37220", "ENSMUSG00000102686")
-  opens(mm, "gm37220", "Gm37220", "ENSMUSG00000102686")
-  opens(mm, "ENSMUSG00000102686.1", "Gm37220", "ENSMUSG00000102686")
-  opens(mm, "BC016548", "BC016548", "ENSMUSG00000070794")
-  opens(mm, "ENSMUSG00000070794", "BC016548", "ENSMUSG00000070794")
+  opens(mm, "Gm28199", "Gm28199", "ENSMUSG00000100791")
+  opens(mm, "gm28199", "Gm28199", "ENSMUSG00000100791")
+  opens(mm, "ENSMUSG00000100791.1", "Gm28199", "ENSMUSG00000100791")
+  opens(mm, "Gm11460", "Gm11460", "ENSMUSG00000081758")
+  opens(mm, "ENSMUSG00000081758", "Gm11460", "ENSMUSG00000081758")
   # Human: unnamed GENCODE genes (gene_name is the ID)
   for (id in c("ENSG00000259371", "ENSG00000259321", "ENSG00000259529", "ENSG00000289757"))
     opens(hs, id, id, id)
   # A gene the OrgDb has still resolves through it
-  expect_identical(pt_figure(mm, "elf5", "genes")$gene, "Elf5")
+  expect_identical(pt_figure(mm, "eya2", "genes")$gene, "Eya2")
 })
 
 test_that("a gene missing only from the project's GTF says so, naming the GTF (bug 258)", {
@@ -114,12 +114,12 @@ test_that("a gene missing only from the project's GTF says so, naming the GTF (b
   mm <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-gtf-names-mm"), pt_example("mammary")))
   hs <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-gtf-names-hs"), pt_example("human")))
   expect_error(pt_figure(hs, "TP53", "genes"), "^'TP53' is not in this project's GTF \\(annotation\\.gtf\\.gz\\)$")
-  expect_error(pt_figure(mm, "Trp53", "genes"), "'Trp53' is not in this project's GTF \\(gencode\\.vM25\\.example\\.gtf\\.gz\\)")
+  expect_error(pt_figure(mm, "Trp53", "genes"), "'Trp53' is not in this project's GTF \\(annotation\\.gtf\\.gz\\)")
   expect_error(pt_figure(hs, "ENSG00000141510", "genes"), "'ENSG00000141510' is not in this project's GTF")
   expect_error(pt_figure(mm, "ENSMUSG99999999999", "genes"),
-               "Ensembl ID 'ENSMUSG99999999999' is not in this project's GTF \\(gencode")
+               "Ensembl ID 'ENSMUSG99999999999' is not in this project's GTF \\(annotation")
   # A name neither knows: as before
-  expect_error(pt_figure(mm, "Foo1", "genes"), "'Foo1' not found in mm10: enter a gene symbol")
+  expect_error(pt_figure(mm, "Foo1", "genes"), "'Foo1' not found in mm39: enter a gene symbol")
 })
 
 test_that("a GTF gene name shared by several genes, or an OrgDb symbol of another gene, is not guessed", {
@@ -137,21 +137,21 @@ test_that("a GTF gene name shared by several genes, or an OrgDb symbol of anothe
 
 test_that("an OrgDb symbol whose Ensembl IDs the GTF has under another ID opens by the GTF's (bug 258 review)", {
   skip_if_not_installed("org.Mm.eg.db")
-  # The mouse example with Elf5 under an ID org.Mm.eg.db does not have.
+  # The mouse example with Eya2 under an ID org.Mm.eg.db does not have.
   ex <- dirname(pt_example("mammary"))
   dir <- tempfile("pt-test-id-drift-")
   dir.create(dir)
   gtf <- file.path(dir, "drift.gtf")
-  writeLines(gsub("ENSMUSG00000027186", "ENSMUSG99999927186",
-                  readLines(gzfile(file.path(ex, "gencode.vM25.example.gtf.gz"))), fixed = TRUE), gtf)
+  writeLines(gsub("ENSMUSG00000017897", "ENSMUSG99999917897",
+                  readLines(gzfile(file.path(ex, "annotation.gtf.gz"))), fixed = TRUE), gtf)
   st <- file.path(dir, "samples.txt")
   txt <- readLines(pt_example("mammary"))
   txt <- sub("^# data_root: .*", paste("# data_root:", ex), txt)
   writeLines(sub("^# gtf_path: .*", paste("# gtf_path:", gtf), txt[!grepl("^# start_", txt)]), st)
   proj <- suppressWarnings(pt_project(file.path(dir, "proj"), st))
-  fig <- pt_figure(proj, "Elf5", c("genes", "transcripts"))
-  expect_identical(fig$gene, "Elf5")
-  g <- GenomicFeatures::genes(proj$txdb, filter = list(gene_id = "ENSMUSG99999927186"))
+  fig <- pt_figure(proj, "Eya2", c("genes", "transcripts"))
+  expect_identical(fig$gene, "Eya2")
+  g <- GenomicFeatures::genes(proj$txdb, filter = list(gene_id = "ENSMUSG99999917897"))
   expect_true(fig$region_params$start <= GenomicRanges::start(g) && fig$region_params$end >= GenomicRanges::end(g))
-  expect_gt(nrow(gtf_transcript_structure("Elf5", .pt_annotation(proj$render_cfg))), 0)
+  expect_gt(nrow(gtf_transcript_structure("Eya2", .pt_annotation(proj$render_cfg))), 0)
 })

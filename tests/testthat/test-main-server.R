@@ -1,8 +1,5 @@
-# The main screen's server side (R/app-screen-server.R) and the screen switch
-# (.pt_screen(), R/app-screen-ui.R), on the bundled mammary example (Basal and LP; chr2,
-# mm10). setup-screen.R selects the classic screen for the whole test session, so each
-# test here that needs the new screen asks for it locally. The data answers themselves
-# are test-main-api.R's.
+# The main screen's server side (R/app-screen-server.R), on the bundled mammary example
+# (Basal and LP; five genes, mm39). The data answers themselves are test-main-api.R's.
 
 # The example's project and context, built once for this file.
 main_srv <- local({
@@ -22,9 +19,9 @@ main_srv <- local({
 
 # A render request as the page sends it, with any field replaced or dropped (NULL).
 render_args <- function(...) {
-  args <- list(gene = "Elf5", chr = "chr2", s = 103400000, e = 103460000,
+  args <- list(gene = "Eya2", chr = "chr2", s = 165430000, e = 165620000,
                picked = list("LP", "Basal"),
-               tracks = list(list(type = "atac", sample = "LP"), list(type = "genes")))
+               tracks = list(list(type = "ATAC", sample = "LP"), list(type = "genes")))
   over <- list(...)
   args[names(over)] <- over
   args
@@ -48,59 +45,27 @@ rpc <- function(...) as.character(jsonlite::toJSON(list(...), auto_unbox = TRUE,
 
 DISPLAY_KEYS <- setdiff(names(.pt_default_settings()), .PT_CORE_SETTINGS)
 
-# ---- .pt_screen() ------------------------------------------------------------------------
+# ---- .pt_composer_app() builds the page --------------------------------------------------
 
-test_that("a test run drives the classic screen unless a test asks for the new one", {
-  # setup-screen.R: what the older composer tests rely on.
-  expect_identical(getOption("PlotTrellis.screen"), "classic")
-  expect_identical(.pt_screen(), "classic")
-})
-
-test_that(".pt_screen(): new by default, the option, else the environment variable", {
-  withr::local_options(PlotTrellis.screen = NULL)
-  withr::local_envvar(PLOTTRELLIS_SCREEN = NA)
-  expect_identical(.pt_screen(), "new")
-  withr::local_envvar(PLOTTRELLIS_SCREEN = "classic")
-  expect_identical(.pt_screen(), "classic")
-  withr::local_options(PlotTrellis.screen = "new")
-  expect_identical(.pt_screen(), "new")
-  withr::local_envvar(PLOTTRELLIS_SCREEN = "new")
-  withr::local_options(PlotTrellis.screen = "classic")
-  expect_identical(.pt_screen(), "classic")
-})
-
-test_that(".pt_screen(): any value but \"classic\" means the new screen", {
-  withr::local_envvar(PLOTTRELLIS_SCREEN = NA)
-  for (v in list("Classic", "old", "", NA, TRUE, c("classic", "new"), 1))
-    expect_identical(withr::with_options(list(PlotTrellis.screen = v), .pt_screen()), "new")
-  withr::local_options(PlotTrellis.screen = NULL)
-  withr::local_envvar(PLOTTRELLIS_SCREEN = "CLASSIC")
-  expect_identical(.pt_screen(), "new")
-})
-
-# ---- .pt_composer_app() picks the page ---------------------------------------------------
-
-test_that(".pt_composer_app() gives the new page by default and the classic one with the option", {
+test_that(".pt_composer_app() gives the main screen's page with experienced = TRUE, the classic page without", {
   m <- main_srv()
-  page_html <- function(app) {
+  page <- function(app) {
     ui <- environment(app$httpHandler)$ui
     htmltools::renderTags(if (is.function(ui)) ui(NULL) else ui)$html
   }
-  withr::local_envvar(PLOTTRELLIS_SCREEN = NA)
-  new_app <- withr::with_options(list(PlotTrellis.screen = NULL),
-                                 suppressMessages(.pt_composer_app(m$json, m$cfg)))
-  expect_s3_class(new_app, "shiny.appobj")
-  html <- page_html(new_app)
+  classic <- page(suppressMessages(.pt_composer_app(m$json, m$cfg)))
+  expect_match(classic, "close_app_btn", fixed = TRUE)
+  expect_false(grepl('id="ptApp"', classic, fixed = TRUE))
+  expect_match(page(suppressMessages(.pt_composer_app(m$json, m$cfg, experienced = FALSE))), "close_app_btn", fixed = TRUE)
+  app <- suppressMessages(.pt_composer_app(m$json, m$cfg, experienced = TRUE))
+  expect_s3_class(app, "shiny.appobj")
+  ui <- environment(app$httpHandler)$ui
+  html <- htmltools::renderTags(if (is.function(ui)) ui(NULL) else ui)$html
   expect_match(html, 'id="ptApp"', fixed = TRUE)
   expect_match(html, 'id="ptSettings"', fixed = TRUE)
+  # nothing of the earlier screen: its mode switch, its Close app button
   expect_false(grepl('id="view_mode"', html, fixed = TRUE))
-
-  classic <- withr::with_options(list(PlotTrellis.screen = "classic"),
-                                 suppressMessages(.pt_composer_app(m$json, m$cfg)))
-  expect_s3_class(classic, "shiny.appobj")
-  html <- page_html(classic)
-  expect_match(html, 'id="view_mode"', fixed = TRUE)
-  expect_false(grepl('id="ptApp"', html, fixed = TRUE))
+  expect_false(grepl("close_app_btn", html, fixed = TRUE))
 })
 
 # ---- .pt_main_settings_key() -------------------------------------------------------------
@@ -115,8 +80,8 @@ test_that("the settings key changes with any display setting or the title, and o
   # The title, trimmed; NULL is no title.
   expect_identical(key(cfg, "  "), k0)
   expect_identical(key(cfg, NULL), k0)
-  expect_false(identical(key(cfg, "Elf5"), k0))
-  expect_identical(key(cfg, " Elf5 "), key(cfg, "Elf5"))
+  expect_false(identical(key(cfg, "Eya2"), k0))
+  expect_identical(key(cfg, " Eya2 "), key(cfg, "Eya2"))
   # One display setting.
   for (k in c("fontsize", "page_w", "show_title", "reference_colour", "uniprot_reviewed_only")) {
     x <- cfg
@@ -142,19 +107,19 @@ test_that("the settings key changes with any display setting or the title, and o
 
 # ---- .pt_main_render_job() ---------------------------------------------------------------
 
-test_that("a render job draws what the classic screen would for the same choice", {
+test_that("a render job is the choice's entries, its region and the live settings", {
   skip_if_not_installed("org.Mm.eg.db")
   ctx <- main_srv()$ctx
   cfg <- ctx$RENDER_CFG
   cfg$fontsize <- 11L
-  args <- render_args(s = 103400000.4, e = 103460000.6)
+  args <- render_args(s = 165430000.4, e = 165620000.6)
   job <- .pt_main_render_job(ctx, args, cfg, "  My title ")
   expect_named(job, c("entries", "region_params", "settings"))
   labels <- .pt_main_labels(ctx, args$picked, args$tracks)
-  expect_identical(labels, c("bw_atac_LP", "genes"))
+  expect_identical(labels, c("bw_ATAC_LP", "genes"))
   expect_identical(job$entries, .pt_build_entries(labels, ctx$TRACK_ITEMS, ctx$DEFAULT_SAMPLE_COLS, cfg))
   expect_identical(job$region_params,
-                   list(chrom = "chr2", start = 103400000L, end = 103460001L, gene = "Elf5"))
+                   list(chrom = "chr2", start = 165430000L, end = 165620001L, gene = "Eya2"))
   expect_identical(job$settings$title, "My title")
   expect_identical(job$settings$fontsize, 11L)
   expect_identical(job$settings[names(.pt_settings_base(cfg))], .pt_settings_base(cfg))
@@ -175,7 +140,7 @@ test_that("a render job clamps the region to the chromosome and gives a region n
   # Numbers sent as text are read as numbers.
   expect_identical(rp(s = "1000", e = "2000")[c("start", "end")], list(start = 1000L, end = 2000L))
   # A region: no gene, an empty gene or a non-text gene is NA.
-  for (g in list(NULL, "", NA, 5, list("Elf5", "Ehf"))) {
+  for (g in list(NULL, "", NA, 5, list("Eya2", "Acot7"))) {
     args <- render_args()
     args["gene"] <- list(g)
     expect_identical(.pt_main_render_job(ctx, args, ctx$RENDER_CFG)$region_params$gene, NA_character_)
@@ -205,30 +170,30 @@ test_that("a render job that cannot be drawn says why", {
   # .pt_main_labels()'s errors pass through, before the region is read.
   expect_identical(job_error(ctx, render_args(tracks = list(list(type = "nope")), chr = "chrZ")),
                    "Unknown track type 'nope'.")
-  expect_identical(job_error(ctx, render_args(tracks = list(list(type = "atac")))),
-                   "'atac' is drawn per sample: say which sample.")
-  expect_identical(job_error(ctx, render_args(picked = list("LP"), tracks = list(list(type = "atac_diff")))),
-                   "'atac_diff' compares two samples: pick exactly two.")
+  expect_identical(job_error(ctx, render_args(tracks = list(list(type = "ATAC")))),
+                   "'ATAC' is drawn per sample: say which sample.")
+  expect_identical(job_error(ctx, render_args(picked = list("LP"), tracks = list(list(type = "ATAC_diff")))),
+                   "'ATAC_diff' compares two samples: pick exactly two.")
 })
 
 test_that("a render job takes a gene only as one of the project's own, under its symbol", {
   skip_if_not_installed("org.Mm.eg.db")
   ctx <- main_srv()$ctx
   gene_of <- function(g) .pt_main_render_job(ctx, render_args(gene = g), ctx$RENDER_CFG)$region_params$gene
-  expect_identical(gene_of("elf5"), "Elf5")
+  expect_identical(gene_of("eya2"), "Eya2")
   # Text that is no gene never reaches the render (a track module builds a cache file's
   # path from the gene's name): not a path, not a made-up name.
-  for (g in c("../../../somewhere/else", "/tmp/x", "Elf5/../x", "NoSuchGene123"))
+  for (g in c("../../../somewhere/else", "/tmp/x", "Eya2/../x", "NoSuchGene123"))
     expect_identical(gene_of(g), NA_character_, info = g)
   # Nor does a symbol the organism has but this project's annotation does not (the example
-  # annotates part of chr2 only): some symbols contain a slash.
+  # annotates five genes' regions only): some symbols contain a slash.
   outside <- setdiff(ctx$ALL_GENES, .pt_main_gene_index(ctx)$genes$sym)
   expect_gt(length(outside), 0)
   for (g in c(outside[1], grep("/", outside, value = TRUE, fixed = TRUE)[1]))
     if (!is.na(g)) expect_identical(gene_of(g), NA_character_, info = g)
 })
 
-test_that("a render job refuses what the classic screen will not generate", {
+test_that("a render job refuses a track whose file is missing, and a gene-only track for a region", {
   skip_if_not_installed("org.Mm.eg.db")
   ctx <- main_srv()$ctx
   tab <- .pt_track_table(ctx$TRACK_ITEMS)
@@ -242,9 +207,9 @@ test_that("a render job refuses what the classic screen will not generate", {
                c("entries", "region_params", "settings"))
   # A track whose file is missing.
   broken <- ctx
-  broken$TRACK_ITEMS[["bw_atac_LP"]]$broken <- TRUE
+  broken$TRACK_ITEMS[["bw_ATAC_LP"]]$broken <- TRUE
   expect_identical(job_error(broken, render_args()),
-                   paste0("Remove before generating: ", ctx$TRACK_ITEMS[["bw_atac_LP"]]$label,
+                   paste0("Remove before generating: ", ctx$TRACK_ITEMS[["bw_ATAC_LP"]]$label,
                           " (its file is missing)."))
 })
 
@@ -259,7 +224,7 @@ test_that("a chromosome with genes but no chromosome size is drawn up to its las
   expect_identical(.pt_main_chr_length(ctx, "chr2"), as.numeric(ctx$CHR_LENGTHS[["chr2"]]))
   for (x in list("chrZ", NA_character_, NULL, c("chr1", "chr2"), 2))
     expect_identical(.pt_main_chr_length(bare, x), NA_real_)
-  r <- .pt_main_render_job(bare, render_args(s = 103400000, e = 3e8), ctx$RENDER_CFG)$region_params
+  r <- .pt_main_render_job(bare, render_args(s = 165430000, e = 3e8), ctx$RENDER_CFG)$region_params
   expect_identical(r$end, as.integer(last))
 })
 
@@ -268,13 +233,13 @@ test_that("a gene's view follows the live gene flank, not the one at launch", {
   ctx <- main_srv()$ctx
   wide <- ctx$RENDER_CFG
   wide$gene_flank_pct <- 200
-  a <- .pt_main_locus(ctx, "Elf5")$view
-  b <- .pt_main_locus(ctx, "Elf5", wide)$view
+  a <- .pt_main_locus(ctx, "Eya2")$view
+  b <- .pt_main_locus(ctx, "Eya2", wide)$view
   expect_lt(b$s, a$s)
   expect_gt(b$e, a$e)
-  expect_identical(.pt_main_request(ctx, "locus", list(q = "Elf5"), wide)$view, b)
+  expect_identical(.pt_main_request(ctx, "locus", list(q = "Eya2"), wide)$view, b)
   # The page cannot supply settings of its own.
-  expect_identical(.pt_main_request(ctx, "locus", list(q = "Elf5", cfg = wide))$view, a)
+  expect_identical(.pt_main_request(ctx, "locus", list(q = "Eya2", cfg = wide))$view, a)
 })
 
 # ---- .pt_main_closer() -------------------------------------------------------------------
@@ -356,7 +321,7 @@ test_that("the figure is the SVG's text and its script; the temporary file is re
   expect_type(fig$svg, "character")
   expect_length(fig$svg, 1)
   expect_match(fig$svg, "^<svg|<svg ")
-  expect_match(fig$svg, "Elf5", fixed = TRUE)
+  expect_match(fig$svg, "Eya2", fixed = TRUE)
   expect_type(fig$script, "character")
   expect_length(fig$script, 1)
   expect_match(fig$script, "render_all", fixed = TRUE)
@@ -366,7 +331,7 @@ test_that("the figure is the SVG's text and its script; the temporary file is re
 })
 
 # ---- the server --------------------------------------------------------------------------
-# Custom messages are captured by recording_session() (helper-composer-fakes.R): a
+# Custom messages are captured by recording_session() (helper-session.R): a
 # MockShinySession whose sendCustomMessage is replaced by one that records each
 # list(type, message), passed to testServer() as its `session`.
 
@@ -436,10 +401,10 @@ test_that("geneinfo is answered with the live settings, and its error as {error}
   shiny::testServer(.pt_main_app(m$ctx, m$json), {
     session$flushReact()
     session$setInputs(s_uniprot_reviewed_only = TRUE)
-    session$setInputs(pt_rpc = rpc(list(id = 1, op = "geneinfo", args = list(gene = "Elf5")),
+    session$setInputs(pt_rpc = rpc(list(id = 1, op = "geneinfo", args = list(gene = "Eya2")),
                                    list(id = 2, op = "geneinfo", args = list(gene = "bad"))))
     r <- replies(rec)
-    expect_identical(r[[1]], list(id = 1L, reply = list(gene = "Elf5", reviewed = TRUE)))
+    expect_identical(r[[1]], list(id = 1L, reply = list(gene = "Eya2", reviewed = TRUE)))
     expect_identical(r[[2]], list(id = 2L, reply = list(error = "no such gene")))
   }, session = rec$session)
 })
@@ -458,7 +423,7 @@ test_that("render in-process answers with the SVG and script; one that cannot be
     r <- replies(rec)
     expect_identical(lapply(r, `[[`, "id"), list("r1", "r2", "r3"))
     fig <- r[[1]]$reply
-    expect_named(fig, c("svg", "script", "key"))
+    expect_named(fig, c("svg", "script", "key", "job"))
     # The key is the settings the figure was drawn with (the title included), as the
     # "pt_settings" message gives it: the page files the figure under it.
     expect_identical(fig$key, .pt_main_settings_key(m$cfg, DISPLAY_KEYS, "Title here"))
@@ -493,6 +458,140 @@ test_that("a render that fails answers {error} and removes its file", {
   }, session = rec$session)
 })
 
+# ---- a drawn figure as a PNG or JPEG file ------------------------------------------------
+
+# Width and height in pixels, from a PNG's header and from a JPEG's frame header.
+png_size <- function(raw) {
+  stopifnot(identical(raw[1:8], as.raw(c(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))))
+  c(sum(as.integer(raw[17:20]) * 256^(3:0)), sum(as.integer(raw[21:24]) * 256^(3:0)))
+}
+jpeg_size <- function(raw) {
+  stopifnot(identical(raw[1:2], as.raw(c(0xff, 0xd8))))
+  i <- 3
+  repeat {
+    stopifnot(raw[i] == as.raw(0xff))
+    two <- function(at) as.integer(raw[at]) * 256 + as.integer(raw[at + 1])
+    if (as.integer(raw[i + 1]) %in% c(0xc0, 0xc1, 0xc2)) return(c(two(i + 7), two(i + 5)))
+    i <- i + 2 + two(i + 2)
+  }
+}
+
+test_that("a drawn figure comes back as a PNG and a JPEG of its own size at 300 dpi, as it was drawn", {
+  skip_on_cran()
+  skip_if_not_installed("org.Mm.eg.db")
+  m <- main_srv()
+  rec <- recording_session()
+  shiny::testServer(.pt_main_app(m$ctx, m$json), {
+    session$flushReact()
+    session$setInputs(pt_rpc = rpc(list(id = "r1", op = "render", args = render_args())))
+    fig <- replies(rec)[[1]]$reply
+    expect_identical(fig$job, "j1")
+    inches <- as.numeric(regmatches(fig$svg, regexec("<svg[^>]* width='([0-9.]+)pt' height='([0-9.]+)pt'",
+                                                     fig$svg))[[1]][2:3]) / 72
+    expect_identical(inches[1], 9)
+    # The page width changes after the figure was drawn: its files are still the figure as drawn.
+    session$setInputs(s_page_w = 5)
+    expect_identical(fs$live_cfg()$page_w, 5)
+    session$setInputs(pt_rpc = rpc(list(id = "p1", op = "raster", args = list(job = "j1", format = "png")),
+                                   list(id = "p2", op = "raster", args = list(job = "j1", format = "jpeg"))))
+    r <- replies(rec)
+    expect_identical(lapply(r, `[[`, "id"), list("r1", "p1", "p2"))
+    expect_named(r[[2]]$reply, c("format", "data"))
+    expect_identical(c(r[[2]]$reply$format, r[[3]]$reply$format), c("png", "jpeg"))
+    png <- jsonlite::base64_dec(r[[2]]$reply$data)
+    jpg <- jsonlite::base64_dec(r[[3]]$reply$data)
+    expect_equal(png_size(png), round(inches * 300))
+    expect_equal(jpeg_size(jpg), round(inches * 300))
+    expect_gt(length(png), 20000)
+    expect_gt(length(jpg), 20000)
+  }, session = rec$session)
+})
+
+test_that("a PNG or JPEG is drawn from the figure's own job, into a file that is removed; what cannot be drawn says why", {
+  skip_if_not_installed("org.Mm.eg.db")
+  m <- main_srv()
+  rec <- recording_session()
+  paths <- character(0)
+  fail <- FALSE
+  # Stands in for the drawing: the file says which job it was drawn from (its title) and as what.
+  local_mocked_bindings(.pt_render_svg = function(entries, region_params, settings) {
+    paths <<- c(paths, settings$output_path)
+    writeLines(paste(settings$title, tools::file_ext(settings$output_path)), settings$output_path)
+    if (fail) "the figure failed" else list(hic_tops = NULL)   # a failed draw leaves its file half written
+  })
+  drawn <- function(reply) rawToChar(jsonlite::base64_dec(reply$data))
+  shiny::testServer(.pt_main_app(m$ctx, m$json), {
+    session$flushReact()
+    session$setInputs(plot_title = "First")
+    session$setInputs(pt_rpc = rpc(list(id = 1, op = "render", args = render_args())))
+    session$setInputs(plot_title = "Second")
+    session$setInputs(pt_rpc = rpc(list(id = 2, op = "render", args = render_args())))
+    r <- replies(rec)
+    expect_identical(list(r[[1]]$reply$job, r[[2]]$reply$job), list("j1", "j2"))
+    session$setInputs(pt_rpc = rpc(
+      list(id = 3, op = "raster", args = list(job = "j1", format = "png")),
+      list(id = 4, op = "raster", args = list(job = "j2", format = "jpeg")),
+      list(id = 5, op = "raster", args = list(job = "j9", format = "png")),
+      list(id = 6, op = "raster", args = list(job = "j1", format = "gif")),
+      list(id = 7, op = "raster", args = list(job = list("j1", "j2"), format = "jpeg")),
+      list(id = 8, op = "raster", args = list(format = "png")),
+      list(id = 9, op = "raster", args = list(job = "j1"))))
+    r <- replies(rec)
+    expect_identical(drawn(r[[3]]$reply), "First png\n")
+    expect_identical(drawn(r[[4]]$reply), "Second jpg\n")
+    expect_identical(r[[5]]$reply, list(error = "Generate this figure again to save it as PNG."))
+    expect_identical(r[[6]]$reply, list(error = "Unknown file format."))
+    expect_identical(r[[7]]$reply, list(error = "Generate this figure again to save it as JPEG."))
+    expect_identical(r[[8]]$reply, list(error = "Generate this figure again to save it as PNG."))
+    expect_identical(r[[9]]$reply, list(error = "Unknown file format."))
+    # two renders and two files drawn, each into its own temporary file, none left
+    expect_length(unique(paths), 4)
+    expect_false(any(file.exists(paths)))
+    fail <<- TRUE
+    session$setInputs(pt_rpc = rpc(list(id = 10, op = "raster", args = list(job = "j1", format = "png"))))
+    expect_identical(replies(rec)[[10]]$reply, list(error = "the figure failed"))
+    expect_length(unique(paths), 5)
+    expect_false(any(file.exists(paths)))
+  }, session = rec$session)
+})
+
+test_that("a PNG or JPEG is 300 dpi, or as much as fits in 32767 pixels a side", {
+  expect_identical(.pt_raster_dpi(9, 12), 300)
+  expect_identical(.pt_raster_dpi(9, 109.2), 300)
+  expect_identical(.pt_raster_dpi(9, 110), 297)
+  expect_identical(.pt_raster_dpi(400, 9), 81)
+  expect_lte(110 * .pt_raster_dpi(9, 110), 32767)
+})
+
+test_that("the server keeps the jobs of the last figures only: an older figure says to generate it again", {
+  skip_if_not_installed("org.Mm.eg.db")
+  m <- main_srv()
+  rec <- recording_session()
+  local_mocked_bindings(.pt_render_svg = function(entries, region_params, settings) {
+    writeLines(paste(settings$title, tools::file_ext(settings$output_path)), settings$output_path)
+    list(hic_tops = NULL)
+  })
+  drawn <- function(reply) rawToChar(jsonlite::base64_dec(reply$data))
+  shiny::testServer(.pt_main_server(m$ctx, m$json, jobs_kept = 3L), {
+    session$flushReact()
+    for (i in 1:3) {
+      session$setInputs(plot_title = paste("Figure", i))
+      session$setInputs(pt_rpc = rpc(list(id = i, op = "render", args = render_args())))
+    }
+    session$setInputs(pt_rpc = rpc(list(id = 4, op = "raster", args = list(job = "j1", format = "png"))))
+    expect_identical(drawn(replies(rec)[[4]]$reply), "Figure 1 png\n")
+    session$setInputs(pt_rpc = rpc(list(id = 5, op = "render", args = render_args()),
+                                   list(id = 6, op = "raster", args = list(job = "j1", format = "png")),
+                                   list(id = 7, op = "raster", args = list(job = "j2", format = "png")),
+                                   list(id = 8, op = "raster", args = list(job = "j4", format = "jpeg"))))
+    r <- replies(rec)
+    expect_identical(r[[5]]$reply$job, "j4")
+    expect_identical(r[[6]]$reply, list(error = "Generate this figure again to save it as PNG."))
+    expect_identical(drawn(r[[7]]$reply), "Figure 2 png\n")
+    expect_identical(drawn(r[[8]]$reply), "Figure 3 jpg\n")
+  }, session = rec$session)
+})
+
 test_that("pt_settings is sent with a key, and a new key after a setting or the title changes", {
   skip_if_not_installed("org.Mm.eg.db")
   m <- main_srv()
@@ -514,4 +613,136 @@ test_that("pt_settings is sent with a key, and a new key after a setting or the 
     session$setInputs(s_fontsize = m$ctx$RENDER_CFG$fontsize, plot_title = "")
     expect_identical(keys()[length(keys())], k0)
   }, session = rec$session)
+})
+
+# ---- the render process ------------------------------------------------------------------
+# testServer() draws in-process unless it is given a pool. This one hands out a render process
+# that only records what it is asked: renders[[i]]$done(result) is the call the real one
+# (R/viz-render-worker.R) makes when its drawing ends.
+fake_pool <- function() {
+  w <- new.env()
+  w$renders <- list()
+  w$cancels <- 0L
+  w$back <- 0L
+  worker <- list(
+    render = function(entries, region_params, settings, done)
+      w$renders[[length(w$renders) + 1L]] <- list(settings = settings, done = done),
+    cancel = function() w$cancels <- w$cancels + 1L)
+  w$pool <- list(take = function() worker, give_back = function(x) w$back <- w$back + 1L)
+  w
+}
+
+test_that("with a render process the figure is answered when the process calls back, one drawing at a time", {
+  skip_if_not_installed("org.Mm.eg.db")
+  m <- main_srv()
+  rec <- recording_session()
+  w <- fake_pool()
+  local_mocked_bindings(.pt_render_svg = function(...) stop("drawn in-process"))
+  shiny::testServer(.pt_main_server(m$ctx, m$json, w$pool), {
+    session$flushReact()
+    session$setInputs(pt_rpc = rpc(list(id = "a", op = "render", args = render_args())))
+    expect_length(w$renders, 1)
+    expect_length(replies(rec), 0)   # no answer before the process calls back
+    # While it draws, another Generate is refused and nothing more is sent to the process.
+    session$setInputs(pt_rpc = rpc(list(id = "b", op = "render", args = render_args())))
+    expect_identical(replies(rec), list(list(id = "b", reply = list(error = "A figure is already being drawn."))))
+    expect_length(w$renders, 1)
+    job <- w$renders[[1]]
+    writeLines("<svg>drawn by the process</svg>", job$settings$output_path)
+    job$done(list(hic_tops = NULL))
+    r <- replies(rec)
+    expect_identical(r[[2]]$id, "a")
+    expect_identical(r[[2]]$reply$svg, "<svg>drawn by the process</svg>")
+    expect_identical(r[[2]]$reply$job, "j1")
+    expect_match(r[[2]]$reply$script, "Eya2", fixed = TRUE)
+    expect_false(file.exists(job$settings$output_path))
+    # A PNG of it is drawn by the process too, and holds off a Generate the same way.
+    session$setInputs(pt_rpc = rpc(list(id = "p", op = "raster", args = list(job = "j1", format = "png")),
+                                   list(id = "c", op = "render", args = render_args())))
+    expect_length(w$renders, 2)
+    expect_identical(replies(rec)[[3]], list(id = "c", reply = list(error = "A figure is already being drawn.")))
+    png <- w$renders[[2]]
+    expect_identical(tools::file_ext(png$settings$output_path), "png")
+    writeBin(as.raw(1:9), png$settings$output_path)
+    png$done(list(hic_tops = NULL))
+    r <- replies(rec)
+    expect_identical(r[[4]]$id, "p")
+    expect_identical(jsonlite::base64_dec(r[[4]]$reply$data), as.raw(1:9))
+    expect_false(file.exists(png$settings$output_path))
+    # What the process reports as an error is the answer, and the next Generate is taken.
+    session$setInputs(pt_rpc = rpc(list(id = "d", op = "render", args = render_args())))
+    expect_length(w$renders, 3)
+    w$renders[[3]]$done("The render process stopped.")
+    expect_identical(replies(rec)[[5]], list(id = "d", reply = list(error = "The render process stopped.")))
+    session$setInputs(pt_rpc = rpc(list(id = "e", op = "render", args = render_args())))
+    expect_length(w$renders, 4)
+    expect_identical(w$cancels, 0L)
+  }, session = rec$session)
+  expect_identical(w$back, 1L)   # the session's end gives the process back to the pool
+})
+
+test_that("Cancel stops the render process and answers the drawing as cancelled, a figure or a PNG", {
+  skip_if_not_installed("org.Mm.eg.db")
+  m <- main_srv()
+  rec <- recording_session()
+  w <- fake_pool()
+  shiny::testServer(.pt_main_server(m$ctx, m$json, w$pool), {
+    session$flushReact()
+    cancelled <- list(error = "Cancelled.", cancelled = TRUE)
+    # Nothing drawing: the process is left alone.
+    session$setInputs(pt_rpc = rpc(list(id = 0, op = "cancel")))
+    expect_identical(w$cancels, 0L)
+    session$setInputs(pt_rpc = rpc(list(id = "a", op = "render", args = render_args())))
+    session$setInputs(pt_rpc = rpc(list(id = 1, op = "cancel")))
+    expect_identical(w$cancels, 1L)
+    r <- replies(rec)
+    expect_identical(r[[2]], list(id = "a", reply = cancelled))
+    expect_identical(r[[3]], list(id = 1L, reply = list(ok = TRUE)))
+    # The next Generate is taken at once; its figure, then a PNG of it cancelled.
+    session$setInputs(pt_rpc = rpc(list(id = "b", op = "render", args = render_args())))
+    expect_length(w$renders, 2)
+    writeLines("<svg/>", w$renders[[2]]$settings$output_path)
+    w$renders[[2]]$done(list(hic_tops = NULL))
+    job <- replies(rec)[[4]]$reply$job
+    session$setInputs(pt_rpc = rpc(list(id = "p", op = "raster", args = list(job = job, format = "jpeg"))))
+    session$setInputs(pt_rpc = rpc(list(id = 2, op = "cancel")))
+    expect_identical(w$cancels, 2L)
+    expect_identical(replies(rec)[[5]], list(id = "p", reply = cancelled))
+    # The figure is still remembered: its PNG can be asked for again.
+    session$setInputs(pt_rpc = rpc(list(id = "q", op = "raster", args = list(job = job, format = "png"))))
+    expect_length(w$renders, 4)
+  }, session = rec$session)
+})
+
+test_that("the script is told the Hi-C colour tops the drawing reports; a script that cannot be written is the answer's error", {
+  skip_if_not_installed("org.Mm.eg.db")
+  m <- main_srv()
+  rec <- recording_session()
+  tops <- list()
+  paths <- character(0)
+  fail <- FALSE
+  local_mocked_bindings(
+    .pt_render_svg = function(entries, region_params, settings) {
+      paths <<- c(paths, settings$output_path)
+      writeLines("<svg/>", settings$output_path)
+      list(hic_tops = c(hic_zrange_HiC = 41.5))
+    },
+    assemble_download_script = function(entries, region_params, settings, hic_tops = NULL) {
+      tops[[length(tops) + 1L]] <<- hic_tops
+      if (fail) stop("no script for you")
+      "the script"
+    })
+  shiny::testServer(.pt_main_app(m$ctx, m$json), {
+    session$flushReact()
+    session$setInputs(pt_rpc = rpc(list(id = 1, op = "render", args = render_args())))
+    expect_identical(replies(rec)[[1]]$reply$script, "the script")
+    fail <<- TRUE
+    session$setInputs(pt_rpc = rpc(list(id = 2, op = "render", args = render_args())))
+    expect_identical(replies(rec)[[2]]$reply, list(error = "no script for you"))
+    # Not remembered as a figure, and its file is gone.
+    session$setInputs(pt_rpc = rpc(list(id = 3, op = "raster", args = list(job = "j2", format = "png"))))
+    expect_match(replies(rec)[[3]]$reply$error, "Generate this figure again", fixed = TRUE)
+  }, session = rec$session)
+  expect_identical(tops, list(c(hic_zrange_HiC = 41.5), c(hic_zrange_HiC = 41.5)))
+  expect_false(any(file.exists(paths)))
 })

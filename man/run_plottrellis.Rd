@@ -5,7 +5,12 @@
 \alias{PlotTrellisApp}
 \title{Launch PlotTrellis}
 \usage{
-run_plottrellis(project_dir = .pt_default_dir(), samples_txt = NULL, ...)
+run_plottrellis(
+  project_dir = .pt_default_dir(),
+  samples_txt = NULL,
+  ...,
+  experienced = FALSE
+)
 
 PlotTrellisApp(project_dir = .pt_default_dir(), ...)
 }
@@ -19,10 +24,13 @@ in your home directory (created if needed); pass another folder per project.}
 app opens the project already there, or the setup wizard if there is none.}
 
 \item{...}{Passed through to \code{\link[shiny:runApp]{shiny::runApp()}} (e.g. \code{launch.browser}, \code{port}, \code{host}).}
+
+\item{experienced}{\code{FALSE} (the default) opens the classic screen, \code{TRUE} the screen
+for experienced users. Give it by name. See "The two screens".}
 }
 \value{
-Invisibly, the value the app finally stopped with (\code{"closed"} when
-its browser tab was closed).
+Invisibly, the value the app finally stopped with (\code{"closed"} after
+Close app, or when its browser tab was closed with \code{experienced = TRUE}).
 }
 \description{
 The usual way to start PlotTrellis: a Shiny app for building
@@ -36,25 +44,30 @@ run needs no re-launch. Blocks until the app is stopped.
 \code{PlotTrellisApp()} is this function's original name, kept as an alias with the same
 behaviour.
 }
+\section{The two screens}{
+
+The app opens on its classic screen: Compose, then Output on the same page.
+\code{experienced = TRUE} opens the screen for experienced users instead: one
+page that keeps the gene, samples, tracks and figure in view together, with
+keyboard shortcuts, saved figures and a Download menu (SVG, PNG, JPEG, R
+script). Both draw the same figures from the same project.
+}
+
 \section{Stopping the app}{
 
-Close the app's browser tab: the app stops a few seconds after its last tab
-is closed. Reloading the tab, or a lost connection, does not stop it: after
-a lost connection, reload the tab, or stop the app from R (Esc in RStudio,
-Ctrl+C in a terminal).
-\code{options(PlotTrellis.stop_on_close = FALSE)} keeps the app running until R
-is interrupted.
+On the classic screen, press Close app. With \code{experienced = TRUE}, close the
+app's browser tab: the app stops a few seconds after its last tab is closed.
+Reloading the tab, or a lost connection, does not stop it: after a lost
+connection, reload the tab, or stop the app from R (Esc in RStudio, Ctrl+C
+in a terminal). \code{options(PlotTrellis.stop_on_close = FALSE)} keeps the app
+running until R is interrupted.
 }
-\section{The classic screen}{
 
-\code{options(PlotTrellis.screen = "classic")}, set before launching, opens the
-app's earlier screen (Compose, then Output on the same page, with a Close
-app button) instead of the main screen. The environment variable
-\code{PLOTTRELLIS_SCREEN=classic} does the same.
-}
 \examples{
 if (interactive()) {
   run_plottrellis(project_dir = tempfile())
+  # the screen for experienced users
+  run_plottrellis(project_dir = tempfile(), experienced = TRUE)
 }
 }
 \seealso{

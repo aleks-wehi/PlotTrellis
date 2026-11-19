@@ -2,9 +2,9 @@
 # keeps its own state; this side answers its questions and draws its figures.
 # Questions arrive as one input, pt_rpc: a JSON array of {id, op, args}. Each
 # is answered with a "pt_rpc_reply" message {id, json}. The data answers are
-# R/app-screen-api.R; "render" draws through the session's render worker, the
-# same path as the classic screen (.pt_build_entries() -> .pt_render_svg(),
-# R/app-render.R), with the Figure settings panel's live settings.
+# R/app-screen-api.R; "render" draws through the session's render worker
+# (.pt_build_entries() -> .pt_render_svg()), with the Figure settings panel's
+# live settings.
 
 # An answer as the JSON text the page parses. Written here, not left to
 # Shiny's own message encoding, so one number format holds for every answer
@@ -50,7 +50,7 @@
     stop("That region is outside ", chrom, " (1 to ",
          format(len, big.mark = ",", scientific = FALSE), ").", call. = FALSE)
 
-  # A region has no gene: NA, as the classic screen's coordinates mode sends.
+  # A region has no gene: NA.
   # A gene is taken only as one this project's annotation has, under its
   # symbol (.pt_main_gene_row()): the page's text is never trusted as a name
   # (a track module may build a cache file's path from it).
@@ -62,8 +62,8 @@
     if (is.null(row$error)) row$symbol else NA_character_
   } else NA_character_
 
-  # What the classic screen will not generate either (R/app-gate.R): a track
-  # whose file is missing, and a gene-only track for a region.
+  # Never generated: a track whose file is missing, and a gene-only track for a
+  # region.
   bad <- Filter(function(k) {
     it <- ctx$TRACK_ITEMS[[k]]
     isTRUE(it$broken) ||
@@ -104,9 +104,8 @@
   )
 }
 
-# Stopping the app without a Close app button: the app stops, with the value
-# "closed" (as Close app gives on the classic screen), shortly after the last
-# open page is closed by its user. A page that was only cut off (a dropped
+# Stopping the app (it has no Close app button): the app stops, with the value
+# "closed", shortly after the last open page is closed by its user. A page that was only cut off (a dropped
 # connection, a sleeping laptop) does not count, so the app is still there to
 # reload; nor does a reload, whose new session arrives within `grace` seconds.
 # `stop` and `later` are arguments so a test can stand in for them.
@@ -133,7 +132,7 @@
 }
 
 .pt_main_server <- function(ctx, SETTINGS_JSON, RENDER_POOL = NULL,
-                            closer = NULL) {
+                            closer = NULL, jobs_kept = 500L) {
   function(input, output, session) {
     # The page says when its user closes or reloads it: the pt_bye input, sent
     # over the connection just before it closes, and a request to this URL as
@@ -153,10 +152,11 @@
     # repeat-click gate for the "pt-once" buttons (R/app-once-gate.R)
     .pt_once_server(input, session)
 
-    # This session's background render process, as in the classic screen
-    # (R/app-main.R): none under shiny::testServer(), which then draws in-process.
-    render_worker <- if (!inherits(session, "MockShinySession"))
-      if (is.null(RENDER_POOL)) .pt_render_worker() else RENDER_POOL$take()
+    # This session's background render process (R/viz-render-worker.R), from
+    # RENDER_POOL (the launcher's, .pt_render_pool()) when there is one. Without
+    # a pool shiny::testServer() has none and draws in-process.
+    render_worker <- if (!is.null(RENDER_POOL)) RENDER_POOL$take()
+      else if (!inherits(session, "MockShinySession")) .pt_render_worker()
     session$onSessionEnded(function() {
       if (is.null(render_worker)) return()
       if (is.null(RENDER_POOL)) render_worker$close()
@@ -171,7 +171,8 @@
     unsaved_settings_note <- function()
       .pt_unsaved_settings_note(fs$settings_dirty())
     .pt_project_actions_server(input, session, unsaved_settings_note,
-                               ctx$PROJECT_DIR, SETTINGS_JSON, ctx$CACHE_DIR)
+                               ctx$PROJECT_DIR, SETTINGS_JSON, ctx$CACHE_DIR,
+                               experienced = TRUE)
 
     reply <- function(id, x)
       session$sendCustomMessage("pt_rpc_reply",
@@ -187,6 +188,19 @@
     # The render in flight (its request id), or NULL. One at a time: the page
     # asks for the next only when the last one has answered.
     drawing <- NULL
+    # The figures drawn in this session, as the jobs they were drawn from, by
+    # the name the page was given for each (the reply's `job`): what a PNG or
+    # JPEG of a figure is drawn from, so it has the settings the figure was
+    # drawn with. A job is a small list; the last `jobs_kept` are kept, far more
+    # than the page holds (40 figures).
+    jobs <- list()
+    n_jobs <- 0L
+    remember <- function(job) {
+      n_jobs <<- n_jobs + 1L
+      jobs[[paste0("j", n_jobs)]] <<- job
+      if (length(jobs) > jobs_kept) jobs <<- utils::tail(jobs, jobs_kept)
+      paste0("j", n_jobs)
+    }
     start_render <- function(id, args) {
       if (!is.null(drawing))
         return(reply(id, list(error = "A figure is already being drawn.")))
@@ -209,9 +223,43 @@
         out <- if (is.character(res)) {
           unlink(job$settings$output_path)
           list(error = res)
-        } else tryCatch(c(.pt_main_figure(job, res$hic_tops), list(key = key)),
+        } else tryCatch(c(.pt_main_figure(job, res$hic_tops),
+                          list(key = key, job = remember(job))),
                         error = function(e) list(error = conditionMessage(e)))
         reply(id, out)
+      }
+      if (is.null(render_worker))
+        done(.pt_render_svg(job$entries, job$region_params, job$settings))
+      else render_worker$render(job$entries, job$region_params, job$settings,
+                                done)
+    }
+    # A drawn figure again, as a PNG or JPEG file (args: the figure's `job`
+    # name and the format): drawn from its remembered job by the render path,
+    # answered as the file's bytes in base64. It takes the place of a render
+    # while it draws: one at a time, and a "cancel" request stops it too.
+    start_raster <- function(id, args) {
+      format <- args$format
+      if (!is.character(format) || length(format) != 1L ||
+          !format %in% c("png", "jpeg"))
+        return(reply(id, list(error = "Unknown file format.")))
+      name <- args$job
+      job <- if (is.character(name) && length(name) == 1L && !is.na(name))
+        jobs[name][[1]]
+      if (is.null(job))
+        return(reply(id, list(error = paste0(
+          "Generate this figure again to save it as ", toupper(format), "."))))
+      if (!is.null(drawing))
+        return(reply(id, list(error = "A figure is being drawn: try again when it is done.")))
+      path <- tempfile(fileext = if (format == "png") ".png" else ".jpg")
+      job$settings$output_path <- path
+      drawing <<- id
+      done <- function(res) {
+        drawing <<- NULL
+        on.exit(unlink(path))
+        reply(id, if (is.character(res)) list(error = res) else tryCatch(
+          list(format = format, data = jsonlite::base64_enc(
+            readBin(path, "raw", file.size(path)))),
+          error = function(e) list(error = conditionMessage(e))))
       }
       if (is.null(render_worker))
         done(.pt_render_svg(job$entries, job$region_params, job$settings))
@@ -240,12 +288,13 @@
         op <- rq$op %||% ""
         args <- rq$args %||% list()
         if (identical(op, "render")) start_render(id, args)
+        else if (identical(op, "raster")) start_raster(id, args)
         else if (identical(op, "cancel")) {
           cancel_render()
           reply(id, list(ok = TRUE))
         } else {
           # the gene flank (locus) and the lookups (geneinfo) are the live
-          # settings', as on the classic screen
+          # settings'
           res <- .pt_main_request(ctx, op, args, fs$live_cfg())
           if (identical(op, "project") && is.null(res$error)) {
             res$id <- basename(ctx$PROJECT_DIR)
@@ -268,6 +317,13 @@
   # a whole genome: built here, with the rest of the launch, not at the first
   # keystroke (it is kept for the R session, .pt_main_gene_index()).
   .pt_main_gene_index(ctx)
+  # A suggested gene this annotation does not have is left out: said once here,
+  # at launch (immediate: runApp() would hold it until the app closes).
+  unknown <- .pt_main_suggested_rows(ctx)$unknown
+  if (length(unknown))
+    warning("Not suggested, as this project's annotation has no such gene: ",
+            paste(unknown, collapse = ", "), " (# suggested_genes:).",
+            call. = FALSE, immediate. = TRUE)
   closer <- if (isTRUE(getOption("PlotTrellis.stop_on_close", TRUE)))
     .pt_main_closer()
   shinyApp(ui = .pt_main_ui(ctx),
