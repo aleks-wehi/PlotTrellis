@@ -4,9 +4,8 @@
 
 import_app <- function(input, output, session) {
   wiz_samples   <- reactiveVal(list())
-  imported      <- reactiveVal(NULL)
   import_visual <- reactiveVal(list())
-  .pt_wizard_import_server(input, output, session, wiz_samples, imported, import_visual, .pt_default_settings())
+  .pt_wizard_import_server(input, output, session, wiz_samples, import_visual, .pt_default_settings())
 }
 
 # Catches the field updates the code under test sends (id = value), for the rest of the
@@ -35,7 +34,6 @@ test_that("a blank path or a missing file is said, and nothing is imported", {
     session$setInputs(wiz_import_path = file.path(tempdir(), "no-such-samples.txt"), wiz_import_load = 2)
     expect_match(status_html(output$wiz_import_status), "No such file:", fixed = TRUE)
     expect_length(wiz_samples(), 0)
-    expect_null(imported())
     expect_identical(import_visual(), list())
   })
 })
@@ -49,7 +47,6 @@ test_that("a file with errors imports nothing and lists them", {
     session$setInputs(wiz_import_path = txt, wiz_import_load = 1)
     expect_match(status_html(output$wiz_import_status), "Nothing imported. The file has these problems:", fixed = TRUE)
     expect_length(wiz_samples(), 0)
-    expect_null(imported())
     expect_identical(import_visual(), list())
   })
   expect_length(ls(sent), 0)
@@ -70,7 +67,6 @@ test_that("an import fills the samples, the data folder and genome fields, and k
     expect_identical(vapply(wiz_samples(), `[[`, "", "condition"), "Ba")
     expect_identical(wiz_samples()[[1]]$data[[1]][c("type", "name", "path")],
                      list(type = "bw", name = "ATAC", path = "atac/a.bw"))
-    expect_identical(imported(), lines)
     # Display settings only; the genome fields go to their inputs, numbers stay numbers.
     expect_setequal(names(import_visual()), c("fontsize", "zrange_cap"))
     expect_equal(import_visual()$fontsize, 11)

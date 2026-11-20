@@ -1,5 +1,5 @@
 info_bw <- function() list(
-  kind = "sample", data_type = "bw", order = 10, filter = c(bw = "Coverage"),
+  kind = "sample", data_type = "bw", order = 10,
   scale_bar = TRUE
 )
 

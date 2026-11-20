@@ -1,6 +1,6 @@
-# The composer's Figure settings block (R/app-settings.R) on its own: render settings
-# made from the defaults, a temporary project_settings.json, no genome. Notifications are
-# recorded. (test-composer-settings.R drives the same block through the whole app.)
+# The app's Figure settings block (R/app-settings.R) on its own: render settings made
+# from the defaults, a temporary project_settings.json, no genome. Notifications are
+# recorded. (test-composer-settings.R drives the same block through the app's server.)
 
 BLOCK_RENDER_CFG <- c(.pt_default_settings(),
                       list(orgdb_pkg = "org.Fake.eg.db", txdb_path = "/no/such/txdb.sqlite"))
@@ -168,8 +168,6 @@ test_that("Revert re-renders from the saved settings, dropping unsaved panel val
     expect_false(fs$settings_dirty())
   })
 })
-
-# ---- added since ---------------------------------------------------------------------------
 
 test_that("every settings group is a collapsed subsection and every s_<key> input is rendered", {
   json <- new_settings_json(); on.exit(unlink(dirname(json), recursive = TRUE), add = TRUE)

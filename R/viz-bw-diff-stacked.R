@@ -1,7 +1,6 @@
 info_bw_diff_stacked <- function() list(
   kind = "comparison", data_type = "bw", order = 10,
-  label = "{name} diff (stacked)", api = "{name}_diff",
-  filter = c(comparison = "Comparisons"), scale_bar = TRUE
+  label = "{name} diff (stacked)", api = "{name}_diff", scale_bar = TRUE
 )
 
 settings_bw_diff_stacked <- function(dict, entry, settings, track_w,

@@ -24,21 +24,6 @@ test_that("parse_samples_txt() and pt_project()'s re-import keep every decimal",
   expect_identical(jsonlite::read_json(file.path(project2, "project_settings.json"))$junction_height, 1.234567)
 })
 
-test_that("the wizard's / composer's save and the start view writer keep every decimal", {
-  project <- tempfile("pt-precision-")
-  dir.create(project)
-  json <- file.path(project, "project_settings.json")
-  .pt_write_project_files(list(data_dir = project, samples = list(), junction_height = 1.234567,
-                               zrange_cap = 123.456789), json)
-  expect_identical(jsonlite::read_json(json)$junction_height, 1.234567)
-  expect_identical(jsonlite::read_json(json)$zrange_cap, 123.456789)
-  .pt_write_start_view(project, "single", "Basal", "Elf5", "genes")
-  expect_identical(jsonlite::read_json(json)$junction_height, 1.234567)
-  expect_identical(jsonlite::read_json(json)$start_view$gene, "Elf5")
-})
-
-# ---- added since ---------------------------------------------------------------------------
-
 test_that("the wizard's and the app's save keep every decimal", {
   project <- tempfile("pt-precision-")
   dir.create(project)

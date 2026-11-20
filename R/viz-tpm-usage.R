@@ -1,7 +1,6 @@
 info_tpm_usage <- function() list(
   kind = "sample", data_type = "quantdir", order = 50,
-  label = "Transcript expression", api = "transcript_expression",
-  filter = c(tpm_usage = "TPMs"), row_panel = TRUE, needs_gene = TRUE
+  label = "Transcript expression", api = "transcript_expression", row_panel = TRUE, needs_gene = TRUE
 )
 
 # One Transcript expression track per sample with a quantification, whatever its

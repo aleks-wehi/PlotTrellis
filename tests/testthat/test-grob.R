@@ -69,14 +69,15 @@ test_that("pt_grob() is the figure at its own size; grid.draw() draws it and a p
   expect_no_error(grid::grid.draw(g))
   grDevices::dev.off()
   expect_equal(svg_sizes(f), svg_sizes(single))
-  # R's pdf() device does not know the font: a clear stop, and no viewport left behind.
-  # On macOS without DejaVu Sans the figure is in "sans", which pdf() draws.
+  # R's pdf() device does not know the font: drawn in its own, one message, no viewport
+  # left behind (see the every-track test below). On macOS without DejaVu Sans the
+  # figure is in "sans", which pdf() draws.
   grDevices::pdf(NULL)
   pdf_dev <- grDevices::dev.cur()
   if (g$font %in% names(grDevices::pdfFonts())) {
-    expect_no_error(grid::grid.draw(g))
+    expect_no_message(grid::grid.draw(g))
   } else {
-    expect_warning(expect_error(grid::grid.draw(g), "draw it on a cairo device"), "draw it on a cairo device")
+    expect_message(grid::grid.draw(g), "device = cairo_pdf")
   }
   expect_identical(grid::current.vpPath(), NULL)
   grDevices::dev.off(pdf_dev)
@@ -123,12 +124,68 @@ test_that("a pt_grob composes with ggplot2 in patchwork and cowplot, text kept",
   expect_no_warning(ggplot2::ggsave(f, cw, width = g$width + 4.5, height = g$height + 0.5))
   expect_labels_kept(f, single)
   expect_true(any(grepl(">B<", readLines(f))))
-  # patchwork drops errors raised while it draws: the warning still says what to do
-  # (unless pdf() knows the font, as "sans" on macOS without DejaVu Sans).
+  # A plain ggsave() of a .pdf uses R's pdf(): the figure in its font, with no warning,
+  # the message saying how to keep DejaVu Sans (unless pdf() knows the font, as "sans"
+  # on macOS without DejaVu Sans), and the figure's text in Helvetica.
   f <- file.path(p$dir, "patchwork-default.pdf")
-  if (!g$font %in% names(grDevices::pdfFonts()))
-    expect_warning(ggplot2::ggsave(f, pw, width = g$width + 4.5, height = g$height + 0.5, device = grDevices::pdf),
-                   "draw it on a cairo device")
+  save_default <- function() expect_no_warning(ggplot2::ggsave(f, pw, width = g$width + 4.5,
+                                                              height = g$height + 0.5))
+  if (g$font %in% names(grDevices::pdfFonts())) expect_no_message(save_default())
+  else expect_message(save_default(), "device = cairo_pdf")
+  pdf_text <- paste(rawToChar(readBin(f, "raw", file.size(f)), multiple = TRUE), collapse = "")
+  expect_true(grepl("/BaseFont /Helvetica", pdf_text, fixed = TRUE, useBytes = TRUE))
+  expect_false(grepl("DejaVu", pdf_text, fixed = TRUE, useBytes = TRUE))
+})
+
+# R's pdf() and postscript() devices, which lack the default DejaVu Sans, draw a pt_grob
+# of every track type in their own font, with one message and no error or warning
+# (postscript() warns only that it cannot draw semi-transparency, as for any plot).
+test_that("a pt_grob of every track type draws on R's pdf() and postscript() devices", {
+  skip_if_not_installed("org.Mm.eg.db")
+  p <- grob_project()
+  fig <- pt_figure(p$proj, "Eya2", unique(pt_tracks(p$proj)$track), comparison = c("LP", "Basal"))
+  expect_setequal(vapply(fig$entries, `[[`, "", "viz"), c(
+    .pt_viz_keys()[.pt_viz_keys() != "genome_axis"]))
+  # A generic family ("sans", the default on macOS without DejaVu Sans) is in
+  # postscriptFonts() but postscript() draws only its own family: drawn in that, no message.
+  fig_sans <- fig
+  fig_sans$settings$font <- "sans"
+  g_sans <- pt_grob(fig_sans)
+  f <- file.path(p$dir, "sans.ps")
+  grDevices::postscript(f, width = g_sans$width, height = g_sans$height)
+  expect_no_message(suppressWarnings(expect_no_error(grid::grid.draw(g_sans)), classes = "warning"))
+  grDevices::dev.off()
+  expect_identical(grid::current.vpPath(), NULL)
+  g <- pt_grob(fig)
+  expect_identical(g$font, .pt_device_font("DejaVu Sans"))
+  skip_if(g$font %in% names(grDevices::pdfFonts()), "the figure's font is one pdf() knows")
+  for (dev in c("pdf", "postscript")) {
+    f <- file.path(p$dir, paste0("all.", if (dev == "pdf") "pdf" else "ps"))
+    if (dev == "pdf") grDevices::pdf(f, width = g$width, height = g$height, compress = FALSE)
+    else grDevices::postscript(f, width = g$width, height = g$height)
+    msgs <- character(0)
+    withCallingHandlers(
+      expect_no_error(grid::grid.draw(g)),
+      message = function(m) {
+        msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage")
+      },
+      warning = function(w) {
+        if (dev == "postscript" && grepl("semi-transparency", conditionMessage(w)))
+          invokeRestart("muffleWarning")
+      })
+    grDevices::dev.off()
+    expect_identical(grid::current.vpPath(), NULL)
+    expect_length(msgs, 1)
+    expect_match(msgs, paste0("R's ", dev, "\\(\\) device has no DejaVu Sans.*device = cairo_pdf"))
+    txt <- paste(rawToChar(readBin(f, "raw", file.size(f)), multiple = TRUE), collapse = "")
+    # Helvetica (a postscript file names it in its prolog anyway), the samples' labels
+    # (short ones: pdf() splits longer text at kerning pairs), and no track drawn as failed.
+    if (dev == "pdf") expect_true(grepl("/BaseFont /Helvetica", txt, fixed = TRUE, useBytes = TRUE))
+    expect_false(grepl("DejaVu", txt, fixed = TRUE, useBytes = TRUE))
+    for (label in c("(Basal)", "(LP)"))
+      expect_true(grepl(label, txt, fixed = TRUE, useBytes = TRUE), info = paste(dev, label))
+    expect_false(grepl("track failed", txt, fixed = TRUE, useBytes = TRUE))
+  }
 })
 
 test_that("a pt_grob + a ggplot says to use patchwork, instead of a silent NULL (bug 266, no fixture data)", {

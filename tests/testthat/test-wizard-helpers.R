@@ -456,6 +456,18 @@ test_that(".pt_write_project_files(): a folder that isn't there stops with the r
                "^cannot open file '.*project_settings-.*\\.json': No such file or directory; cannot open the connection$")
 })
 
+test_that(".pt_write_project_files(): a failed settings write leaves the saved project_settings.json as it was", {
+  proj <- hp_dir()
+  json <- file.path(proj, "project_settings.json")
+  writeLines('{"page_w": 7}', json)
+  # A write that fails after the file is opened (as on a full disk; writeLines() opens, so
+  # empties, its file before writing): the old file must survive and no temporary file stay.
+  local_mocked_bindings(toJSON = function(...) 1L, .package = "jsonlite")
+  expect_error(.pt_write_project_files(list(page_w = 9), json), "character")
+  expect_identical(readLines(json), '{"page_w": 7}')
+  expect_identical(list.files(proj), "project_settings.json")
+})
+
 test_that(".pt_write_project_files(): the samples copy failing gives FALSE, the settings still written", {
   proj <- hp_dir()
   json <- file.path(proj, "project_settings.json")
@@ -486,26 +498,20 @@ test_that(".pt_write_samples_copy(): absolute folder and GTF, the genome always,
   expect_identical(readLines(file.path(proj, "project_samples.txt"))[2], "# gtf_path: ref/none.gtf")
 })
 
-test_that(".pt_write_samples_copy(): a blank GTF is left blank; a start view goes after the # lines", {
+test_that(".pt_write_samples_copy(): a blank GTF is left blank; an older project's start view is left out", {
   proj <- hp_dir()
   hp_touch(proj, "data/atac/a.bw")
   json <- file.path(proj, "project_settings.json")
+  # The start_view entry an older version wrote into project_settings.json.
   settings <- list(data_dir = file.path(proj, "data"), gtf_path = "", orgdb = "org.Mm.eg.db",
                    samples = list(list(condition = "Lp", colour = "#1B9E77",
                                        data = list(list(type = "bw", name = "ATAC", path = "atac/a.bw")))),
-                   start_view = .pt_start_view_entry("single", "Lp", "Elf5", c("genes", "bw_ATAC_Lp")))
+                   start_view = list(view_mode = "single", conditions = list("Lp"), gene = "Elf5",
+                                     tracks = list("genes", "bw_ATAC_Lp")))
   expect_true(.pt_write_samples_copy(settings, json))
   expect_identical(readLines(file.path(proj, "project_samples.txt")), c(
     paste0("# data_root: ", normalizePath(file.path(proj, "data"))), "# gtf_path: ", "# orgdb: org.Mm.eg.db",
-    "# start_gene: Elf5", "# start_tracks: genes, ATAC", "# start_samples: NA, Lp",
     "condition\tcolour\tbw:ATAC", "Lp\t#1B9E77\tatac/a.bw"))
-  # A start view that isn't a list is ignored; one whose lines fail is left out quietly.
-  settings$start_view <- "Elf5"
-  expect_true(.pt_write_samples_copy(settings, json))
-  expect_false(any(grepl("^# start_", readLines(file.path(proj, "project_samples.txt")))))
-  settings$start_view <- list(view_mode = "single", conditions = list("Gone"), gene = "Elf5", tracks = list("bw_ATAC_Gone"))
-  expect_true(.pt_write_samples_copy(settings, json))
-  expect_false(any(grepl("^# start_", readLines(file.path(proj, "project_samples.txt")))))
 })
 
 test_that(".pt_write_samples_copy(): a settings list it can't export gives FALSE and writes nothing", {
@@ -513,30 +519,6 @@ test_that(".pt_write_samples_copy(): a settings list it can't export gives FALSE
   json <- file.path(proj, "project_settings.json")
   expect_false(.pt_write_samples_copy(list(data_dir = NULL, samples = list()), json))
   expect_false(file.exists(file.path(proj, "project_samples.txt")))
-})
-
-# ---- .pt_kept_start_view() ---------------------------------------------------------------
-
-test_that(".pt_kept_start_view(): the same GTF spelled another way keeps the view; a non-list view is none", {
-  root <- hp_dir()
-  hp_touch(root, c("data/atac/a.bw", "ref/g.gtf"))
-  sv <- list(view_mode = "single", conditions = list("Ba"), gene = "Elf5", tracks = list("bw_ATAC_Ba", "genes"))
-  smp <- list(list(condition = "Ba", colour = "#1B9E77", data = list(list(type = "bw", name = "ATAC", path = "atac/a.bw"))))
-  old <- list(gtf_path = file.path(root, "ref", "g.gtf"), orgdb = "org.Mm.eg.db", start_view = sv)
-  new <- list(gtf_path = file.path(root, "ref", "..", "ref", "g.gtf"), orgdb = "org.Mm.eg.db",
-              data_dir = file.path(root, "data"), samples = smp)
-  expect_identical(.pt_kept_start_view(old, new), sv)
-  # Another sample added, the file path changed: kept.
-  more <- new
-  more$samples <- c(smp, list(list(condition = "Lp", colour = "#000000", data = list())))
-  more$samples[[1]]$data[[1]]$path <- "elsewhere.bw"
-  expect_identical(.pt_kept_start_view(old, more), sv)
-  expect_null(.pt_kept_start_view(utils::modifyList(old, list(start_view = "Elf5")), new))
-  # A blank GTF on both sides is the same GTF.
-  expect_identical(.pt_kept_start_view(utils::modifyList(old, list(gtf_path = "")), utils::modifyList(new, list(gtf_path = ""))), sv)
-  # The view's sample renamed: none.
-  ren <- new; ren$samples[[1]]$condition <- "Bb"
-  expect_null(.pt_kept_start_view(old, ren))
 })
 
 # ---- The form and the page ---------------------------------------------------------------
@@ -730,3 +712,4 @@ test_that("modal_edit_index(): NULL when adding, the row when editing, NA once r
     expect_identical(h("modal_edit_index")(), NA_integer_)
   })
 })
+

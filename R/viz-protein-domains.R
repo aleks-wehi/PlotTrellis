@@ -1,6 +1,5 @@
 info_protein_domains <- function() list(
   kind = "fixed", order = 20, label = "Canonical protein annotation",
-  filter = c(annotation = "Annotations"),
   needs_gene = TRUE
 )
 

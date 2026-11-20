@@ -1,7 +1,7 @@
 info_junctions_mirrored_diff <- function() list(
   kind = "comparison", data_type = "paired-end", order = 20,
   label = "{name} mirrored diff",
-  api = "{name}_diff", filter = c(comparison = "Comparisons")
+  api = "{name}_diff"
 )
 
 # Mirrored junction comparison: Comparison's arcs above a shared baseline,

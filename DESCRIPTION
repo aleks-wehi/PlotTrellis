@@ -1,20 +1,13 @@
 Package: PlotTrellis
-Title: Composable Genomic Track Visualisations for Non-Coders
+Title: Project-Centric EDA Figures for Genome-Aligned Transcriptomics
 Version: 1.2.0
-Authors@R: c(
+Authors@R:
     person("Aleksander", "Pacnik", email = "pacnik.a@wehi.edu.au", role = c("aut", "cre"),
-        comment = c(ORCID = "0009-0000-4062-2582")),
-    person("Konstantin", "Lebedev", role = "cph",
-        comment = "SortableJS library, inst/www/track-lists/Sortable.min.js"),
-    person("Andrie", "de Vries", role = "cph",
-        comment = "code adapted from the sortable package, inst/www/track-lists/"),
-    person("Posit", role = "cph",
-        comment = "code adapted from the sortable package, inst/www/track-lists/"))
-Description: A plotgardener-based genomic track composer that lets biologists
-    build common EDA visualisations (coverage, Hi-C, splice junctions,
-    transcript structure, protein domains) via a Shiny interface, without
-    writing code, and download a standalone R script that reproduces the
-    exact figure offline.
+        comment = c(ORCID = "0009-0000-4062-2582"))
+Description: Pay the setup once, not per figure. One text file describes your
+    experiment. Every gene thereafter is a few clicks in a 'shiny' app or a few
+    lines of R from a clean, fair genome-aligned transcriptomics figure, perfect
+    for exploring your data. Share the file, and your lab can make their own.
 License: Artistic-2.0
 URL: https://github.com/aleks-wehi/PlotTrellis
 BugReports: https://github.com/aleks-wehi/PlotTrellis/issues
@@ -24,7 +17,6 @@ Depends:
     R (>= 4.5.0)
 Imports:
     shiny (>= 1.9.0),
-    htmltools,
     jsonlite,
     plotgardener (>= 1.16.0),
     rtracklayer,
@@ -51,6 +43,7 @@ Imports:
     callr
 Suggests:
     testthat (>= 3.1.7),
+    htmltools,
     vdiffr,
     httptest2,
     knitr,

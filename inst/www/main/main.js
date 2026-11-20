@@ -41,6 +41,7 @@ async function reset(which) {
   byId('chr').innerHTML = Object.keys(P.chrLen || {}).map(c => `<option>${esc(c)}</option>`).join(''); byId('ptVer').textContent = P.version ? 'v' + P.version : '';
   { const fx = P.types.filter(T => T.kind === 'fixed').sort((a, b) => annAt(a.id) - annAt(b.id)); let i = 0; P.types = P.types.map(T => T.kind === 'fixed' ? fx[i++] : T); }
   for (const T of P.types) T.name = T.name.replace(/\s*\(stacked\)/, '');
+  for (const T of P.types) T.name = T.name.replace(/\s*mirrored(?= diff)/, '');   // "Junctions diff", "Junctions diff (TPM-scaled)"
   TYPE = Object.fromEntries(P.types.map(t => [t.id, t]));
   S = SAVED[P.id] || { region: false, locus: null, view: null, err: null, nearby: [], picked: [], gap: null, fig: [], drawn: null, busy: false, fail: null, tab: 'figure', info: null,
     exp: {}, hist: [], recent: [], sugg: [], suggAt: 0, lastGene: '', set: { key: SETKEY } };
@@ -96,7 +97,7 @@ const CATS = { cmp: 'Comparisons', expr: 'Expression', ann: 'Annotations' };
 // The first three tracks (five ids) carry a star.
 const ANN_ORDER = ['genes', 'tx_ann', 'transcripts_annotated', 'protein', 'protein_domains', 'tx_all', 'transcripts_all', 'tx', 'transcripts'];
 const STARRED = ANN_ORDER.slice(0, 5), annAt = id => (ANN_ORDER.indexOf(id) + 1) || 99;
-const THINT = '<button class="chunk empty thint" title="Click a track in Add, on the left"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8H3M7 4 3 8l4 4"/></svg>select tracks</button>';
+const THINT = '<span class="chunk empty"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8H3M7 4 3 8l4 4"/></svg>select tracks</span>';
 const cats = pl => { const cs = [...new Set(pl.map(k => tk(k).cat))], rank = c => c === 'cmp' ? 1 : c === 'expr' ? 2 : c === 'ann' ? 3 : 0; return cs.sort((a, b) => rank(a) - rank(b)); };
 const shown = () => S.fig.filter(k => tk(k).ok);
 const inFig = k => S.fig.includes(k);
@@ -126,7 +127,10 @@ function changed(mutate) { const b4 = S.fig.slice(); if (mutate) mutate();
 function toast(msg) { const t = byId('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200); }
 
 const dot = c => `<span class="dot" style="background:${/^[#\w(),.%\s-]+$/.test(c || '') ? c : 'transparent'}"></span>`;   // a colour, never markup
-const label = t => `<b${t.sub ? '' : ' class="solo"'}>${esc(t.name)}</b>${t.sub ? `<span class="sub">${t.col ? dot(t.col) : ''}<span class="l2">${esc(t.T.kind === 'sample' ? sn(t.sub) : t.sub)}</span></span>` : ''}`;
+// The In figure rows name the samples in full; a comparison row gives both, each with its swatch.
+const label = t => t.T.kind === 'comparison' && t.sub
+  ? `<b>${esc(t.name)}</b><span class="sub"><span class="l2 cmp">${S.picked.slice(0, 2).map(x => dot(sampleOf(x).colour) + esc(x)).join(' vs ')}</span></span>`
+  : `<b${t.sub ? '' : ' class="solo"'}>${esc(t.name)}</b>${t.sub ? `<span class="sub">${t.col ? dot(t.col) : ''}<span class="l2">${esc(t.sub)}</span></span>` : ''}`;
 const tchip = (keys, html, cls = '') => `<button class="tchip ${cls}" aria-pressed="${pressed(keys)}" data-g="${reg(keys)}">${html}</button>`;
 
 /* ------------------------------------------------------------------ the Add half
@@ -199,20 +203,20 @@ function gsPlace(el) { const b = byId('stage').getBoundingClientRect(); Object.a
 // What the canvas shows for a moment: a flick (Space held).
 function gsShowTemp() { const el = gsOv('gs-peek'), id = gsFlick ? gsOther || (gsLast && gsLast.id) : null, h = id && gsById(id);
   if (!gsOn || !h || h === S.drawn || S.busy || byId('right').hidden) { el.hidden = true; el.dataset.id = ''; return; }
-  if (el.dataset.id !== h.id) { el.dataset.id = h.id; el.innerHTML = `<span class="gs-tag">${gsI.eye}${h.no} ${esc(h.label)} \u00B7 ${esc(h.sub)}</span>` + gsSvg(h); }
+  if (el.dataset.id !== h.id) { el.dataset.id = h.id; el.innerHTML = `<span class="gs-tag">${gsI.eye}${esc(h.label)} \u00B7 ${esc(h.sub)}</span>` + gsSvg(h); }
   const fitH = FITH && S.tab === 'figure', f = el.querySelector('svg.gs-fig'); el.classList.toggle('fit-h', fitH);
   if (f) { if (fitH) f.setAttribute('preserveAspectRatio', 'xMidYMin meet'); else f.removeAttribute('preserveAspectRatio'); }
   gsPlace(el); el.hidden = false; }
 function gsCard(h) { const cur = h === S.drawn, i = S.hist.indexOf(h);
-  return `<div class="gs-c${cur ? ' cur' : ''}" data-gsid="${esc(h.id)}"><button class="gs-th" data-open="${i}" title="${esc(h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}><img alt="" src="${h.thumb}"></button><span class="gs-no">${h.no}</span>`
+  return `<div class="gs-c${cur ? ' cur' : ''}" data-gsid="${esc(h.id)}"><button class="gs-th" data-open="${i}" title="${esc(h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}><img alt="" src="${h.thumb}"></button>`
     + `<button class="gs-x" data-hx="${i}" aria-label="Delete ${esc(h.title)}" title="Delete">${gsI.x}</button>`
     + `<span class="gs-m"><span class="trunc">${esc((h.at ? h.at + ' · ' : '') + h.sub)}</span></span></div>`; }
 function gsDraw() { const hb = byId('hist'), fold = gsFolded(), n = S.hist.length;
   document.body.classList.toggle('gs-fold', fold);
-  if (fold) { hb.innerHTML = `<div class="gs-bar"><button class="gs-ib" data-gsfold aria-label="Show the saved figures" title="Show">${gsI.up}</button><span class="gs-n">${n}</span>`
-      + gsGroups().map(g => `<span class="gs-dg">${g.hs.map(h => `<button class="gs-dot${h === S.drawn ? ' cur' : ''}" data-gsid="${esc(h.id)}" data-open="${S.hist.indexOf(h)}" title="${esc(h.no + '. ' + h.title)}" aria-label="Open ${esc(h.title)}"${S.busy ? ' disabled' : ''}></button>`).join('')}</span>`).join('') + '</div>'; return; }
-  hb.innerHTML = `<div class="gs-h"><button class="gs-ib" data-gsfold aria-label="Fold the saved figures" title="Fold"${n ? '' : ' disabled'}>${gsI.down}</button><span class="gs-n" title="Figures this session. Click one to open, hold Space to flick.">${n || ''}</span></div>`
-    + (n ? gsGroups().map(g => `<div class="gs-g"><span class="gs-gl trunc" title="${esc(g.label)}">${esc(g.label)}</span><div class="gs-row">${g.hs.map(gsCard).join('')}</div></div>`).join('') : '<div class="gs-empty" title="Figures you draw land here"></div>');
+  if (fold) { hb.innerHTML = `<div class="gs-bar"><button class="gs-ib" data-gsfold aria-label="Show the saved figures" title="Show">${gsI.up}</button><span class="gs-n" title="${n} saved figure${n === 1 ? '' : 's'}">${n}</span></div>`; return; }
+  if (!n) { hb.innerHTML = ''; return; }
+  hb.innerHTML = `<div class="gs-h"><button class="gs-ib" data-gsfold aria-label="Fold the saved figures" title="Fold">${gsI.down}</button><span class="gs-n" title="Figures this session. Click one to open, hold Space to flick.">${n}</span></div>`
+    + gsGroups().map(g => `<div class="gs-g"><span class="gs-gl trunc" title="${esc(g.label)}">${esc(g.label)}</span><div class="gs-row">${g.hs.map(gsCard).join('')}</div></div>`).join('');
   // keep the newest card, or the one just opened, in view
   const want = S.hist[0] && hb.dataset.gsTop !== S.hist[0].id ? S.hist[0] : S.drawn !== gsCur ? S.drawn : null; if (S.hist[0]) hb.dataset.gsTop = S.hist[0].id; gsCur = S.drawn;
   const c = want && hb.querySelector(`.gs-c[data-gsid="${CSS.escape(want.id)}"]`);
@@ -241,17 +245,14 @@ function render() {
   REG = [];
   // samples, and the sentence that says what is picked
   const n = P.samples.length, p = S.picked;
-  byId('chips').className = 'chips ' + (n <= 4 ? 'few' : n <= 8 ? 'some' : 'lots') + (n <= 9 ? ' nums' : '');
-  byId('chips').innerHTML = P.samples.map((s, i) => `<button class="chip" aria-pressed="${p.includes(s.name)}" data-s="${esc(s.name)}"${n <= 9 ? ` aria-keyshortcuts="${i + 1}"` : ''}>${n <= 9 ? `<kbd class="num">${i + 1}</kbd>` : ''}${dot(s.colour)}${esc(s.name)}</button>`).join('');
-  // up to three rows of sample buttons are simply shown; only a fourth row brings the scroll and the round "show all" button
-  const cb = byId('chips'), rows3 = n > 8 && new Set([...cb.children].map(c => c.offsetTop)).size <= 3; cb.classList.toggle('fits', rows3);
-  byId('more').hidden = n <= 8 || rows3; document.querySelector('.bar').classList.toggle('open', n > 8 && !rows3 && !!S.open); byId('more').setAttribute('aria-expanded', String(!!S.open));
+  byId('chips').className = 'chips ' + (n <= 4 ? 'few' : n <= 8 ? 'some' : 'lots');
+  byId('chips').innerHTML = P.samples.map((s, i) => `<button class="chip" aria-pressed="${p.includes(s.name)}" data-s="${esc(s.name)}"${n <= 9 ? ` aria-keyshortcuts="${i + 1}"` : ''}>${dot(s.colour)}${esc(s.name)}</button>`).join('');
   const allOn = p.length === n; byId('allBtn').setAttribute('aria-pressed', String(allOn)); byId('allBtn').title = allOn ? 'Clear the samples' : 'Pick all samples'; byId('allBtn').setAttribute('aria-label', byId('allBtn').title); byId('allKey').textContent = allOn ? '0' : 'A';
-  const chunk = (name, role) => `<span class="chunk${role ? ' two' : ''}" title="${esc(name)}${role ? ' (' + role + ')' : ''}">${dot(sampleOf(name).colour)}${role ? `<span class="col"><span class="role">${role}</span><span class="trunc">${esc(name)}</span></span>` : `<span class="trunc">${esc(name)}</span>`}</span>`;
-  byId('roles').innerHTML = '<span class="word">in</span>' + (!p.length ? '<button class="chunk empty" id="pickHint" title="Click the samples on the right">select samples<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h11M9 4l4 4-4 4"/></svg></button>' : p.length === 1 ? chunk(p[0])
-    : p.length === 2 ? `${chunk(p[0], 'comparison')}<span class="word">against</span>${chunk(p[1], 'reference')}<button class="swap" id="swap" aria-label="Switch which sample is the reference" title="Switch which sample is the reference"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h11M10 2l3 3-3 3M14 11H3M6 8l-3 3 3 3"/></svg></button>`
-    : `<span class="chunk multi" title="${esc(p.join(', '))}">${p.slice(0, 12).map(x => dot(sampleOf(x).colour)).join('')}<span>${p.length} samples</span></span>`)
-    + (p.length ? '<span class="unp"><button class="unpick" id="unpick" aria-label="Clear the samples" title="Clear the samples">&#10005;</button><kbd class="hk" aria-hidden="true">0</kbd></span>' : '');
+  const chunk = (name, role) => `<span class="chunk" title="${esc(name)}${role ? ' (' + role + ')' : ''}">${dot(sampleOf(name).colour)}<span class="trunc">${esc(name)}</span></span>`;
+  byId('roles').innerHTML = '<span class="word">in</span>' + (!p.length ? '<span class="chunk empty">select samples<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h11M9 4l4 4-4 4"/></svg></span>' : p.length === 1 ? chunk(p[0])
+    : p.length === 2 ? `${chunk(p[0], 'comparison')}<span class="word">relative to</span>${chunk(p[1], 'reference')}<button class="swap" id="swap" aria-label="Switch which sample is the reference" title="Switch which sample is the reference"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h11M10 2l3 3-3 3M14 11H3M6 8l-3 3 3 3"/></svg></button>`
+    : `<span class="chunk multi" title="${esc(p.join(', '))}">${(p.length > 5 ? [] : p).map(x => dot(sampleOf(x).colour)).join('')}<span>${p.length} samples</span></span>`)
+    + (p.length ? '<span class="unp"><button class="unpick" id="unpick" aria-label="Clear the samples" title="Clear the samples">&#10005;</button></span>' : '');
   const box = S.region ? byId('range') : byId('gene'); box.setAttribute('aria-invalid', String(!!S.err)); box.title = S.err || '';
   byId('clear').hidden = !box.value;
   if (S.locus) { reveal('roles'); reveal('samples'); }
@@ -286,7 +287,7 @@ function render() {
     else if (S.busy) st.innerHTML = '<div class="centre"><div class="spin"></div>' + (api.cancel ? '<button class="sbtn" id="cancelBtn">Cancel</button>' : '') + '</div>';
     else if (S.drawn) st.innerHTML = S.drawn.html;
     else if (!inF.length) st.innerHTML = '<div class="centre">' + THINT + '</div>';
-    else st.innerHTML = `<div class="centre">${S.fail ? `<div class="err">${esc(S.fail)}</div>` : ''}<button class="gen pop" id="gen">Generate figure</button><span class="keys"><kbd>Ctrl</kbd> <kbd>Enter</kbd></span></div>`; }
+    else st.innerHTML = `<div class="centre">${S.fail ? `<div class="err">${esc(S.fail)}</div>` : ''}<button class="gen pop" id="gen">Generate figure</button></div>`; }
   // Download: while a PNG or JPEG is being drawn the button is its Cancel (where the server can stop a draw)
   { const b = byId('dlBtn'); b.disabled = dlBusy ? !api.cancel : !S.drawn; b.classList.toggle('busy', !!dlBusy);
     byId('dlLbl').textContent = !dlBusy ? 'Download' : api.cancel ? 'Cancel ' + dlWhat : 'Drawing ' + dlWhat + '\u2026'; if (!S.drawn || dlBusy) dlMenu(false); }
@@ -297,8 +298,12 @@ function render() {
   restoreFocus(fk);
   if (had === byId('addAll') && byId('addAll').disabled) byId('clearAll').focus(); else if (had === byId('clearAll') && byId('clearAll').disabled) byId('addAll').focus();
   if (drag && drag.y != null && !drag.row.isConnected && dragRow()) dragTo(drag.y);   // a redraw under a drag: the row goes back under the pointer
+  fitNames();
   enterHint();
 }
+function fitNames() { for (const el of document.querySelectorAll('#roles .chunk .trunc')) { el.style.width = '';
+  const r = document.createRange(); r.selectNodeContents(el); const rs = [...r.getClientRects()];
+  if (new Set(rs.map(x => Math.round(x.top))).size > 1) el.style.width = Math.ceil(Math.max(...rs.map(x => x.width)) + 1) + 'px'; } }
 
 // Zoom and move buttons, the chromosome, and the genes around the window (click one to go there).
 const IC = { zout: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14M5 7h4"/></svg>',
@@ -483,8 +488,9 @@ function onFlip(el, fn) { const set = on => { if ((el.getAttribute('aria-checked
 let FITH = true; try { FITH = localStorage.getItem('pt-fit') !== 'width'; } catch (e) {}
 function applyFit() { const st = byId('stage'), on = FITH && !!S && S.tab === 'figure', f = st.querySelector('svg.fig'); st.classList.toggle('fit-h', on);
   if (f) { if (on) f.setAttribute('preserveAspectRatio', 'xMidYMin meet'); else f.removeAttribute('preserveAspectRatio'); } }
-setFlip(byId('fitFlip'), FITH);
-onFlip(byId('fitFlip'), on => { FITH = on; try { localStorage.setItem('pt-fit', on ? 'height' : 'width'); } catch (e) {} applyFit(); });
+// The switch's first half is the whole figure (fit height), so it is on for fit width.
+setFlip(byId('fitFlip'), !FITH);
+onFlip(byId('fitFlip'), on => { FITH = !on; try { localStorage.setItem('pt-fit', on ? 'width' : 'height'); } catch (e) {} applyFit(); });
 function setRegion(on) { S.region = on; setFlip(byId('locusFlip'), on); byId('gene').hidden = on; byId('chr').hidden = !on; byId('range').hidden = !on; closeSugg(); }
 // Light or dark is chosen in the Project settings dialog (R/app-project-actions.R). R draws that dialog anew each time it is
 // opened, so its switch is found when it is used, and set to the mode on screen when the dialog shows.
@@ -558,11 +564,7 @@ const hotSample = i => flipSample(P.samples[i].name);   // a number switches its
 byId('allBtn').addEventListener('click', () => { setAll(S.picked.length !== P.samples.length); byId('allBtn').focus(); });
 const hidSay = () => toast(byId('hidN').title.split('\n').slice(0, 6).join(' \u00B7 '));
 byId('hidN').addEventListener('click', hidSay); byId('hidN').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hidSay(); } });
-byId('more').addEventListener('click', () => { S.open = !S.open; render(); byId('more').focus(); });
-// "select tracks" (where the figure will be, and in an empty figure box): light up the Add half, focus its first button
-document.addEventListener('click', e => { if (!e.target.closest('.thint')) return; const h = byId('addHalf'); h.classList.remove('flash'); void h.offsetWidth; h.classList.add('flash'); const c = document.querySelector('#addList .tchip'); c && c.focus(); });
 byId('roles').addEventListener('click', e => { if (e.target.closest('#unpick')) { setAll(false); const c = document.querySelector('#chips .chip'); c && c.focus(); return; }
-  if (e.target.closest('#pickHint')) { const b = byId('samples'); b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash'); const c = document.querySelector('#chips .chip'); c && c.focus(); return; }
   if (e.target.closest('#swap')) { changed(() => reranked(() => S.picked.reverse())); byId('swap').focus(); } });
 byId('addAll').addEventListener('click', () => changed(() => { for (const k of addable) if (!inFig(k)) place(k); }));
 byId('clearAll').addEventListener('click', () => changed(() => { S.fig = []; S.hand = []; }));

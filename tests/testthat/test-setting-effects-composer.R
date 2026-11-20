@@ -1,10 +1,9 @@
-# Effect tests for the settings whose only
-# consumer is the composer server, not render_all(): reference_colour /
-# comparison_colour (resolved onto comparison entries by build_entries()) and
-# uniprot_reviewed_only (the Gene info panel's UniProt link-out).
-# test-composer-settings.R checks these values reach the composer; this file
-# checks they change what it produces. gene_flank_pct's effect is covered
-# there ("a composer flank change re-resolves the current gene's region").
+# Effect tests for reference_colour / comparison_colour, whose only consumer is the app's
+# server, not render_all(): they are resolved onto comparison entries by .pt_build_entries().
+# test-composer-settings.R checks every setting reaches the render; this file checks these
+# two change what it draws. uniprot_reviewed_only's effect is test-main-api.R's (the Gene
+# info UniProt link) and test-main-server.R's (the live value reaches it); gene_flank_pct's
+# is test-composer-settings.R's. Drives the real server (pattern of test-main-server.R).
 # Needs the mouse fixture.
 
 effects_composer <- function() {
@@ -20,47 +19,31 @@ test_that("reference_colour/comparison_colour colour the comparison tracks (mous
   skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- effects_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
+  rec <- recording_session()
+  # Ba (reference) against LP (comparison): the track bw_diff_stacked_atac_Ba_vs_LP
+  # (R/viz-track-detection.R); the page sends the comparison first.
+  args <- list(chr = "chr2", s = 103400000, e = 103460000, picked = list("LP", "Ba"),
+               tracks = list(list(type = "atac_diff")))
+  svg_of <- function(id) {
+    session <- rec$session
+    session$setInputs(pt_rpc = as.character(jsonlite::toJSON(list(list(id = id, op = "render", args = args)),
+                                                             auto_unbox = TRUE, digits = NA)))
+    r <- Filter(function(m) identical(m$type, "pt_rpc_reply") && identical(m$message$id, id), rec$custom)
+    fig <- jsonlite::fromJSON(r[[length(r)]]$message$json, simplifyVector = FALSE)
+    expect_null(fig$error)
+    fig$svg
+  }
   shiny::testServer(cp$app, {
-    # Comparison item key format: R/viz-track-detection.R (<viz>_<name>_<ref>_vs_<cmp>).
-    key <- "bw_diff_stacked_atac_Ba_vs_LP"
-    session$setInputs(view_mode = "compose", region_mode = "coords", region_chr = "chr2",
-                      region_range = c(103400000L, 103460000L), figure_tracks = key)
-    svg_now <- function() paste(readLines(state$svg_path, warn = FALSE), collapse = "\n")
-    session$setInputs(generate = 1)
-    expect_null(state$plot_error)
-    def <- svg_now()
+    session$flushReact()
+    def <- svg_of("r1")
     expect_true(grepl("#4D4D4D", def, fixed = TRUE))
     expect_true(grepl("#56B4E9", def, fixed = TRUE))
 
-    session$setInputs(s_reference_colour = "#123456", s_comparison_colour = "#ABCDEF", generate = 2)
-    expect_null(state$plot_error)
-    alt <- svg_now()
+    session$setInputs(s_reference_colour = "#123456", s_comparison_colour = "#ABCDEF")
+    alt <- svg_of("r2")
     expect_true(grepl("#123456", alt, fixed = TRUE))
     expect_true(grepl("#ABCDEF", alt, fixed = TRUE))
     expect_false(grepl("#4D4D4D", alt, fixed = TRUE))
     expect_false(grepl("#56B4E9", alt, fixed = TRUE))
-  })
-})
-
-test_that("uniprot_reviewed_only switches the Gene info UniProt link to Swiss-Prot only (mouse dataset)", {
-  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
-  # The panel also makes a live UniProt call (canonical-isoform check); fail it fast.
-  # It shows the rendered figure's gene, so a (stubbed) figure is generated first.
-  local_mocked_bindings(.uniprot_read_lines = function(url) stop("offline (test)"),
-                        render_all = function(entries, region_params, settings, device_fn) invisible(NULL))
-  cp <- effects_composer()
-  on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
-  shiny::testServer(cp$app, {
-    session$setInputs(view_mode = "compose", region_mode = "gene", gene_name = "Elf5", figure_tracks = "genes")
-    session$setInputs(generate = 1)
-    link <- function() {
-      html <- as.character(output$gr_extras_ui$html)
-      utils::URLdecode(sub(".*href=\"(https://www.uniprot.org/[^\"]*)\".*", "\\1", html))
-    }
-    def <- link()
-    expect_match(def, "(gene:Elf5) AND (organism_id:10090)", fixed = TRUE)
-    expect_false(grepl("reviewed", def, fixed = TRUE))
-    session$setInputs(s_uniprot_reviewed_only = TRUE)
-    expect_match(link(), "AND (reviewed:true)", fixed = TRUE)
-  })
+  }, session = rec$session)
 })

@@ -3,14 +3,14 @@
   --pt-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --pt-font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
   --pt-bg: #F5F1E8; --pt-surface: #FFFFFF; --pt-surface-2: #EDF0E8; --pt-tray: #F1F3EC;
-  --pt-border: #D9DDD0; --pt-border-strong: #B9C2B4; --pt-input-border: #7C887A;
+  --pt-border: #D9DDD0; --pt-border-strong: #B9C2B4; --pt-input-border: #8A9588;
   --pt-text: #1F2A24; --pt-muted: #5C6A61; --pt-heading: #1F3A2E;
   --pt-nav-bg: #1F3A2E; --pt-nav-text: #F4EFE3; --pt-nav-line: rgba(244, 239, 227, 0.45); --pt-nav-hover: rgba(244, 239, 227, 0.14); --pt-nav-warn: #F2C879;
   --pt-primary: #2F6B4A; --pt-primary-hover: #28593E; --pt-primary-edge: #1E4630; --pt-on-primary: #FFFFFF;
-  --pt-select: #B4532B; --pt-select-soft: #F6E3D9; --pt-on-select: #FFFFFF;
+  --pt-select: #2F6B4A; --pt-select-soft: #DCEBD9; --pt-on-select: #FFFFFF;
   --pt-accent: #E07A4F; --pt-focus: #2F6B4A; --pt-input-bg: #FFFFFF; --pt-hover: #E9F2E2; --pt-link: #2F6B4A;
-  --pt-danger: #B5412F; --pt-danger-soft: #FBE9E5;
-  --pt-shadow: 0 2px 6px rgba(31, 58, 46, 0.14);
+  --pt-danger: #C4503C; --pt-danger-soft: #FBE9E5;
+  --pt-shadow: 0 1px 2px rgba(31, 58, 46, 0.06), 0 4px 14px rgba(31, 58, 46, 0.07);
   --pt-r: 4px; --pt-r-sm: 3px;   /* corners: boxes and buttons, and small parts inside them */
   --pt-tip-bg: #1F3A2E; --pt-tip-text: #F4EFE3;
 }
@@ -21,7 +21,7 @@
   --pt-text: #ECE7DA; --pt-muted: #A8B6AB; --pt-heading: #F4EFE3;
   --pt-nav-bg: #101D17;
   --pt-primary: #8DBF6A; --pt-primary-hover: #9DCB7C; --pt-primary-edge: #5E8F45; --pt-on-primary: #12211A;
-  --pt-select: #E07A4F; --pt-select-soft: #4A3026; --pt-on-select: #1F120C;
+  --pt-select: #8DBF6A; --pt-select-soft: #2B4D3C; --pt-on-select: #12211A;
   --pt-focus: #8DBF6A; --pt-input-bg: #14241C; --pt-hover: #2B4D3C; --pt-link: #A5D184;
   --pt-danger: #F08A76; --pt-danger-soft: #4A2A24;
   --pt-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
@@ -89,11 +89,7 @@ body.many .sentence { width: 590px; }
 .chunk { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 10px; border-radius: var(--pt-r); background: var(--pt-select-soft); border-left: 4px solid var(--pt-select); font-weight: 700; font-size: 14px; min-width: 0; max-width: 200px; white-space: nowrap; }
 body.many .chunk { max-width: 218px; font-size: 12.5px; height: 36px; }
 body.many .chunk .trunc { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; }
-.chunk.two { height: 42px; }
 .chunk.multi, body.many .chunk.multi { max-width: none; flex: none; }
-.chunk .col { display: grid; min-width: 0; line-height: 1.12; }
-.chunk .role { font-size: 8.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--pt-muted); }
-body.many .chunk.two .trunc { font-size: 12px; line-height: 1.1; }
 .chunk.empty { background: transparent; border: 1.5px dashed var(--pt-input-border); border-left-width: 1.5px; color: var(--pt-muted); font-weight: 500; justify-content: center; width: 96px; }
 .samples { flex: 1; min-width: 0; display: flex; position: relative; }
 .chips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; overflow-y: auto; padding: 5px; border: 1px solid var(--pt-border); border-radius: var(--pt-r); background: var(--pt-tray); }
@@ -110,13 +106,6 @@ body.many .chunk.two .trunc { font-size: 12px; line-height: 1.1; }
 .chips.lots { position: absolute; left: 0; right: 0; top: 0; max-height: 92px; padding: 3px 30px 3px 4px; gap: 4px; scroll-snap-type: y mandatory; scroll-padding: 3px 0; }
 .chips.lots .chip { height: 26px; font-size: 12.5px; scroll-snap-align: start; }
 body.many .bar { height: 113px; }
-body.many .bar.open { height: auto; }
-.more { position: absolute; right: 20px; bottom: 5px; width: 24px; height: 24px; border-radius: var(--pt-r-sm); border: 1px solid var(--pt-input-border); background: var(--pt-surface); color: var(--pt-text); display: grid; place-items: center; z-index: 2; }
-.more:hover { background: var(--pt-hover); }
-.more svg { width: 12px; height: 12px; transition: transform 0.15s; }
-.bar.open { height: auto; min-height: 112px; }
-.bar.open .chips.lots { position: static; max-height: none; }
-.bar.open .more svg { transform: rotate(180deg); }
 
 /* Tracks on the left, figure on the right */
 .main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 14px; padding: 12px 16px; min-height: 0; }
@@ -195,7 +184,6 @@ body.many .bar.open { height: auto; }
 /* Fit height: the whole figure inside the box (its own proportions kept, see applyFit() in main.js). */
 .stage.fit-h svg.fig { height: 100%; }
 .centre { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 10px; }
-.centre .keys { position: absolute; left: 0; right: 0; top: calc(50% + 40px); text-align: center; }
 /* The canvas is white in both schemes, so what sits on it keeps the light scheme's colours. */
 .gen { background: var(--pt-primary); color: var(--pt-on-primary); border: 1px solid var(--pt-primary-edge); border-radius: var(--pt-r); font-size: 18px; font-weight: 700; padding: 14px 30px; }
 .gen:hover { background: var(--pt-primary-hover); }
@@ -235,17 +223,10 @@ button.chunk.empty:hover { border-color: var(--pt-select); color: var(--pt-text)
 .allb { width: 24px; height: 24px; border-radius: var(--pt-r-sm); border: 1px solid var(--pt-input-border); background: var(--pt-surface); color: var(--pt-text); display: grid; place-items: center; }
 .allb svg { width: 14px; height: 14px; } .allb:hover { background: var(--pt-hover); }
 .allb[aria-pressed='true'] { background: var(--pt-select); border-color: var(--pt-select); color: var(--pt-on-select); }
-.more { right: 1px; bottom: 5px; }
 .chips { user-select: none; }
 .chips.lots { right: 32px; padding-right: 4px; }
-.chips.lots.fits { overflow: hidden; scroll-snap-type: none; }
-.samples.flash .chips { animation: g-flash 0.9s ease-out; }
-@keyframes g-flash { 0%, 60% { box-shadow: 0 0 0 3px var(--pt-select); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .ehint { position: absolute; right: 36px; top: 50%; transform: translateY(-50%); font-size: 11.5px; font-weight: 600; color: var(--pt-muted); pointer-events: none; white-space: nowrap; background: var(--pt-input-bg); padding-left: 6px; }
 .chip { position: relative; }
-.chip .num { flex: none; min-width: 15px; height: 16px; line-height: 13px; padding: 0 3px; font-size: 10.5px; font-weight: 700; text-align: center; border-radius: var(--pt-r-sm); }
-.chips.few .chip .num, .chips.some .chip .num { min-width: 20px; height: 20px; line-height: 17px; font-size: 12.5px; }
-.chips.lots.nums .chip { padding: 0 8px 0 5px; gap: 5px; }
 /* hover colour: the script sets data-hover="select" on the root, which makes every hover light terracotta */
 :root[data-hover='select'] { --pt-hover: color-mix(in srgb, var(--pt-select-soft) 62%, var(--pt-surface)); }
 /* dark: a brown fill under the pointer looked heavier than the picked state (which is an outline), so there the hover is a thin terracotta outline */
@@ -278,7 +259,6 @@ kbd.hk { font-size: 9.5px; line-height: 11px; padding: 0 3px; min-width: 13px; t
 .cap .only { text-transform: none; letter-spacing: 0; font-weight: 600; font-style: italic; margin-left: 8px; font-size: 11.5px; }
 .wrap.kept .tchip { opacity: 0.55; border-style: dashed; }
 .main > .pickT { grid-column: 3; display: grid; place-items: center; min-height: 0; }
-.half.flash { animation: g-flash 0.9s ease-out; }
 /* The filmstrip: flick, delete, grouped by gene, folds to a bar. */
 body.gs-on #hist { gap: 0; padding: 2px 2px 0 0; align-items: flex-start; scrollbar-width: thin; scroll-padding-left: 36px; }
 body.gs-on.gs-fold #hist { height: 26px; padding: 0; overflow: hidden; }
@@ -296,23 +276,16 @@ body.gs-on.gs-fold #hist { height: 26px; padding: 0; overflow: hidden; }
 .gs-c.cur { border-color: var(--pt-select); box-shadow: inset 0 0 0 1px var(--pt-select); }
 .gs-c .gs-th { height: 48px; flex: none; background: #FFFFFF; border: 0; padding: 0; display: block; width: 100%; overflow: hidden; }
 .gs-c .gs-th img { width: 100%; display: block; }
-.gs-c .gs-th:disabled, .gs-dot:disabled { opacity: 0.45; cursor: default; }
-.gs-no { position: absolute; left: 4px; top: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--pt-r-sm); background: #1F3A2E; color: #F4EFE3; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; pointer-events: none; }
+.gs-c .gs-th:disabled { opacity: 0.45; cursor: default; }
 /* A card's one button: delete it */
 .gs-x { position: absolute; right: 3px; top: 3px; width: 24px; height: 24px; border-radius: var(--pt-r-sm); border: 1px solid var(--pt-border-strong); background: var(--pt-surface); color: var(--pt-muted); display: grid; place-items: center; padding: 0; }
 .gs-x svg { width: 12px; height: 12px; display: block; }
 .gs-x:hover { color: var(--pt-danger); border-color: var(--pt-danger); background: var(--pt-surface); }
 .gs-m { display: flex; align-items: center; gap: 3px; height: 19px; padding: 0 3px 0 6px; font-size: 10.5px; color: var(--pt-muted); }
 .gs-m .trunc { flex: 1; }
-.gs-empty { flex: none; width: 138px; height: 70px; margin-top: 15px; border: 1.5px dashed var(--pt-border-strong); border-radius: var(--pt-r); }
-/* folded: a thin bar, the count and one dot per figure */
+/* folded: a thin bar and the count */
 .gs-bar { display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 6px 0 0; min-width: 0; overflow: hidden; }
 .gs-bar .gs-n { font-size: 12px; font-weight: 800; color: var(--pt-muted); margin-right: 4px; }
-.gs-dg { display: flex; gap: 3px; padding: 0 5px; border-left: 1px solid var(--pt-border-strong); }
-.gs-n + .gs-dg { border-left: 0; padding-left: 0; }
-.gs-dot { width: 12px; height: 12px; border-radius: var(--pt-r-sm); border: 1.5px solid var(--pt-input-border); background: transparent; padding: 0; }
-.gs-dot.cur { border-color: var(--pt-select); background: var(--pt-select); }
-.gs-dot:hover:not(:disabled) { border-color: var(--pt-text); }
 /* the flick sits exactly over the canvas */
 .gs-ov { position: fixed; z-index: 20; background: #FFFFFF; border-radius: var(--pt-r); overflow: hidden; }
 .gs-ov[hidden] { display: none !important; }
@@ -341,8 +314,26 @@ body.gs-on.gs-fold #hist { height: 26px; padding: 0; overflow: hidden; }
 #ptSettings details .row { display: flex; flex-wrap: wrap; }
 #ptSettings details .row::before, #ptSettings details .row::after { display: none; }
 #ptSettings details .row > [class*='col-'] { width: 50%; float: none; }
-#keysDlg .hintline { margin: 14px 0 0; font-size: 12px; color: var(--pt-muted); }
 
+
+/* ---- No key hints on the page (the shortcuts are in their dialog), plain hints, the sample names centred and plain */
+#allKey, .ehint, .dlmenu small { display: none !important; }
+span.chunk.empty { width: auto; gap: 6px; padding: 0 2px; border: 0; font-family: var(--pt-font); font-size: 13.5px; cursor: default; }
+span.chunk.empty svg { width: 14px; height: 14px; color: var(--pt-select); }
+body.many .chunk:not(.empty) { height: 42px; font-size: 15px; }
+body.many .chunk:not(.empty) .trunc { line-height: 1.3; }   /* two lines, with room for the tails of g and y */
+.trow .l2 .dot { margin: 0 5px 0 2px; vertical-align: -1px; }
+.chunk .trunc { text-align: center; text-wrap: balance; }
+.swap { width: 24px; height: 24px; border: 0; border-radius: var(--pt-r-sm); background: transparent; color: var(--pt-muted); }
+.swap:hover { background: var(--pt-hover); color: var(--pt-text); }
+.swap svg { width: 14px; height: 14px; stroke-width: 1.4; }
+.trow .l2.cmp { line-height: 1.5; }   /* a swatch's ring is taller than a 1.12 line: not clipped on one line */
+/* In figure names the samples in full, on as many lines as that takes (not cut at two) */
+.trow.in .l2 { display: block; padding: 3px 0; }
+.chunk:not(.empty) { background: none; border-left: 0; padding: 0 2px; font-size: 16px; font-weight: 400; }
+#ptSettings .pt-set-foot .btn { height: 32px; padding: 0 12px; border: 1px solid var(--pt-input-border); border-radius: var(--pt-r); background: var(--pt-surface-2); color: var(--pt-text); font-family: var(--pt-font); font-size: 12.5px; font-weight: 600; text-decoration: none; box-shadow: none; }
+#ptSettings .pt-set-foot .btn:hover { background: var(--pt-hover); }
+#ptSettings .pt-set-foot .btn:disabled, #ptSettings .pt-set-foot .btn.disabled { opacity: 0.45; cursor: default; }
 /* ---------------------------------------------------------------- beside Bootstrap
    The page also loads Bootstrap 3, shiny.css, plottrellis.css and plottrellis-help.css (before this file): Shiny needs them for
    the Figure settings panel's inputs and for the project dialogs. The rules below undo, on the page's own elements only, every

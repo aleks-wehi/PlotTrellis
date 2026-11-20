@@ -5,12 +5,7 @@
 \alias{PlotTrellisApp}
 \title{Launch PlotTrellis}
 \usage{
-run_plottrellis(
-  project_dir = .pt_default_dir(),
-  samples_txt = NULL,
-  ...,
-  experienced = FALSE
-)
+run_plottrellis(project_dir = .pt_default_dir(), samples_txt = NULL, ...)
 
 PlotTrellisApp(project_dir = .pt_default_dir(), ...)
 }
@@ -24,17 +19,14 @@ in your home directory (created if needed); pass another folder per project.}
 app opens the project already there, or the setup wizard if there is none.}
 
 \item{...}{Passed through to \code{\link[shiny:runApp]{shiny::runApp()}} (e.g. \code{launch.browser}, \code{port}, \code{host}).}
-
-\item{experienced}{\code{FALSE} (the default) opens the classic screen, \code{TRUE} the screen
-for experienced users. Give it by name. See "The two screens".}
 }
 \value{
-Invisibly, the value the app finally stopped with (\code{"closed"} after
-Close app, or when its browser tab was closed with \code{experienced = TRUE}).
+Invisibly, the value the app finally stopped with (\code{"closed"} when
+its browser tab was closed).
 }
 \description{
-The usual way to start PlotTrellis: a Shiny app for building
-plotgardener figures without writing code, and downloading a standalone R script that
+The usual way to start PlotTrellis: a Shiny app for making a project's
+figures in a few clicks, and downloading a standalone R script that
 reproduces each one. Opens the setup wizard when \code{project_dir} has no
 \code{project_settings.json} yet (or after Edit project settings), otherwise the composer,
 and switches between the two by itself after Save, Reset or Clear caches, so a first
@@ -44,30 +36,18 @@ run needs no re-launch. Blocks until the app is stopped.
 \code{PlotTrellisApp()} is this function's original name, kept as an alias with the same
 behaviour.
 }
-\section{The two screens}{
-
-The app opens on its classic screen: Compose, then Output on the same page.
-\code{experienced = TRUE} opens the screen for experienced users instead: one
-page that keeps the gene, samples, tracks and figure in view together, with
-keyboard shortcuts, saved figures and a Download menu (SVG, PNG, JPEG, R
-script). Both draw the same figures from the same project.
-}
-
 \section{Stopping the app}{
 
-On the classic screen, press Close app. With \code{experienced = TRUE}, close the
-app's browser tab: the app stops a few seconds after its last tab is closed.
-Reloading the tab, or a lost connection, does not stop it: after a lost
-connection, reload the tab, or stop the app from R (Esc in RStudio, Ctrl+C
-in a terminal). \code{options(PlotTrellis.stop_on_close = FALSE)} keeps the app
-running until R is interrupted.
+Close the app's browser tab: the app stops a few seconds after its last tab
+is closed. Reloading the tab, or a lost connection, does not stop it: after
+a lost connection, reload the tab, or stop the app from R (Esc in RStudio,
+Ctrl+C in a terminal).
+\code{options(PlotTrellis.stop_on_close = FALSE)} keeps the app running until R
+is interrupted.
 }
-
 \examples{
 if (interactive()) {
   run_plottrellis(project_dir = tempfile())
-  # the screen for experienced users
-  run_plottrellis(project_dir = tempfile(), experienced = TRUE)
 }
 }
 \seealso{

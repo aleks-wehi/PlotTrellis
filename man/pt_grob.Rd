@@ -24,12 +24,11 @@ over its neighbours. In patchwork, give its column its size in inches,
 \code{\link[grid:grid.draw]{grid::grid.draw()}} also draws a \code{\link[=pt_figure]{pt_figure()}} directly.
 }
 \details{
-Save a composition with a cairo device, e.g.
-\code{ggsave("both.pdf", device = cairo_pdf)}. R's own \code{pdf()} and \code{postscript()}
-devices know only a few fonts (not the default DejaVu Sans): drawing the
-grob on them warns and stops with that advice. Under patchwork, which drops
-errors raised while it draws, only the warning shows and the saved page is
-blank.
+R's own \code{pdf()} and \code{postscript()} devices (a plain \code{ggsave("both.pdf")}
+uses \code{pdf()}) know only a few fonts, not the default DejaVu Sans: on them
+the figure's text is drawn in the device's own font (usually Helvetica),
+with a message. For the figure's own font, save with a cairo device, e.g.
+\code{ggsave("both.pdf", device = cairo_pdf)}.
 }
 \examples{
 proj <- pt_project(file.path(tempdir(), "pt-example-human"),
@@ -41,8 +40,7 @@ if (requireNamespace("patchwork", quietly = TRUE)) {
   both <- patchwork::wrap_elements(full = g) + p +
     patchwork::plot_layout(widths = grid::unit(c(g$width, 1), c("in", "null")))
   ggplot2::ggsave(file.path(tempdir(), "both.pdf"), both,
-                  width = g$width + 4.5, height = g$height + 0.5,
-                  device = grDevices::cairo_pdf)
+                  width = g$width + 4.5, height = g$height + 0.5)
 }
 }
 \seealso{

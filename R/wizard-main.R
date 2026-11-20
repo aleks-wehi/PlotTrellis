@@ -68,8 +68,6 @@ wizard_server <- function(SETTINGS_JSON, CFG,
   # Display settings and suggested genes imported from a samples.txt (the wizard
   # has no inputs for them): Save writes cfg's values with these on top.
   import_visual <- reactiveVal(list())
-  # the lines of the samples.txt last imported in this wizard session
-  imported      <- reactiveVal(NULL)
   # After a Save that failed, the "Not saved yet" list re-checks as the fields
   # change, so it never shows a problem already fixed (e.g. by an Import), and
   # goes once all pass.
@@ -93,7 +91,7 @@ wizard_server <- function(SETTINGS_JSON, CFG,
   add_sample_modal <- samples_block$add_sample_modal
   wiz_prefill_rows <- samples_block$wiz_prefill_rows
   add_modal_row    <- samples_block$add_modal_row
-  .pt_wizard_import_server(input, output, session, wiz_samples, imported,
+  .pt_wizard_import_server(input, output, session, wiz_samples,
                            import_visual, DEFAULT_SETTINGS)
   export_block <- .pt_wizard_export_server(
     input, output, data_root, wiz_samples, import_visual, cfg, DEFAULT_SETTINGS
@@ -104,7 +102,7 @@ wizard_server <- function(SETTINGS_JSON, CFG,
                                       wiz_samples,
                                       wiz_collect_flat_settings)$is_dirty
   save_problems <- .pt_wizard_save_server(
-    input, output, SETTINGS_JSON, mirror_txt, data_root, wiz_samples, imported,
+    input, output, SETTINGS_JSON, mirror_txt, data_root, wiz_samples,
     wiz_collect_flat_settings, save_failed, write_error
   )$save_problems
 }

@@ -1,8 +1,8 @@
-# The composer's startup (R/app-main.R): everything .pt_composer_app() loads once per
+# The app's startup (R/app-main.R): everything .pt_composer_app() loads once per
 # launch (genome migration, TxDb, chromosome lengths, samples, track items, gene
-# list, render settings, start view), returned as one list that the UI builder
-# and the server blocks read. The body is unindented, as it was inside the app
-# closure.
+# list, render settings), returned as one list that the page's answers
+# (R/app-screen-api.R) and the server (R/app-screen-server.R) read. The body is
+# unindented, as it was inside the app closure.
 .pt_composer_context <- function(SETTINGS_JSON, CFG) {
 
 # ── Startup: load heavy objects once ──────────────────────────────────────────
@@ -64,13 +64,6 @@ CHR_LENGTHS <- readRDS(GENOME$chrom_sizes_path)
 
 SAMPLES_DF  <- load_samples_from_settings(CFG$samples, CFG$data_dir)
 
-# Every sample is selectable in every view_mode (One/Two/Multi), whatever data
-# it has. Which tracks a sample, or a pair of samples, offers is decided in
-# viz-track-detection.R (detect_generic(), detect_pair_generic() and the modules'
-# own detect_<key>()), which give no item rather than an error when a data type
-# is missing.
-AVAILABLE_CONDITIONS <- vapply(SAMPLES_DF, function(r) r$display, character(1))
-
 # Every sample, with no pre-filter: detect_pair_generic() checks the data on
 # both sides of each pair, so e.g. two ATAC-only samples still get an ATAC
 # coverage comparison.
@@ -86,44 +79,23 @@ ALL_GENES <- sort(AnnotationDbi::keys(get(ORGDB_PKG,
 # The one cfg every render and lookup reads, computed once from CFG: the flat
 # CFG keys plus the genome-derived values (orgdb_pkg, genome_label,
 # tx_*_lookup_path). The wizard edits the core settings (with a restart), and
-# the composer's Figure settings panel layers live values for the other keys on
-# top of it (saved_cfg()/live_cfg() in server()).
+# the Figure settings panel layers live values for the other keys on top of it
+# (saved_cfg()/live_cfg(), R/app-settings.R).
 RENDER_CFG <- .pt_render_cfg(CFG, GENOME, CACHE_DIR)
 
 # Each sample's own colour, else PALETTE in sample order.
 DEFAULT_SAMPLE_COLS <- .pt_sample_colours(SAMPLES_DF)
 
-# Optional preloaded starting view (pt_preload()): the UI starts with this mode,
-# condition(s), gene and figure tracks already picked, so Generate is the only
-# click. NULL (no start_view in the settings) keeps the usual blank start.
-START_VIEW <- if (is.list(CFG$start_view))
-  lapply(CFG$start_view, unlist) else NULL
-# Keys that no longer exist (a sample renamed since) are dropped, not shown,
-# after renaming the junction track's old keys. Order is kept, and so are
-# repeats of Gene annotation, the one track a figure can hold several times; any
-# other track is kept once (a pt_figure() can repeat one, the picker can't).
-if (!is.null(START_VIEW)) {
-  sv_keys <- as.character(.pt_renamed_junctions_key(START_VIEW$tracks))
-  START_VIEW$tracks <- sv_keys[sv_keys %in% names(TRACK_ITEMS) &
-                                 (sv_keys == "genes" | !duplicated(sv_keys))]
-}
-
-# Multi's Available pool, sorted by label (.pt_compose_available_keys()).
-COMPOSE_AVAILABLE_KEYS <- .pt_compose_available_keys(TRACK_ITEMS)
-
 # Gene-required track types (needs_gene in their info_<key>()): from coordinates
-# they can only draw an empty-state message. Kept as a plain R vector too (not
-# just the JSON string the page carries) so server() can run the same red-box
-# check the client already does, to gate Generate on it.
+# they can only draw an empty-state message, so the server refuses them for a
+# region (.pt_main_render_job()).
 GENE_REQUIRED_TYPES <- .pt_gene_required_types()
 
 list(SETTINGS_JSON = SETTINGS_JSON, CFG = CFG, PROJECT_DIR = PROJECT_DIR,
      CACHE_DIR = CACHE_DIR,
      GENOME = GENOME, ORGDB_PKG = ORGDB_PKG, txdb = txdb, CDS_BY_TX = CDS_BY_TX,
      CHR_LENGTHS = CHR_LENGTHS, SAMPLES_DF = SAMPLES_DF,
-     AVAILABLE_CONDITIONS = AVAILABLE_CONDITIONS,
      TRACK_ITEMS = TRACK_ITEMS, ALL_GENES = ALL_GENES, RENDER_CFG = RENDER_CFG,
-     DEFAULT_SAMPLE_COLS = DEFAULT_SAMPLE_COLS, START_VIEW = START_VIEW,
-     COMPOSE_AVAILABLE_KEYS = COMPOSE_AVAILABLE_KEYS,
+     DEFAULT_SAMPLE_COLS = DEFAULT_SAMPLE_COLS,
      GENE_REQUIRED_TYPES = GENE_REQUIRED_TYPES)
 }

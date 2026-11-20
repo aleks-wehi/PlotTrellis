@@ -47,17 +47,9 @@ DISPLAY_KEYS <- setdiff(names(.pt_default_settings()), .PT_CORE_SETTINGS)
 
 # ---- .pt_composer_app() builds the page --------------------------------------------------
 
-test_that(".pt_composer_app() gives the main screen's page with experienced = TRUE, the classic page without", {
+test_that(".pt_composer_app() gives the main screen's page", {
   m <- main_srv()
-  page <- function(app) {
-    ui <- environment(app$httpHandler)$ui
-    htmltools::renderTags(if (is.function(ui)) ui(NULL) else ui)$html
-  }
-  classic <- page(suppressMessages(.pt_composer_app(m$json, m$cfg)))
-  expect_match(classic, "close_app_btn", fixed = TRUE)
-  expect_false(grepl('id="ptApp"', classic, fixed = TRUE))
-  expect_match(page(suppressMessages(.pt_composer_app(m$json, m$cfg, experienced = FALSE))), "close_app_btn", fixed = TRUE)
-  app <- suppressMessages(.pt_composer_app(m$json, m$cfg, experienced = TRUE))
+  app <- suppressMessages(.pt_composer_app(m$json, m$cfg))
   expect_s3_class(app, "shiny.appobj")
   ui <- environment(app$httpHandler)$ui
   html <- htmltools::renderTags(if (is.function(ui)) ui(NULL) else ui)$html

@@ -23,7 +23,7 @@
     </div>
     <div class="line" id="roles" hidden></div>
   </div>
-  <div class="samples" id="samples" hidden><div class="chips" id="chips" role="group" aria-label="Samples"></div><div class="sside"><button class="allb" id="allBtn" aria-pressed="false" aria-label="Pick all samples" title="Pick all samples"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8.5 4.5 11.5 9.5 5M7.5 10.5l1 1 6-6.5"/></svg></button><kbd class="hk" id="allKey" aria-hidden="true">A</kbd></div><button class="more" id="more" aria-label="Show all samples" aria-expanded="false" title="Show all samples" hidden><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg></button></div>
+  <div class="samples" id="samples" hidden><div class="chips" id="chips" role="group" aria-label="Samples"></div><div class="sside"><button class="allb" id="allBtn" aria-pressed="false" aria-label="Pick all samples" title="Pick all samples"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8.5 4.5 11.5 9.5 5M7.5 10.5l1 1 6-6.5"/></svg></button><kbd class="hk" id="allKey" aria-hidden="true">A</kbd></div></div>
 </section>
 
 <main class="main">
@@ -36,9 +36,9 @@
   <section class="right" id="right" hidden>
     <div class="tools">
       <div class="flip" id="viewFlip" role="switch" tabindex="0" aria-checked="false" aria-label="Figure or gene info"><span>Figure</span><span>Gene info</span></div>
-      <div class="flip sp" id="fitFlip" role="switch" tabindex="0" aria-checked="false" aria-label="Fit the whole figure in the height of its box">
-        <span title="Fit width"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h12M5 5 2 8l3 3M11 5l3 3-3 3"/></svg></span>
+      <div class="flip sp" id="fitFlip" role="switch" tabindex="0" aria-checked="false" aria-label="Fit the figure to the width of its box, not its height">
         <span title="Fit height"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v12M5 5l3-3 3 3M5 11l3 3 3-3"/></svg></span>
+        <span title="Fit width"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h12M5 5 2 8l3 3M11 5l3 3-3 3"/></svg></span>
       </div>
       <button class="tbtn" id="setBtn">Figure settings</button>
       <span class="dl" id="dl"><button class="tbtn" id="dlBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="dlMenu"><span id="dlLbl">Download</span><svg class="caret" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></button>
@@ -49,7 +49,7 @@
     <div class="stage" id="stage"></div>
     <div class="hist" id="hist" hidden></div>
   </section>
-  <div class="pickT" id="pickT" hidden><button class="chunk empty thint" title="Click a track in Add, on the left"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8H3M7 4 3 8l4 4"/></svg>select tracks</button></div>
+  <div class="pickT" id="pickT" hidden><span class="chunk empty"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8H3M7 4 3 8l4 4"/></svg>select tracks</span></div>
 </main>
 
 <dialog id="keysDlg">
@@ -71,7 +71,6 @@
     <dt><kbd>[</kbd></dt><dd>Earlier figure</dd>
     <dt><kbd>]</kbd></dt><dd>Later figure</dd>
   </dl>
-  <p class="hintline">Closing this tab stops PlotTrellis.</p>
   <div class="acts"><button class="sbtn" id="keysClose">Close</button></div>
 </dialog>
 <div class="toast" id="toast" role="status" hidden></div>

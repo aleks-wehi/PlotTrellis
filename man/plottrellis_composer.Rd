@@ -4,7 +4,7 @@
 \alias{plottrellis_composer}
 \title{Open the PlotTrellis composer on its own}
 \usage{
-plottrellis_composer(project_dir = .pt_default_dir(), ..., experienced = FALSE)
+plottrellis_composer(project_dir = .pt_default_dir(), ...)
 }
 \arguments{
 \item{project_dir}{Directory holding this project's \code{project_settings.json} and its
@@ -12,13 +12,10 @@ cache/downloaded-script state, or a \code{\link[=pt_project]{pt_project()}}. Def
 in your home directory (created if needed); pass another folder per project.}
 
 \item{...}{Passed through to \code{\link[shiny:runApp]{shiny::runApp()}} (e.g. \code{launch.browser}, \code{port}, \code{host}).}
-
-\item{experienced}{\code{FALSE} (the default) opens the classic screen, \code{TRUE} the screen
-for experienced users. Give it by name. See "The two screens".}
 }
 \value{
-Invisibly, the value the app stopped with: \code{"closed"} (Close app, or
-with \code{experienced = TRUE} its browser tab was closed), \code{"edit_settings"}
+Invisibly, the value the app stopped with: \code{"closed"} (its browser
+tab was closed), \code{"edit_settings"}
 (Edit project settings) or \code{"restart"} (Reset project / Clear caches).
 }
 \description{

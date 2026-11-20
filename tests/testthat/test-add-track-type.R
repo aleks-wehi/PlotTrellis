@@ -1,14 +1,13 @@
 # Adding a track type the way a contributor does: a module (info_/settings_/render_
 # functions) and nothing else, no list edited by hand. Two toy modules, defined here: a
-# per-sample one (a BED file's features counted per bin, drawn as a signal; word for word the
-# example module of the "Adding a track type" how-to) and a comparison (the log2 ratio of two
+# per-sample one (a BED file's features counted per bin, drawn as a signal; the example
+# module of the "Adding a track type" how-to) and a comparison (the log2 ratio of two
 # bigWig tracks). Discovery is pointed at them by mocking the two functions every lookup
 # goes through (.pt_viz_keys() and .pt_module_fn()), so everything that reads the
 # declarations sees them, render_all() included, as for a module in R/.
 
 info_bed_density <- function() list(
-  kind = "sample", data_type = "bed", order = 35, label = "{name} density", filter = c(bed = "BED"),
-  scale_bar = TRUE
+  kind = "sample", data_type = "bed", order = 35, label = "{name} density", scale_bar = TRUE
 )
 
 settings_bed_density <- function(dict, entry, settings, track_w, region_params) {
@@ -55,8 +54,7 @@ render_bed_density <- function(entry, dict, ctx) {
 }
 
 info_bw_ratio <- function() list(
-  kind = "comparison", data_type = "bw", order = 15, label = "{name} log2 ratio", api = "{name}_ratio",
-  filter = c(comparison = "Comparisons")
+  kind = "comparison", data_type = "bw", order = 15, label = "{name} log2 ratio", api = "{name}_ratio"
 )
 
 settings_bw_ratio <- function(dict, entry, settings, track_w, region_params) {
@@ -122,7 +120,7 @@ with_toys <- function(seen = new.env(), env = parent.frame()) {
   seen
 }
 
-test_that("a new track type is offered, named, built into an entry and filed under its filter", {
+test_that("a new track type is offered, named and built into an entry", {
   with_toys()
   rows <- list(
     list(display = "A", data = list(list(type = "bw", name = "atac", path = "A_atac.bw"),
@@ -151,7 +149,7 @@ test_that("a new track type is offered, named, built into an entry and filed und
   expect_identical(tab$track[tab$key == "bw_ratio_atac_A_vs_B"], "atac_ratio")
   expect_false(anyDuplicated(paste(tab$track, tab$sample)) > 0)
   expect_message(keys <- .pt_resolve_tracks(tab, c("peaks_bed_density", "atac_ratio"), c("A", "B"),
-                                            comparison = c("A", "B")), "no 'peaks_bed_density' for B")
+                                            comparison = c("B", "A")), "no 'peaks_bed_density' for B")
   expect_identical(keys, c("bed_density_peaks_A", "bw_ratio_atac_A_vs_B"))
 
   # Entries with the sample, colour and paths.
@@ -163,13 +161,6 @@ test_that("a new track type is offered, named, built into an entry and filed und
                    list(viz = "bw_ratio", control_path = "A_atac.bw", treatment_path = "B_atac.bw",
                         control_colour = "#111111", treatment_colour = "#222222"))
 
-  # Under its filter button, which already exists; no new button.
-  filters <- .pt_type_filters()
-  expect_identical(filters$bed_density, "bed")
-  expect_identical(filters$bw_ratio, "comparison")
-  infos <- .pt_viz_infos()
-  expect_identical(as.character(tagList(.pt_filter_buttons())),
-                   as.character(tagList(.pt_filter_buttons(infos[setdiff(names(infos), TOYS)]))))
   # The fixture helpers build it too.
   expect_identical(build_entry("bed_density", rows[[1]])$path, "A_peaks.bed")
   expect_identical(build_comparison_entry("bw_ratio", rows[[1]], rows[[2]])$treatment_path, "B_atac.bw")
@@ -230,52 +221,4 @@ test_that("the example module counts every feature of a BED file with header and
   expect_error(load(path = tempfile()), "file not found")
   expect_error(load(path = NA_character_), "no data file given")
   expect_true(load(sub("chr1", "chr9", features))$no_chrom)
-})
-
-# ---- added since ---------------------------------------------------------------------------
-
-test_that("a new track type is offered, named and built into an entry", {
-  with_toys()
-  rows <- list(
-    list(display = "A", data = list(list(type = "bw", name = "atac", path = "A_atac.bw"),
-                                    list(type = "bed", name = "peaks", path = "A_peaks.bed"))),
-    list(display = "B", data = list(list(type = "bw", name = "atac", path = "B_atac.bw"))))
-  items <- c(build_track_items(rows), build_comparison_track_items(rows))
-
-  # Offered for a sample with its data type, not for one without.
-  expect_true("bed_density_peaks_A" %in% names(items))
-  expect_false(any(grepl("^bed_density_.*_B$", names(items))))
-  expect_true(all(c("bw_ratio_atac_A_vs_B", "bw_ratio_atac_B_vs_A") %in% names(items)))
-  # Detection order: after bed, and the ratio after the stacked diff.
-  of_types <- function(types) names(Filter(function(it) it$type %in% types, items))
-  expect_identical(of_types(c("bw", "bed", "bed_density")),
-                   c("bw_atac_A", "bed_peaks_A", "bed_density_peaks_A", "bw_atac_B"))
-  expect_identical(of_types(c("bw_diff_stacked", "bw_ratio")),
-                   c("bw_diff_stacked_atac_A_vs_B", "bw_ratio_atac_A_vs_B", "bw_diff_stacked_atac_B_vs_A",
-                     "bw_ratio_atac_B_vs_A"))
-
-  # A label and an API name of its own.
-  expect_identical(items$bed_density_peaks_A$label, "peaks density \u00B7 A")
-  expect_identical(items$bw_ratio_atac_A_vs_B$label, "atac log2 ratio \u00B7 B (Cmp) vs A (Ref)")
-  expect_false(anyDuplicated(vapply(items, `[[`, "", "label")) > 0)
-  tab <- .pt_track_table(items)
-  expect_identical(tab$track[tab$key == "bed_density_peaks_A"], "peaks_bed_density")
-  expect_identical(tab$track[tab$key == "bw_ratio_atac_A_vs_B"], "atac_ratio")
-  expect_false(anyDuplicated(paste(tab$track, tab$sample)) > 0)
-  expect_message(keys <- .pt_resolve_tracks(tab, c("peaks_bed_density", "atac_ratio"), c("A", "B"),
-                                            comparison = c("A", "B")), "no 'peaks_bed_density' for B")
-  expect_identical(keys, c("bed_density_peaks_A", "bw_ratio_atac_A_vs_B"))
-
-  # Entries with the sample, colour and paths.
-  entries <- .pt_build_entries(c("bed_density_peaks_A", "bw_ratio_atac_A_vs_B"), items, c(A = "#E41A1C"),
-                               list(reference_colour = "#111111", comparison_colour = "#222222"))
-  expect_identical(entries[[1]][c("viz", "sample", "colour", "name", "path")],
-                   list(viz = "bed_density", sample = "A", colour = "#E41A1C", name = "peaks", path = "A_peaks.bed"))
-  expect_identical(entries[[2]][c("viz", "control_path", "treatment_path", "control_colour", "treatment_colour")],
-                   list(viz = "bw_ratio", control_path = "A_atac.bw", treatment_path = "B_atac.bw",
-                        control_colour = "#111111", treatment_colour = "#222222"))
-
-  # The fixture helpers build it too.
-  expect_identical(build_entry("bed_density", rows[[1]])$path, "A_peaks.bed")
-  expect_identical(build_comparison_entry("bw_ratio", rows[[1]], rows[[2]])$treatment_path, "B_atac.bw")
 })

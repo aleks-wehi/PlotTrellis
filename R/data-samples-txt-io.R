@@ -271,8 +271,7 @@ import_samples_txt <- function(path, defaults = list()) {
   sprintf(paste0(
     "Columns %s%s are each used by one sample only, so every sample gets its own track and ",
     "its own scale, and there are no comparison tracks. Use one column per data type, with a ",
-    "row per sample: %s. See vignette(\"PlotTrellis\"), section \"Your own data in code ",
-    "(writing a samples.txt)\"."),
+    "row per sample: %s. See vignette(\"samples-txt\", package = \"PlotTrellis\")."),
     paste(head(shown, 4), collapse = ", "), more,
     paste(suggest, collapse = ", "))
 }

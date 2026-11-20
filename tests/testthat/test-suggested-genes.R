@@ -78,9 +78,8 @@ test_that("the wizard carries it: the project's list, or the one of a samples.tx
   out <- file.path(root, "exported.txt")
   shiny::testServer(function(input, output, session) {
     wiz_samples <- reactiveVal(list())
-    imported <- reactiveVal(NULL)
     import_visual <- reactiveVal(list())
-    .pt_wizard_import_server(input, output, session, wiz_samples, imported, import_visual, .pt_default_settings())
+    .pt_wizard_import_server(input, output, session, wiz_samples, import_visual, .pt_default_settings())
     blk <- .pt_wizard_export_server(input, output, function() root, wiz_samples, import_visual, cfg,
                                     .pt_default_settings())
   }, {
@@ -121,7 +120,7 @@ test_that("the app says at launch which suggested genes the annotation does not 
   withr::local_options(PlotTrellis.stop_on_close = FALSE)
   prj <- .pt_project(proj)
   expect_warning(
-    app <- suppressMessages(.pt_composer_app(prj$settings_json, prj$cfg, experienced = TRUE)),
+    app <- suppressMessages(.pt_composer_app(prj$settings_json, prj$cfg)),
     "Not suggested, as this project's annotation has no such gene: NoSuchGene, AlsoNot (# suggested_genes:).",
     fixed = TRUE
   )

@@ -1,6 +1,5 @@
 info_transcripts_annotated <- function() list(
-  kind = "fixed", order = 50, label = "Transcripts annotated (filtered)",
-  filter = c(annotation = "Annotations"), needs_gene = TRUE
+  kind = "fixed", order = 50, label = "Transcripts annotated (filtered)", needs_gene = TRUE
 )
 
 # The same transcripts and height as the Transcripts (filtered) track.

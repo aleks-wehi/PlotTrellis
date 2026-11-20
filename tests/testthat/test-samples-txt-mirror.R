@@ -137,7 +137,7 @@ test_that("the wizard form does not show the display settings", {
 })
 
 test_that("the vignette's samples.txt example is tab-separated and imports as shown", {
-  rmd <- testthat::test_path("..", "..", "vignettes", "PlotTrellis.Rmd")
+  rmd <- testthat::test_path("..", "..", "vignettes", "samples-txt.Rmd")
   skip_if_not(file.exists(rmd), "vignette source not available (installed package)")
   lines <- readLines(rmd)
   # pandoc turns tabs into spaces unless told otherwise, and the rendered page's Copy button copies what it shows.
@@ -148,7 +148,7 @@ test_that("the vignette's samples.txt example is tab-separated and imports as sh
   expect_false(any(grepl("  ", block[!startsWith(block, "#")])))   # no runs of spaces in the table
   root <- tempfile("pt-vig-")
   files <- sub("^[^\t]*\t[^\t]*\t", "", block[!startsWith(block, "#") & grepl("\t", block)][-1])
-  for (f in unlist(strsplit(files, "\t"))) {
+  for (f in setdiff(unlist(strsplit(files, "\t")), "")) {   # an empty cell: no such file
     dir.create(file.path(root, dirname(f)), recursive = TRUE, showWarnings = FALSE)
     file.create(file.path(root, f))
   }

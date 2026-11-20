@@ -68,11 +68,9 @@ pt_project <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
 }
 
 # Creates or refreshes project_dir from samples_txt (NULL: the project must
-# already exist), shared by pt_project() and run_plottrellis(). A samples.txt
-# may carry `# start_gene:` / `# start_tracks:` lines, and optionally
-# `# start_samples:`, `# start_comparison:` and `# start_order:` (comma lists,
-# as pt_figure()'s tracks, samples, comparison and order; "NA" for an empty
-# samples slot): the app then opens with that view preloaded.
+# already exist), shared by pt_project() and run_plottrellis(). The
+# `# start_gene:`, `# start_tracks:`, ... lines an older samples.txt may carry
+# (the app once opened on that view) are ignored, with one message.
 .pt_import <- function(project_dir, samples_txt = NULL, overwrite = FALSE) {
   json <- file.path(project_dir, "project_settings.json")
   if (is.null(samples_txt)) {
@@ -116,35 +114,27 @@ pt_project <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
     if (!is.null(made_from))
       message("Re-importing '", basename(samples_txt), "' into '", project_dir,
               "'.")
-    # A start line that stops the import (below) must leave the project as it
-    # was: the two project files are put back, with their dates, so the next
-    # pt_project() tries again and says so, instead of opening the new settings
-    # without their start view.
+    # An import that stops part way must leave the project as it was: the two
+    # project files are put back, with their dates, so the next pt_project()
+    # tries again and says so.
     kept <- file.path(project_dir,
                       c("project_settings.json", "project_samples.txt"))
     backup <- tempfile("pt-import-backup-", fileext = c(".json", ".txt"))
     had <- file.exists(kept)
     file.copy(kept[had], backup[had], copy.date = TRUE)
     on.exit(unlink(backup), add = TRUE)
-    # Read before parse_samples_txt(): when samples_txt is the project's own
-    # copy (a rebuild from it), that call rewrites the copy, and its start lines
-    # must come from the original.
-    lines <- readLines(samples_txt, warn = FALSE)
+    if (any(grepl("^#\\s*start_(gene|tracks|samples|comparison|order):",
+                  readLines(samples_txt, warn = FALSE))))
+      message("Ignoring the '# start_' lines of '", basename(samples_txt),
+              "': the app opens with nothing picked. ",
+              "A '# suggested_genes:' line lists genes for its gene box to suggest.")
     tryCatch({
       parse_samples_txt(samples_txt, project_dir = project_dir,
                         overwrite = TRUE)
       settings <- jsonlite::read_json(json)
       settings$samples_txt_source <- src
-      writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE,
-                                  null = "null", digits = NA),
-                 json)
-      sv <- .pt_txt_start_view(lines, .pt_project(project_dir)$cfg)
-      if (!is.null(sv))
-        .pt_write_start_view(project_dir, sv$view_mode, unlist(sv$conditions),
-                             sv$gene, unlist(sv$tracks))
-      # Recorded last: when samples_txt is the project's own copy, the writes
-      # above rewrite it.
-      settings <- jsonlite::read_json(json)
+      # Taken after parse_samples_txt(): when samples_txt is the project's own
+      # copy, that call rewrites it.
       settings$samples_txt_mtime <- stamp()
       writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE,
                                   null = "null", digits = NA),
@@ -172,142 +162,6 @@ pt_project <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
   identical(new, paste0(ext, "/", example, "/samples.txt")) &&
     grepl(paste0("/PlotTrellis[^/]*(/inst)?/extdata/\\Q", example,
                  "\\E/samples\\.txt$"), old, perl = TRUE)
-}
-
-# The start view a samples.txt's start lines give (the lines are described above
-# .pt_import()), for project settings `cfg` (its samples and data_dir); NULL
-# without both start_gene and start_tracks. Shared by .pt_import() and the
-# wizard's Import.
-.pt_txt_start_view <- function(lines, cfg) {
-  hdr <- function(key) {
-    ln <- grep(paste0("^#\\s*", key, ":"), lines, value = TRUE)
-    if (length(ln)) trimws(sub(paste0("^#\\s*", key, ":"), "", ln[1])) else NULL
-  }
-  gene <- hdr("start_gene")
-  tracks <- hdr("start_tracks")
-  if (is.null(gene) || is.null(tracks)) return(NULL)
-  samples <- load_samples_from_settings(cfg$samples, cfg$data_dir)
-  items <- c(build_track_items(samples), build_comparison_track_items(samples))
-  split <- function(x) {
-    if (is.null(x)) return(NULL)
-    v <- trimws(strsplit(x, ",")[[1]])
-    v[v == "NA"] <- NA_character_
-    v
-  }
-  tab <- .pt_track_table(items)
-  tracks <- split(tracks)
-  start_samples <- split(hdr("start_samples"))
-  # A track this project doesn't have (e.g. one a newer PlotTrellis removed) is
-  # left out of the start view with one warning; the rest still opens. A quoted
-  # number or a name@sample keeps its own error (each with its hint).
-  known <- vapply(
-    tracks,
-    function(t) grepl("@", t, fixed = TRUE) || grepl("^[0-9]+$", t) ||
-      !inherits(tryCatch(.pt_track_names(tab, t), error = identity), "error"),
-    logical(1)
-  )
-  if (!all(known)) {
-    # immediate: run_plottrellis() would hold it until the app closes
-    warning("Leaving out of the start view the track",
-            if (sum(!known) > 1) "s", " this project doesn't have: ",
-            paste(tracks[!known], collapse = ", "), " (# start_tracks:).",
-            call. = FALSE, immediate. = TRUE)
-    if (length(start_samples) == length(tracks))
-      start_samples <- start_samples[known]
-    tracks <- tracks[known]
-    if (!length(tracks)) return(NULL)
-  }
-  # Likewise a start sample the table no longer has (its row deleted): left out
-  # with one warning. # start_samples: loses the tracks it gave that sample. #
-  # start_comparison: is then no longer the samples written: its comparison
-  # tracks go, and its per-sample tracks too when no sample is left (rather than
-  # every sample). Lines wrong otherwise (a start_samples of another length,
-  # both lines together, a quoted number) keep their own error.
-  start_comparison <- split(hdr("start_comparison"))
-  all_samples <- names(.pt_sample_colours(samples))
-  gone <- unique(c(start_samples, start_comparison))
-  gone <- gone[!is.na(gone) & !gone %in% all_samples & !grepl("^[0-9]+$", gone)]
-  kind <- vapply(tracks, function(t) {
-    n <- tryCatch(.pt_track_names(tab, t), error = function(e) NA_character_)
-    tab$kind[match(n, tab$track)]
-  }, character(1), USE.NAMES = FALSE)
-  # With one sample per track, a gone one in the slot of a track that takes none
-  # is such an error.
-  per_track_ok <- length(start_samples) != length(tracks) ||
-    length(tracks) == 1 ||
-    !any(start_samples %in% gone & !kind %in% c("sample", "comparison"))
-  if (length(gone) && is.null(start_samples) != is.null(start_comparison) &&
-      length(start_samples) %in% c(0, 1, length(tracks)) && per_track_ok) {
-    warning("Leaving out of the start view the sample",
-            if (length(gone) > 1) "s", " this project doesn't have: ",
-            paste(gone, collapse = ", "),
-            " (# start_samples: or # start_comparison:).",
-            call. = FALSE, immediate. = TRUE)
-    if (!is.null(start_samples)) {
-      drop <- rep_len(start_samples, length(tracks)) %in% gone &
-        kind %in% c("sample", "comparison")
-      start_samples <-
-        if (length(start_samples) == 1) NULL else start_samples[!drop]
-    } else {
-      start_comparison <- start_comparison[!start_comparison %in% gone]
-      drop <- kind %in% "comparison" |
-        (!length(start_comparison) & kind %in% "sample")
-      if (!length(start_comparison)) start_comparison <- NULL
-    }
-    tracks <- tracks[!drop]
-    if (!length(tracks)) return(NULL)
-  }
-  # "NA" for every track, all of them fixed (a copy written for such a view),
-  # means no samples at all; with a per-sample track among them the NA stays,
-  # and its "needs a sample" error.
-  fixed <- vapply(tracks, function(t) {
-    k <- tab$kind[tab$track == t]; length(k) > 0 && all(k == "fixed")
-  }, logical(1))
-  if (!is.null(start_samples) && all(is.na(start_samples)) && all(fixed))
-    start_samples <- NULL
-  keys <- .pt_resolve_tracks(tab, tracks, all_samples, start_samples,
-                             start_comparison, hdr("start_order") %||% "track")
-  # start_comparison's order (reference first) is the view's, with or without a
-  # comparison track.
-  .pt_start_view_of(items, keys, gene, unique(c(start_comparison, all_samples)))
-}
-
-# Start lines that give back the start view `sv` of project settings `cfg`,
-# checked by reading them back with .pt_txt_start_view(); none when no set of
-# them gives exactly that view (a Multi view of 2 samples, say). For the
-# project_samples.txt copy, so rebuilding the project from it restores the view
-# too.
-.pt_start_view_lines <- function(sv, cfg) {
-  samples <- load_samples_from_settings(cfg$samples, cfg$data_dir)
-  tab <- .pt_track_table(c(build_track_items(samples),
-                           build_comparison_track_items(samples)))
-  keys <- .pt_renamed_junctions_key(as.character(unlist(sv$tracks)))
-  i <- match(keys, tab$key)
-  if (!length(keys) || anyNA(i) || !is.character(sv$gene) ||
-      length(sv$gene) != 1)
-    return(character(0))
-  csv <- function(key, x) paste0("# ", key, ": ",
-                                 paste(ifelse(is.na(x), "NA", x),
-                                       collapse = ", "))
-  conds <- as.character(unlist(sv$conditions))
-  by_track <- csv("start_tracks", unique(tab$track[i]))
-  # No start_samples line when no track of the view takes a sample.
-  by_sample <- if (all(is.na(tab$sample[i])))
-    character(0) else csv("start_samples", tab$sample[i])
-  forms <- list(c(csv("start_tracks", tab$track[i]), by_sample),
-                c(by_track, csv("start_comparison", conds)),
-                c(by_track, csv("start_comparison", conds),
-                  "# start_order: sample"))
-  want <- .pt_start_view_entry(sv$view_mode, conds, sv$gene, keys)
-  for (f in forms) {
-    lines <- c(paste0("# start_gene: ", sv$gene), f)
-    got <- tryCatch(
-      suppressMessages(suppressWarnings(.pt_txt_start_view(lines, cfg))),
-      error = function(e) NULL
-    )
-    if (identical(got, want)) return(lines)
-  }
-  character(0)
 }
 
 #' @export
@@ -500,7 +354,7 @@ pt_samples <- function(proj) {
       cands <- list(list(tracks = nm, samples = smp, order = "track"))
     pair <- unique(smp[kind == "comparison"])
     if (length(pair) == 1) {
-      cmp <- c(sub(".* vs ", "", pair), sub(" vs .*", "", pair))
+      cmp <- c(sub(" vs .*", "", pair), sub(".* vs ", "", pair))
       # Each per-sample track once per run of adjacent ones (comparison =
       # repeats it).
       run <- cumsum(kind != "sample")
@@ -525,9 +379,9 @@ pt_samples <- function(proj) {
        "samples separately",
        if (length(ok)) paste0(". The same figure: ", ok[[1]]) else
          paste0(": samples = one sample for every track, or one per track (NA for tracks without ",
-                "one); comparison = c(reference, other) for comparison tracks, which then draws ",
+                "one); comparison = c(other, reference) for comparison tracks, which then draws ",
                 "per-sample tracks for both. See ?pt_figure"),
-       ". In a samples.txt, use # start_tracks: with # start_samples: or # start_comparison: lines.",
+       ".",
        call. = FALSE)
 }
 
@@ -565,18 +419,18 @@ pt_samples <- function(proj) {
   cmp <- unique(nms[kinds == "comparison"])
   if (length(cmp)) {
     ex  <- has_of(cmp[1])[1]
-    arg <- paste0("comparison = c(\"", sub(".* vs ", "", ex), "\", \"",
-                  sub(" vs .*", "", ex), "\")")
+    arg <- paste0("comparison = c(\"", sub(" vs .*", "", ex), "\", \"",
+                  sub(".* vs ", "", ex), "\")")
     if (!is.null(samples))
       stop("'", cmp[1],
            "' compares 2 samples, which samples = can't give: drop samples and set ",
-           arg, " (reference first).", call. = FALSE)
+           arg, " (reference second).", call. = FALSE)
     if (is.null(comparison))
       stop("'", cmp[1], "' compares 2 samples: set ", arg,
-           " (reference first).", call. = FALSE)
+           " (reference second).", call. = FALSE)
     if (length(comparison) != 2)
       stop("'", cmp[1],
-           "' compares 2 samples, so comparison needs exactly 2 (reference first); it has ",
+           "' compares 2 samples, so comparison needs exactly 2 (reference second); it has ",
            length(comparison), ".", call. = FALSE)
   }
 
@@ -641,7 +495,7 @@ pt_samples <- function(proj) {
     if (kinds[i] == "fixed") {
       keys <- c(keys, tab$key[tab$track == nms[i]][1])
     } else if (kinds[i] == "comparison") {
-      pair <- paste(comparison[2], "vs", comparison[1])
+      pair <- paste(comparison[1], "vs", comparison[2])
       k <- key_of(nms[i], pair)
       if (is.na(k))
         stop("No '", nms[i], "' track for ", pair, ". Pairs that have it: ",
@@ -682,9 +536,10 @@ pt_samples <- function(proj) {
 #' * `samples` as long as `tracks`: track i shows sample i, with `NA` for tracks
 #'   that need no sample, e.g.
 #'   `tracks = c("genes", "atac", "atac"), samples = c(NA, "K562", "GM12878")`;
-#' * `comparison = c("GM12878", "K562")`: every per-sample track for those
+#' * `comparison = c("K562", "GM12878")`: every per-sample track for those
 #'   samples, in that order. A comparison track (such as `junctions_diff`) needs
-#'   exactly 2 here and compares the second against the first, the reference.
+#'   exactly 2 here and compares the first against the second, the reference
+#'   ("K562 vs GM12878", as its heading writes it).
 #'
 #' Tracks and samples can also be given by number: tracks by their `id` in
 #' [pt_tracks()], samples by their row in `samples.txt` ([pt_samples()]).
@@ -700,7 +555,7 @@ pt_samples <- function(proj) {
 #'   `NULL` (the default): every sample.
 #' @param comparison Instead of `samples`: the samples to repeat every
 #'   per-sample track over, in order; with a comparison track, exactly 2, the
-#'   reference first.
+#'   reference second.
 #' @param region Instead of `gene`: a region such as
 #'   `"chr1:198,600,000-198,760,000"`.
 #' @param title Figure title.
@@ -728,7 +583,7 @@ pt_samples <- function(proj) {
 #'
 #' # Two samples and their comparison (K562 against the reference GM12878), grouped by sample:
 #' pt_figure(proj, "PSME2", c("atac", "junctions", "junctions_diff", "genes"),
-#'           comparison = c("GM12878", "K562"), order = "sample")
+#'           comparison = c("K562", "GM12878"), order = "sample")
 #' @export
 pt_figure <- function(proj, gene = NULL, tracks = "genes", samples = NULL,
                       comparison = NULL, region = NULL, title = "",
@@ -962,12 +817,11 @@ pt_stitch <- function(figs, file, ncol = 1, dpi = 300) {
 #' `ggsave()` a page somewhat bigger than the figures (margins, tags).
 #' [grid::grid.draw()] also draws a [pt_figure()] directly.
 #'
-#' Save a composition with a cairo device, e.g.
-#' `ggsave("both.pdf", device = cairo_pdf)`. R's own `pdf()` and `postscript()`
-#' devices know only a few fonts (not the default DejaVu Sans): drawing the
-#' grob on them warns and stops with that advice. Under patchwork, which drops
-#' errors raised while it draws, only the warning shows and the saved page is
-#' blank.
+#' R's own `pdf()` and `postscript()` devices (a plain `ggsave("both.pdf")`
+#' uses `pdf()`) know only a few fonts, not the default DejaVu Sans: on them
+#' the figure's text is drawn in the device's own font (usually Helvetica),
+#' with a message. For the figure's own font, save with a cairo device, e.g.
+#' `ggsave("both.pdf", device = cairo_pdf)`.
 #'
 #' @param fig A [pt_figure()].
 #' @return A grob of class `pt_grob`, with the figure's `width` and `height` in
@@ -983,8 +837,7 @@ pt_stitch <- function(figs, file, ncol = 1, dpi = 300) {
 #'   both <- patchwork::wrap_elements(full = g) + p +
 #'     patchwork::plot_layout(widths = grid::unit(c(g$width, 1), c("in", "null")))
 #'   ggplot2::ggsave(file.path(tempdir(), "both.pdf"), both,
-#'                   width = g$width + 4.5, height = g$height + 0.5,
-#'                   device = grDevices::cairo_pdf)
+#'                   width = g$width + 4.5, height = g$height + 0.5)
 #' }
 #' @export
 pt_grob <- function(fig) {
@@ -1011,18 +864,23 @@ drawDetails.pt_grob <- function(x, recording) {
   # Named after the grob (grid numbers every grob), so it differs from any
   # other pt_grob's while both are drawn.
   vp <- paste0("pt_grob_", x$name)
-  # R's pdf() and postscript() devices draw only the fonts in their own lists;
-  # checked before drawing anything (their warning text is translated).
+  # R's pdf() and postscript() devices draw only the fonts in their own lists
+  # (not the default DejaVu Sans; they would warn and draw nothing): the
+  # figure's other fonts are drawn in the device's own font instead (Helvetica
+  # unless its family is set). postscript() draws only its own family (and its
+  # `fonts`), whatever postscriptFonts() lists, so on it every font is swapped.
+  # Text keeps the places measured for the figure's own font.
   dev <- names(grDevices::dev.cur())
   known <- switch(dev, pdf = names(grDevices::pdfFonts()),
                   postscript = names(grDevices::postscriptFonts()))
-  if (!is.null(known) && length(x$font) && nzchar(x$font) && !x$font %in% known) {
-    msg <- paste0("R's ", dev, "() device cannot draw the figure's font (", x$font,
-                  "): draw it on a cairo device, e.g. ggsave(..., device = cairo_pdf).")
-    # A warning as well: patchwork's print() drops errors raised while it draws.
-    warning(msg, call. = FALSE)
-    stop(msg, call. = FALSE)
-  }
+  missing <- !is.null(known) && length(x$font) && nzchar(x$font) &&
+    !x$font %in% known
+  if (missing)
+    message("R's ", dev, "() device has no ", x$font, ": the figure is drawn in ",
+            "the device's font (usually Helvetica). For ", x$font, ", save with ",
+            "a cairo device, e.g. ggsave(..., device = cairo_pdf).")
+  if (missing || identical(dev, "postscript"))
+    x$steps <- .pt_known_fonts(x$steps, if (dev == "pdf") known else character(0))
   # The device's defaults the figure was drawn with: settings of the viewport
   # around it (a cex, a bold face) would otherwise change its text. cex and lex
   # multiply down the viewports, so they are divided by the current ones; alpha
@@ -1045,6 +903,19 @@ drawDetails.pt_grob <- function(x, recording) {
   # grid.draw() each step would reset the graphical parameters after it, and
   # the genes track's labels would lose the font of the viewport around them.
   for (step in x$steps) eval(step$expr, step$list, getNamespace("grid"))
+}
+
+# `x` (recorded drawing steps, grobs, viewports, gpars) with every font family
+# not in `known` replaced by "", the device's own.
+.pt_known_fonts <- function(x, known) {
+  if (inherits(x, "gpar")) {
+    fam <- x$fontfamily
+    if (!is.null(fam)) x$fontfamily[!fam %in% known] <- ""
+  } else if (is.list(x)) {
+    for (i in seq_along(x))
+      if (!is.null(x[[i]])) x[[i]] <- .pt_known_fonts(x[[i]], known)
+  }
+  x
 }
 
 #' @exportS3Method grid::widthDetails
@@ -1192,98 +1063,10 @@ pt_example <- function(dataset = c("mammary", "human")) {
               "samples.txt", package = "PlotTrellis", mustWork = TRUE)
 }
 
-#' Open the app with a figure preloaded
-#'
-#' Makes `fig` the starting view of `proj`'s app: the next [run_plottrellis()]
-#' on this project opens with the same gene, sample(s) and tracks already
-#' picked, so Generate figure is the only click. Use it to hand a ready-to-go
-#' project to someone who doesn't code. Saving the app's wizard keeps it while
-#' the GTF, the OrgDb and the samples and tracks it shows (by name) are all
-#' still there, and clears it otherwise. An Import in the wizard replaces it by
-#' the imported samples.txt's start lines (none: no view); the
-#' project_samples.txt copy beside the settings carries it as such lines.
-#'
-#' Only the classic screen opens on the starting view. The screen for
-#' experienced users (`run_plottrellis(experienced = TRUE)`) always opens
-#' empty; its gene box offers the genes of a samples.txt's
-#' `# suggested_genes:` line.
-#'
-#' @param proj A [pt_project()].
-#' @param fig A [pt_figure()] of `proj`, made with `gene =` (a `region =` view
-#'   isn't preloaded).
-#' @return `proj`'s folder, invisibly, for [run_plottrellis()].
-#' @examples
-#' proj <- pt_project(file.path(tempdir(), "pt-example-human"),
-#'                    pt_example("human"))
-#' pt_preload(proj, pt_figure(proj, "PSME2", c("genes", "atac", "junctions")))
-#' \dontrun{
-#' run_plottrellis(proj)
-#' }
-#' @export
-pt_preload <- function(proj, fig) {
-  stopifnot(inherits(proj, "pt_project"), inherits(fig, "pt_figure"))
-  # A figure kept from before project_dir was recorded has none: not checked.
-  if (!is.null(fig$project_dir) && !identical(fig$project_dir, proj$dir))
-    stop("fig was made from another project (", fig$project_dir,
-         "): make it with pt_figure() on this one.", call. = FALSE)
-  if (is.na(fig$gene))
-    stop("pt_preload() needs a figure made with gene =.", call. = FALSE)
-  proj <- .pt_renamed_junctions_project(proj)
-  .pt_start_view(proj$dir, proj$items, .pt_renamed_junctions_key(fig$keys),
-                 fig$gene, names(proj$colours))
-  invisible(proj$dir)
-}
-
-# The app's mode follows the sample count: 1 = One, 2 = Two (reference first,
-# as a comparison track has it), more = Multi, which has no comparison tracks.
-.pt_start_view <- function(dir, items, keys, gene, sample_order) {
-  sv <- .pt_start_view_of(items, keys, gene, sample_order)
-  .pt_write_start_view(dir, sv$view_mode, unlist(sv$conditions), sv$gene,
-                       unlist(sv$tracks))
-}
-
-# The start view itself, as project_settings.json holds it (see
-# .pt_start_view()).
-.pt_start_view_of <- function(items, keys, gene, sample_order) {
-  sel <- items[keys]
-  cmp <- Filter(function(it) !is.null(it$samples), sel)
-  conds <- if (length(cmp)) cmp[[1]]$samples else character(0)
-  conds <- unique(c(conds, intersect(sample_order,
-                                     unlist(lapply(sel, `[[`, "sample")))))
-  mode <- if (length(conds) == 1)
-    "single" else if (length(conds) == 2) "two" else "compose"
-  if (mode == "compose" && length(cmp)) {
-    warning("The app's Multi mode (3+ samples) has no comparison tracks; preloading without them.",
-            call. = FALSE)
-    keys <- keys[!keys %in% names(cmp)]
-  }
-  .pt_start_view_entry(mode, if (mode == "compose") character(0) else conds,
-                       gene, keys)
-}
-
-.pt_start_view_entry <- function(view_mode, conditions, gene, keys)
-  list(view_mode = view_mode, conditions = as.list(conditions), gene = gene,
-       tracks = as.list(keys))
-
-# Adds start_view (read by .pt_composer_app()'s START_VIEW) to a project's
-# settings.
-.pt_write_start_view <- function(dir, view_mode, conditions, gene, keys) {
-  json <- file.path(dir, "project_settings.json")
-  settings <- jsonlite::read_json(json)
-  settings$start_view <- .pt_start_view_entry(view_mode, conditions, gene, keys)
-  writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE,
-                              null = "null", digits = NA),
-             json)
-  # And the project_samples.txt copy, which then carries the view too (a failure
-  # is ignored).
-  .pt_write_samples_copy(settings, json)
-  invisible()
-}
-
-# The junction track's viz key used to be "sashimi". A saved start view can
-# still hold its item keys ("sashimi_<name>_<sample>") and a saved pt_figure its
-# entries' viz ("sashimi"); this gives their "junctions" equivalents. NULL (no
-# tracks) stays NULL.
+# The junction track's viz key used to be "sashimi". A saved pt_figure can
+# still hold its item keys ("sashimi_<name>_<sample>") and its entries' viz
+# ("sashimi"); this gives their "junctions" equivalents. NULL (no tracks) stays
+# NULL.
 .pt_renamed_junctions_key <- function(keys) {
   if (is.null(keys)) return(NULL)
   sub("^sashimi(_|$)", "junctions\\1", keys)

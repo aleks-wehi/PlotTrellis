@@ -61,31 +61,6 @@ test_that("sample-free tracks keep their labels and order (FIXED_ITEMS)", {
   ))
 })
 
-test_that("the app's filter buttons and type-to-filter map are the hand-kept ones", {
-  map <- .pt_type_filters(infos())
-  expect_setequal(names(map), EXISTING)
-  # COMPARISON_VIZ_TYPES_JS and ANNOTATION_VIZ_TYPES_JS; every other type was its own filter.
-  expect_setequal(names(Filter(function(f) f == "comparison", map)),
-                  c("bw_diff_stacked", "junctions_mirrored_diff", "junctions_mirrored_diff_tpm_scaled"))
-  expect_setequal(names(Filter(function(f) f == "annotation", map)),
-                  c("genes", "transcripts", "transcripts_all", "transcripts_annotated", "protein_domains"))
-  other <- Filter(function(f) !f %in% c("comparison", "annotation"), map)
-  expect_identical(unlist(other), setNames(names(other), names(other)))
-  # The buttons, written out by hand.
-  old <- tagList(
-    conditionalPanel("input.view_mode === 'two'",
-      tags$button("Comparisons", class = "btn btn-lg btn-default filter-btn", `data-filter` = "comparison")
-    ),
-    tags$button("Annotations", class = "btn btn-lg btn-default filter-btn", `data-filter` = "annotation"),
-    tags$button("BED",         class = "btn btn-lg btn-default filter-btn", `data-filter` = "bed"),
-    tags$button("Coverage",    class = "btn btn-lg btn-default filter-btn", `data-filter` = "bw"),
-    tags$button("HiC",         class = "btn btn-lg btn-default filter-btn", `data-filter` = "hic"),
-    tags$button("Junctions",   class = "btn btn-lg btn-default filter-btn", `data-filter` = "junctions"),
-    tags$button("TPMs",        class = "btn btn-lg btn-default filter-btn", `data-filter` = "tpm_usage")
-  )
-  expect_identical(as.character(tagList(.pt_filter_buttons(infos()))), as.character(old))
-})
-
 # Two samples with one of every data type (named as in the human test data), and two whose
 # data of four types share one name. Paths need not exist.
 fake_rows <- function() lapply(c("A", "B"), function(s) list(display = s, data = list(
@@ -299,7 +274,9 @@ test_that("a malformed declaration stops with an error naming the module and the
                "info_toy() has an unknown field 'scalebar'", fixed = TRUE)
   expect_error(info_of(list(kind = "sample", data_type = "bw", scale_bar = "yes")), "info_toy() field 'scale_bar'",
                fixed = TRUE)
-  expect_error(info_of(list(kind = "fixed", filter = "Annotations")), "info_toy() field 'filter'", fixed = TRUE)
+  # The removed filter field (the earlier screen's filter buttons) is an unknown field now.
+  expect_error(info_of(list(kind = "fixed", filter = c(annotation = "Annotations"))),
+               "info_toy() has an unknown field 'filter'", fixed = TRUE)
   expect_error(info_of(list(kind = "fixed", order = "first")), "info_toy() field 'order'", fixed = TRUE)
   # A sample-free track needs no data type; the defaults are filled in.
   ok <- info_of(list(kind = "fixed"))
@@ -307,11 +284,7 @@ test_that("a malformed declaration stops with an error naming the module and the
                    list(label = "toy", api = "toy", scale_bar = FALSE, row_panel = FALSE, needs_gene = FALSE))
 })
 
-test_that("a declaration without both module functions, or two labels for one filter button, is an error", {
-  two <- list(a = .pt_viz_info("bw"), b = .pt_viz_info("hic"))
-  two$b$filter <- c(bw = "Signal")
-  expect_error(.pt_filter_buttons(two), "filter button 'bw' has two labels: Coverage, Signal", fixed = TRUE)
-  expect_error(.pt_check_filter_labels(two), "filter button 'bw' has two labels: Coverage, Signal", fixed = TRUE)
+test_that("a declaration without both module functions is an error", {
   # Every module but bed has both functions: bed's declaration is then the only orphan.
   keys <- setdiff(.pt_viz_keys(), "bed")
   local_mocked_bindings(.pt_viz_keys = function() keys)
@@ -444,13 +417,4 @@ test_that("every track type draws a one-track figure without 'track failed'", {
     expect_false(any(grepl("track failed", msgs)), info = key)
     expect_false(any(grepl("track failed", readLines(svg, warn = FALSE))), info = key)
   }
-})
-
-# ---- added since ---------------------------------------------------------------------------
-
-test_that("a declaration without both module functions is an error", {
-  # Every module but bed has both functions: bed's declaration is then the only orphan.
-  keys <- setdiff(.pt_viz_keys(), "bed")
-  local_mocked_bindings(.pt_viz_keys = function() keys)
-  expect_error(.pt_viz_infos(), "info_bed() is defined but settings_bed() and render_bed() are not both", fixed = TRUE)
 })

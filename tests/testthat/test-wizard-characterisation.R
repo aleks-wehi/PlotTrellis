@@ -1232,24 +1232,6 @@ test_that("a Save whose samples copy can't be written still saves, and says so",
   expect_identical(jsonlite::fromJSON(ch_json(proj))$genome_label, "mm39")
 })
 
-test_that("a Save of an import whose start lines don't fit notes it in the saved dialog", {
-  skip_if_not_installed("org.Mm.eg.db")
-  proj <- ch_project(); on.exit(unlink(proj, recursive = TRUE), add = TRUE)
-  rec <- ch_mocks()
-  txt <- ch_txt(c("# start_gene: Elf5", "# start_tracks: DNase", "condition\tcolour\tbw:ATAC", "Ba\t#1B9E77\tatac/a.bw"))
-  shiny::testServer(ch_server(proj), {
-    session$setInputs(wiz_import_path = txt, wiz_import_load = 1)
-    ch_good_genome(session, proj)
-    expect_message(expect_message(session$setInputs(wiz_save = 1), "start lines: "), "settings saved")
-    m <- ch_last_modal(rec)
-    expect_match(m, '<p class="wiz-warn">', fixed = TRUE)
-    expect_match(m, "The imported samples.txt's # start_gene: / # start_tracks: lines don't fit its samples, so the app opens with no gene or tracks picked.", fixed = TRUE)
-    expect_match(m, "Leaving out of the start view the track this project doesn't have: DNase (# start_tracks:).", fixed = TRUE)
-    expect_match(m, "DNase", fixed = TRUE)
-  })
-  expect_false("start_view" %in% names(jsonlite::fromJSON(ch_json(proj))))
-})
-
 test_that("a Save into a folder that can't be written keeps the session, and Back clears the message", {
   proj <- ch_project()
   on.exit({ Sys.chmod(proj, "0755"); unlink(proj, recursive = TRUE) }, add = TRUE)

@@ -57,11 +57,9 @@ test_that("the protein-domain cache is per loaded genome, so a replaced GTF is l
   f1 <- .pd_cache_file(pd_dir, "mm10", old_meta, "G")
   expect_match(f1, file.path("mm10", basename(dirname(old_meta)), "G.rds"), fixed = TRUE)
   expect_true(file.exists(f1))
-  expect_true(.pt_gi_pd_cached("G", "mm10", old_meta, pd_dir))
 
   replace_gtf(gtf, "# release 2, with a renamed transcript")
   new_meta <- meta_for()
-  expect_false(.pt_gi_pd_cached("G", "mm10", new_meta, pd_dir))
   local_mocked_bindings(.uniprot_read_lines = function(url) stop("looked up again"))
   r2 <- lookup(new_meta)
   expect_identical(r2$status, "error")

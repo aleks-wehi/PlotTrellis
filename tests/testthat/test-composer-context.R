@@ -1,6 +1,6 @@
-# The composer's startup context (R/app-context.R). The settings checks stop before
-# the genome loads (ensure_genome_ready() is replaced by a stop), so they need no genome;
-# the full context is built from the bundled mammary example, as test-filter-buttons.R does.
+# The app's startup context (R/app-context.R). The settings checks stop before the
+# genome loads (ensure_genome_ready() is replaced by a stop), so they need no genome; the
+# full context is built from the bundled mammary example.
 
 # Settings for a context call that never gets as far as the genome.
 pre_genome_cfg <- function(...) modifyList(list(gtf_path = "/no/such.gtf", orgdb = "org.Mm.eg.db",
@@ -87,8 +87,8 @@ test_that("a blank genome label stops before the genome loads", {
 test_that("the example's context holds every startup field, built from its settings", {
   ex <- example_ctx(); ctx <- ex$ctx
   expect_named(ctx, c("SETTINGS_JSON", "CFG", "PROJECT_DIR", "CACHE_DIR", "GENOME", "ORGDB_PKG", "txdb", "CDS_BY_TX",
-                      "CHR_LENGTHS", "SAMPLES_DF", "AVAILABLE_CONDITIONS", "TRACK_ITEMS", "ALL_GENES", "RENDER_CFG",
-                      "DEFAULT_SAMPLE_COLS", "START_VIEW", "COMPOSE_AVAILABLE_KEYS", "GENE_REQUIRED_TYPES"))
+                      "CHR_LENGTHS", "SAMPLES_DF", "TRACK_ITEMS", "ALL_GENES", "RENDER_CFG", "DEFAULT_SAMPLE_COLS",
+                      "GENE_REQUIRED_TYPES"))
   expect_identical(ctx$SETTINGS_JSON, ex$json)
   expect_identical(ctx$PROJECT_DIR, dirname(ex$json))
   expect_identical(ctx$CACHE_DIR, file.path(dirname(ex$json), "cache"))
@@ -98,14 +98,13 @@ test_that("the example's context holds every startup field, built from its setti
   expect_s4_class(ctx$txdb, "TxDb")
 })
 
-test_that("the example's conditions, colours and track items agree", {
+test_that("the example's samples, colours and track items agree", {
   ctx <- example_ctx()$ctx
-  expect_identical(ctx$AVAILABLE_CONDITIONS, vapply(ctx$SAMPLES_DF, `[[`, "", "display"))
-  expect_true(length(ctx$AVAILABLE_CONDITIONS) >= 2)
-  expect_identical(names(ctx$DEFAULT_SAMPLE_COLS), ctx$AVAILABLE_CONDITIONS)
+  samples <- vapply(ctx$SAMPLES_DF, `[[`, "", "display")
+  expect_true(length(samples) >= 2)
+  expect_identical(names(ctx$DEFAULT_SAMPLE_COLS), samples)
   expect_identical(ctx$TRACK_ITEMS, c(build_track_items(ctx$SAMPLES_DF), build_comparison_track_items(ctx$SAMPLES_DF)))
   expect_true("genes" %in% names(ctx$TRACK_ITEMS))
-  expect_identical(ctx$COMPOSE_AVAILABLE_KEYS, .pt_compose_available_keys(ctx$TRACK_ITEMS))
   expect_identical(ctx$GENE_REQUIRED_TYPES, .pt_gene_required_types())
 })
 
@@ -118,38 +117,4 @@ test_that("the example's chromosome lengths and gene list come from the genome",
   expect_type(ctx$ALL_GENES, "character")
   expect_false(is.unsorted(ctx$ALL_GENES))
   expect_true(length(ctx$ALL_GENES) > 1000)
-})
-
-test_that("the start view keeps known tracks in order, repeats of Gene annotation only", {
-  ex <- example_ctx()
-  keys <- setdiff(names(ex$ctx$TRACK_ITEMS), "genes")[1:2]
-  cfg <- ex$cfg
-  cfg$start_view <- list(view_mode = list("compose"),
-                         tracks = list("genes", keys[1], "no_such_track", keys[1], "genes", keys[2], "sashimi_gone"))
-  ctx <- suppressMessages(.pt_composer_context(ex$json, cfg))
-  # Lists are unlisted; unknown keys (and an old junctions key still unknown once renamed)
-  # dropped; a repeated track kept once, a repeated Gene annotation kept.
-  expect_identical(ctx$START_VIEW$view_mode, "compose")
-  expect_identical(ctx$START_VIEW$tracks, c("genes", keys[1], "genes", keys[2]))
-})
-
-test_that("no start view, or one that is not a list, gives NULL", {
-  ex <- example_ctx()
-  cfg <- ex$cfg
-  cfg$start_view <- NULL
-  expect_null(suppressMessages(.pt_composer_context(ex$json, cfg))$START_VIEW)
-  cfg$start_view <- "compose"
-  expect_null(suppressMessages(.pt_composer_context(ex$json, cfg))$START_VIEW)
-})
-
-# ---- added since ---------------------------------------------------------------------------
-
-test_that("the example's samples, colours and track items agree", {
-  ctx <- example_ctx()$ctx
-  samples <- vapply(ctx$SAMPLES_DF, `[[`, "", "display")
-  expect_true(length(samples) >= 2)
-  expect_identical(names(ctx$DEFAULT_SAMPLE_COLS), samples)
-  expect_identical(ctx$TRACK_ITEMS, c(build_track_items(ctx$SAMPLES_DF), build_comparison_track_items(ctx$SAMPLES_DF)))
-  expect_true("genes" %in% names(ctx$TRACK_ITEMS))
-  expect_identical(ctx$GENE_REQUIRED_TYPES, .pt_gene_required_types())
 })

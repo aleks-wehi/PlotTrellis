@@ -293,7 +293,7 @@ test_that("a script of every track type in the human example runs alone with Rsc
   proj <- suppressWarnings(pt_project(file.path(tempdir(), "pt-test-script-human"), pt_example("human")))
   tracks <- unique(pt_tracks(proj)$track)
   expect_true(all(c("junctions", "junctions_diff", "atac_diff") %in% tracks))
-  fig <- pt_figure(proj, "PSME2", tracks, comparison = c("GM12878", "K562"))
+  fig <- pt_figure(proj, "PSME2", tracks, comparison = c("K562", "GM12878"))
 
   run_dir <- tempfile("pt-script-run-")
   dir.create(run_dir)

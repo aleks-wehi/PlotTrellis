@@ -1,24 +1,11 @@
-# The composer's project actions: the two top-bar buttons (Edit project
-# settings, Close app) and the dialogs behind them, Reset project configuration
-# and Clear all caches included. Lifted out of .pt_composer_app() as the pattern
-# for splitting that closure (the same shape as
-# .pt_gene_info_ui()/.pt_gene_info_server()): a top-level function that takes
-# the session objects and only the state it reads, keeps every input id (the
-# inline JS, the browser drivers and the tests address them by id), and tests on
-# its own with no genome.
+# The app's project actions: the dialogs behind the page's Edit project
+# settings button, Reset project configuration and Clear all caches included.
+# A top-level function that takes the session objects and only the state it
+# reads, keeps every input id (the page, the browser drivers and the tests
+# address them by id), and tests on its own with no genome.
 
-# The buttons fixed to the top-right of the title bar via CSS (#topbar-actions).
-.pt_project_actions_ui <- function() {
-  div(id = "topbar-actions",
-    actionButton("open_settings", "Edit project settings \u25B8",
-                 class = "btn-default btn-sm pt-once"),
-    actionButton("close_app_btn", "Close app",
-                 class = "btn-default btn-sm pt-once")
-  )
-}
-
-# The warning shown in the Edit project settings / Clear caches / Close app
-# confirms while the Figure settings have unsaved changes; NULL (nothing shown)
+# The warning shown in the Edit project settings and Clear caches confirms
+# while the Figure settings have unsaved changes; NULL (nothing shown)
 # otherwise.
 .pt_unsaved_settings_note <- function(dirty) {
   if (isTRUE(dirty))
@@ -27,14 +14,10 @@
       " Use Save as project default first to keep them.")
 }
 
-# `unsaved_settings_note` is the composer's zero-argument function returning
-# that warning (it stays defined in the composer closure, where a test reads
-# it); the three paths are the project's. `experienced`: TRUE on the screen for
-# experienced users, whose one button for all of this reads "Project settings"
-# and whose dialog also holds the light / dark switch.
+# `unsaved_settings_note` is the server's zero-argument function returning
+# that warning; the three paths are the project's.
 .pt_project_actions_server <- function(input, session, unsaved_settings_note,
-                                       project_dir, settings_json, cache_dir,
-                                       experienced = FALSE) {
+                                       project_dir, settings_json, cache_dir) {
 
   # ── Settings (re-enter wizard) ──────────────────────────────────────────────
   # Editing settings stops this app and restarts into the wizard, a separate app
@@ -45,18 +28,9 @@
   # in it) and, in a collapsed Advanced section, Clear all caches and Reset
   # project configuration.
   observeEvent(input$open_settings, {
-    folder <- p("Project folder: ", tags$code(project_dir))
-    advanced <- tags$details(id = "settings_advanced",
-      tags$summary(class = "btn btn-default btn-sm", "Advanced"),
-      p("Everything this project keeps (settings and caches) is in its project folder. Your data files are never changed."),
-      actionButton("clear_caches_btn", "Clear all caches...",
-                   class = "btn-warning btn-sm pt-once"),
-      actionButton("reset_project_btn", "Reset project configuration...",
-                   class = "btn-danger btn-sm pt-once")
-    )
-    if (isTRUE(experienced)) showModal(modalDialog(
+    showModal(modalDialog(
       title = "Project settings", easyClose = FALSE,
-      folder,
+      p("Project folder: ", tags$code(project_dir)),
       # Light or dark: the page's script (inst/www/main/main.js) sets this switch
       # to the mode on screen when the dialog shows, and acts on it.
       div(class = "pt-setrow", span("Appearance"),
@@ -65,18 +39,16 @@
               span("Light"), span("Dark"))),
       p("Edit settings restarts the app into the setup wizard, pre-filled with your current settings. Any in-progress figure/selection in this session will be lost."),
       unsaved_settings_note(),
-      advanced,
+      tags$details(id = "settings_advanced",
+        tags$summary(class = "btn btn-default btn-sm", "Advanced"),
+        p("Everything this project keeps (settings and caches) is in its project folder. Your data files are never changed."),
+        actionButton("clear_caches_btn", "Clear all caches...",
+                     class = "btn-warning btn-sm pt-once"),
+        actionButton("reset_project_btn", "Reset project configuration...",
+                     class = "btn-danger btn-sm pt-once")
+      ),
       footer = tagList(modalButton("Close"),
                        actionButton("confirm_edit_settings", "Edit settings",
-                                    class = "btn-primary pt-once"))
-    )) else showModal(modalDialog(
-      title = "Edit project settings?", easyClose = FALSE,
-      p("This restarts the app into the setup wizard, pre-filled with your current settings. Any in-progress figure/selection in this session will be lost."),
-      unsaved_settings_note(),
-      folder,
-      advanced,
-      footer = tagList(modalButton("Cancel"),
-                       actionButton("confirm_edit_settings", "Continue",
                                     class = "btn-primary pt-once"))
     ))
   })
@@ -140,36 +112,10 @@
     later::later(function() stopApp(returnValue = "restart"), 0.2)
   }, ignoreInit = TRUE)
 
-  # ── Close app ───────────────────────────────────────────────────────────────
-  # Same confirm-then-delayed-stopApp() pattern as reset/edit-settings, but
-  # with a returnValue that ISN'T "restart"/"edit_settings", so
-  # run_plottrellis()'s loop returns instead of relaunching: this actually
-  # ends the app, not just the tab. Manual only -- no auto-stop on tab close/
-  # disconnect, since a flaky connection dropping and reconnecting would
-  # otherwise kill the app out from under the user.
-  observeEvent(input$close_app_btn, {
-    showModal(modalDialog(
-      title = "Close app?", easyClose = FALSE,
-      p("This stops the R process running this app. You'll need to relaunch it to use PlotTrellis again."),
-      unsaved_settings_note(),
-      footer = tagList(modalButton("Cancel"),
-                       actionButton("confirm_close_app", "Close app",
-                                    class = "btn-primary pt-once"))
-    ))
-  })
-
-  observeEvent(input$confirm_close_app, {
-    showModal(modalDialog(
-      title = "App closed", easyClose = FALSE, footer = NULL,
-      p("You can close this browser tab now.")
-    ))
-    later::later(function() stopApp(returnValue = "closed"), 0.2)
-  }, ignoreInit = TRUE)
-
   # ── Clear all caches ────────────────────────────────────────────────────────
   # Deletes the project's cache/ folder and nothing else (never files beside the
   # GTF or in data folders); project_settings.json is left alone, so the restart
-  # goes straight back into the composer, and each cache rebuilds on next use.
+  # goes straight back into the app, and each cache rebuilds on next use.
   observeEvent(input$clear_caches_btn, {
     showModal(modalDialog(
       title = "Clear all caches?", easyClose = FALSE,

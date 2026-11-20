@@ -1,5 +1,5 @@
 info_hic <- function() list(
-  kind = "sample", data_type = "hic", order = 20, filter = c(hic = "HiC"),
+  kind = "sample", data_type = "hic", order = 20,
   scale_bar = TRUE,
   entry_settings = "hic_style"
 )

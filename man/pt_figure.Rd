@@ -19,27 +19,29 @@ pt_figure(
 \arguments{
 \item{proj}{A \code{\link[=pt_project]{pt_project()}}.}
 
-\item{gene}{A gene symbol (any case) or Ensembl gene ID. The view is the gene plus the
-project's flank setting on each side.}
+\item{gene}{A gene symbol (any case) or Ensembl gene ID. The view is the gene
+plus the project's flank setting on each side.}
 
 \item{tracks}{Track names (or numbers, see \code{\link[=pt_tracks]{pt_tracks()}}), top to bottom.}
 
-\item{samples}{Which sample each per-sample track shows: one name (or number) for all of
-them, or one per track (\code{NA} for tracks without a sample). \code{NULL} (the default): every
-sample.}
+\item{samples}{Which sample each per-sample track shows: one name (or number)
+for all of them, or one per track (\code{NA} for tracks without a sample).
+\code{NULL} (the default): every sample.}
 
-\item{comparison}{Instead of \code{samples}: the samples to repeat every per-sample track over,
-in order; with a comparison track, exactly 2, the reference first.}
+\item{comparison}{Instead of \code{samples}: the samples to repeat every
+per-sample track over, in order; with a comparison track, exactly 2, the
+reference second.}
 
-\item{region}{Instead of \code{gene}: a region such as \code{"chr1:198,600,000-198,760,000"}.}
+\item{region}{Instead of \code{gene}: a region such as
+\code{"chr1:198,600,000-198,760,000"}.}
 
 \item{title}{Figure title.}
 
-\item{order}{When a track is repeated over samples: \code{"track"} (all samples of one track,
-then the next track) or \code{"sample"} (all of one sample's tracks, then the next sample's).
-Grouping applies to per-sample tracks written next to each other: tracks without a
-sample and comparison tracks stay where they are written and split the groups, so write
-them first or last.}
+\item{order}{When a track is repeated over samples: \code{"track"} (all samples of
+one track, then the next track) or \code{"sample"} (all of one sample's tracks,
+then the next sample's). Grouping applies to per-sample tracks written next
+to each other: tracks without a sample and comparison tracks stay where
+they are written and split the groups, so write them first or last.}
 
 \item{...}{Not used; an old \verb{parallel =} stops with what to write instead.}
 }
@@ -47,47 +49,53 @@ them first or last.}
 A \code{pt_figure}.
 }
 \description{
-Picks a gene (or region) and the tracks to show, in order, top to bottom. Nothing is
-drawn until the figure is printed, saved with \code{\link[=pt_save]{pt_save()}}, or exported with
-\code{\link[=pt_script]{pt_script()}}.
+Picks a gene (or region) and the tracks to show, in order, top to bottom.
+Nothing is drawn until the figure is printed, saved with \code{\link[=pt_save]{pt_save()}}, or
+exported with \code{\link[=pt_script]{pt_script()}}.
 }
 \details{
 Track names are the ones \code{\link[=pt_tracks]{pt_tracks()}} lists: \code{genes}, \code{transcripts},
-\code{transcripts_all}, \code{transcripts_annotated} and \code{protein_domains} need no sample. The
-others are named after your \code{samples.txt}'s columns (\code{bw:atac} gives \code{atac};
-\verb{quantdir:} gives \code{transcript_expression} (\code{transcript_counts}, its old name, still works);
-comparisons get a \verb{_diff} suffix, such as \code{junctions_diff}).
+\code{transcripts_all}, \code{transcripts_annotated} and \code{protein_domains} need no
+sample. The others are named after your \code{samples.txt}'s columns (\code{bw:atac}
+gives \code{atac}; \verb{quantdir:} gives \code{transcript_expression} (\code{transcript_counts},
+its old name, still works); comparisons get a \verb{_diff} suffix, such as
+\code{junctions_diff}).
 
 Which samples a per-sample track shows:
 \itemize{
 \item neither \code{samples} nor \code{comparison}: every sample, in \code{samples.txt} order;
 \item \code{samples = "K562"}: that one sample for every track;
-\item \code{samples} as long as \code{tracks}: track i shows sample i, with \code{NA} for tracks that need
-no sample, e.g. \verb{tracks = c("genes", "atac", "atac"), samples = c(NA, "K562", "GM12878")};
-\item \code{comparison = c("GM12878", "K562")}: every per-sample track for those samples, in that
-order. A comparison track (such as \code{junctions_diff}) needs exactly 2 here and compares
-the second against the first, the reference.
+\item \code{samples} as long as \code{tracks}: track i shows sample i, with \code{NA} for tracks
+that need no sample, e.g.
+\verb{tracks = c("genes", "atac", "atac"), samples = c(NA, "K562", "GM12878")};
+\item \code{comparison = c("K562", "GM12878")}: every per-sample track for those
+samples, in that order. A comparison track (such as \code{junctions_diff}) needs
+exactly 2 here and compares the first against the second, the reference
+("K562 vs GM12878", as its heading writes it).
 }
 
-Tracks and samples can also be given by number: tracks by their \code{id} in \code{\link[=pt_tracks]{pt_tracks()}},
-samples by their row in \code{samples.txt} (\code{\link[=pt_samples]{pt_samples()}}). Numbers change when
-\code{samples.txt} does, so use names in scripts you keep. Sample names must be written
-exactly as in \code{samples.txt}.
+Tracks and samples can also be given by number: tracks by their \code{id} in
+\code{\link[=pt_tracks]{pt_tracks()}}, samples by their row in \code{samples.txt} (\code{\link[=pt_samples]{pt_samples()}}).
+Numbers change when \code{samples.txt} does, so use names in scripts you keep.
+Sample names must be written exactly as in \code{samples.txt}.
 }
 \examples{
-proj <- pt_project(file.path(tempdir(), "pt-example-human"), pt_example("human"))
-fig <- pt_figure(proj, "PSME2", c("genes", "transcripts", "atac", "junctions"))
+proj <- pt_project(file.path(tempdir(), "pt-example-human"),
+                   pt_example("human"))
+fig <- pt_figure(proj, "PSME2",
+                 c("genes", "transcripts", "atac", "junctions"))
 pt_save(fig, file.path(tempdir(), "PSME2.pdf"))
 
 # One sample for every track:
 pt_figure(proj, "PSME2", c("genes", "atac", "junctions"), samples = "K562")
 
 # One sample per track, in any order:
-pt_figure(proj, "PSME2", c("genes", "atac", "atac"), samples = c(NA, "K562", "GM12878"))
+pt_figure(proj, "PSME2", c("genes", "atac", "atac"),
+          samples = c(NA, "K562", "GM12878"))
 
 # Two samples and their comparison (K562 against the reference GM12878), grouped by sample:
 pt_figure(proj, "PSME2", c("atac", "junctions", "junctions_diff", "genes"),
-          comparison = c("GM12878", "K562"), order = "sample")
+          comparison = c("K562", "GM12878"), order = "sample")
 }
 \seealso{
 \code{\link[=pt_save]{pt_save()}}, \code{\link[=pt_script]{pt_script()}}, \code{\link[=pt_tracks]{pt_tracks()}}, \code{\link[=pt_samples]{pt_samples()}}

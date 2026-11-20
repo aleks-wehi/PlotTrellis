@@ -1,0 +1,147 @@
+---
+title: "In R"
+output:
+  BiocStyle::html_document:
+    toc: false
+vignette: >
+  %\VignetteIndexEntry{In R}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+Every figure the app makes, you can make in a few lines of R, and vice versa.
+
+# Set up
+
+```{r project-setup, eval=FALSE}
+library(PlotTrellis)
+proj <- pt_project(project_dir = "your-folder",
+                   samples_txt = pt_example())
+pt_tracks(proj)    # the tracks it has
+pt_samples(proj)   # the samples it has
+```
+
+For your own data, give your `samples.txt` path instead of `pt_example()`.
+
+# Choosing tracks and samples
+
+Tracks are drawn top to bottom, in the order given.
+
+```{r choosing, eval=FALSE}
+# every track for every sample, in samples.txt order
+fig <- pt_figure(proj, "Eya2", tracks = c("ATAC", "genes"))
+pt_save(fig, "Eya2.pdf")   # or .svg, .png
+```
+
+Other alterations include:
+
+```{r choosing-more, eval=FALSE}
+# one sample
+pt_figure(proj, "Eya2", tracks = c("ATAC", "genes"), samples = "LP")
+
+# a sample per track (NA for a track without samples)
+pt_figure(proj, "Eya2", tracks = c("HIC", "genes", "HIC", "genes"),
+          samples = c("LP", NA, "Basal", NA))
+
+# LP compared against Basal; the second is the reference
+pt_figure(proj, "Eya2", tracks = c("ATAC", "ATAC_diff", "genes"),
+          comparison = c("LP", "Basal"))
+
+# grouped by sample instead of by track
+pt_figure(proj, "Eya2", tracks = c("ATAC", "H3K36me3", "genes"),
+          order = "sample")
+
+# any coordinates instead of a gene
+pt_figure(proj, region = "chr2:165,430,000-165,620,000",
+          tracks = c("ATAC", "genes"))
+```
+
+Numbers work instead of names (`tracks = c(6, 1), samples = 2`), according to the order in
+`samples.txt` visible through `pt_tracks(proj)` and `pt_samples(proj)`.
+
+# Many genes
+
+One file per gene:
+
+```{r one-per-gene, eval=FALSE}
+# gene symbols, or Ensembl gene IDs with or without version
+de_genes <- c("Eya2", "Acot7", "Cxcl14")
+for (gene in de_genes) {
+  fig <- pt_figure(proj, gene, tracks = c("ATAC", "genes"),
+                   title = gene)
+  pt_save(fig, paste0(gene, ".pdf"))
+}
+```
+
+All in one file, with `pt_stitch()`:
+
+```{r stitch, eval=FALSE}
+# gene symbols, or Ensembl gene IDs with or without version
+de_genes <- c("Eya2", "Acot7", "Cxcl14")
+figs <- list()
+for (gene in de_genes)
+  figs[[gene]] <- pt_figure(proj, gene, tracks = c("ATAC", "genes"),
+                            title = gene)
+pt_stitch(figs, "all_genes.pdf")                 # stacked
+pt_stitch(figs, "all_genes_2col.pdf", ncol = 2)  # two columns
+```
+
+Note: `.pdf` and `.svg` stay vector files, with components and text 
+you can edit in vector graphics editors (e.g. Illustrator)
+
+# With other tools
+
+`pt_grob()` turns a figure into a grid grob, making it compatible with patchwork, cowplot, gridExtra or beside your own ggplot (e.g. a PCA, a volcano plot).
+
+Adding a separate plot with patchwork:
+
+```{r grob, eval=FALSE}
+library(ggplot2)
+library(patchwork)
+g <- pt_grob(figs[["Eya2"]])
+p <- ggplot(mtcars, aes(wt, mpg)) + geom_point()   # your plot
+both <- wrap_elements(g) + p + plot_layout(widths = c(g$width, 4))
+ggsave("Eya2_and_plot.pdf", both, width = g$width + 4 + 0.5,
+       height = g$height + 0.5)
+```
+
+# Beyond the API
+
+- **`pt_script(fig, "Eya2.R")`** writes a standalone R script that redraws the figure with
+  plotgardener, for edits the API doesn't offer:
+    - Tracks, their order, colours, heights, the region and settings: the **Edit here** block
+      at the top.
+    - Specific changes to visuals of tracks: each track type is drawn by its own `render_<type>()` function further
+      down (e.g. `render_bw()` for coverage). Edit that one.
+- **`run_plottrellis(proj)`** opens the same project in the app.
+
+<style>
+.code-box { position: relative; margin: 1.2em 150px 1.2em 0; }
+@media screen and (max-width: 991px) { .code-box { margin-right: 0; } }
+.code-box pre { margin: 0; padding-top: 12px; padding-bottom: 12px; }
+.copy-code { position: absolute; top: 4px; right: 4px; font-size: 12px; opacity: 0; }
+.code-box:hover .copy-code, .copy-code:focus { opacity: 1; }
+</style>
+<script>
+if (navigator.clipboard) document.querySelectorAll("pre").forEach(function (pre) {
+  var button = document.createElement("button");
+  button.className = "copy-code";
+  button.textContent = "Copy";
+  var code = pre.querySelector("code") || pre;
+  var box = document.createElement("div");
+  box.className = "code-box";
+  pre.parentNode.insertBefore(box, pre);
+  box.appendChild(pre);
+  button.onclick = function () {
+    navigator.clipboard.writeText(code.innerText).then(function () {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = "Copy"; }, 1500);
+    });
+  };
+  box.appendChild(button);
+});
+</script>

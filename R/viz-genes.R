@@ -1,6 +1,5 @@
 info_genes <- function() list(
-  kind = "fixed", order = 10, label = "Gene annotation",
-  filter = c(annotation = "Annotations")
+  kind = "fixed", order = 10, label = "Gene annotation"
 )
 
 settings_genes <- function(dict, entry, settings, track_w, region_params) {

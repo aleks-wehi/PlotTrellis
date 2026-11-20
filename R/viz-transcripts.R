@@ -1,6 +1,5 @@
 info_transcripts <- function() list(
   kind = "fixed", order = 40, label = "Transcripts (filtered)",
-  filter = c(annotation = "Annotations"),
   needs_gene = TRUE
 )
 

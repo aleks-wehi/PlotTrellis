@@ -1,11 +1,10 @@
 ---
-title: "PlotTrellis"
+title: "Quick Start"
 output:
   BiocStyle::html_document:
     toc: false
-    pandoc_args: ["--preserve-tabs"]
 vignette: >
-  %\VignetteIndexEntry{PlotTrellis}
+  %\VignetteIndexEntry{Quick Start}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -14,270 +13,125 @@ vignette: >
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 ```
 
-PlotTrellis draws multi-track genomic figures (coverage, splice junctions, Hi-C, transcript
-structures and expression, comparisons between samples) in a point-and-click app or in a few
-lines of R.
+Pay the setup once, not per figure. One text file describes your experiment. Every gene
+thereafter is a few clicks or lines of R from a clean, fair figure, great for exploring your data.
+Sharing is simple then too.
 
-# Installation
+# Install
 
-PlotTrellis needs R 4.5 or later. From scratch, installing takes 40 to 50 minutes on Linux
-(add `Ncpus = 4` to the second `install.packages()` to speed it up):
+PlotTrellis needs R 4.5 or later, on Linux or macOS. Installing from scratch (dependencies included) takes ~45
+minutes:
 
 ```{r install, eval=FALSE}
 install.packages("BiocManager")
-install.packages("PlotTrellis", repos = c("https://aleks-wehi.r-universe.dev",
-                                          BiocManager::repositories()))
+install.packages("PlotTrellis",
+                 repos = c("https://aleks-wehi.r-universe.dev",
+                           BiocManager::repositories()))
+# mouse gene names (for human data: "org.Hs.eg.db")
+BiocManager::install("org.Mm.eg.db", update = FALSE)
 ```
 
-# Your first figure in the app
+# A project from a colleague
+
+Open it with the path of their `samples.txt` (you need read access to their data):
+
+```{r colleague, eval=FALSE}
+library(PlotTrellis)
+run_plottrellis(project_dir = "tcell-project",
+                samples_txt = "/data/smithlab/tcell_2026/samples.txt")
+```
+
+# Your first figure
+
+Start R, ensuring you're in a folder you can write to.
 
 ```{r app-example, eval=FALSE}
-if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) BiocManager::install("org.Mm.eg.db", update = FALSE)   # mouse gene annotation (for human data: "org.Hs.eg.db")
 library(PlotTrellis)
-run_plottrellis(project_dir = "PlotTrellis-example", samples_txt = pt_example())
+run_plottrellis(project_dir = "PlotTrellis-example", # full or relative
+                samples_txt = pt_example())
 ```
 
-This opens the bundled example: mouse mammary basal cells (Basal) and luminal progenitors (LP)
-at five genes, with RNA-seq, splice junctions, transcript expression, ATAC, H3K36me3 and Hi-C.
-`pt_example()` is the path of its `samples.txt`, the
-file that lists a project's samples and data. `project_dir` is the folder PlotTrellis keeps the
-project in (any folder; without it, `~/PlotTrellis`).
+This creates `PlotTrellis-example` folder in your working directory and opens the bundled example in the app: mouse mammary basal cells (Basal) and luminal
+progenitors (LP) at five genes, with RNA-seq, splice junctions, transcript expression, ATAC,
+H3K36me3 and Hi-C. `project_dir` is the folder PlotTrellis keeps the project in.
 
-The app opens on *Eya2* with its tracks picked: click **Generate figure**. Then try *Lrrfip1*,
-*Acot7*, *Dzip1* or *Cxcl14*, or other tracks. R is busy while the app runs: click **Close app**
-(top right) to stop it. Closing the browser tab does not.
+Write *Eya2* in the gene box, pick the samples, add tracks and click **Generate figure**. 
 
-A second example, human GM12878 and K562 cells around *PSME2*: use
-`samples_txt = pt_example("human")` and a new `project_dir` (it needs `org.Hs.eg.db`).
-
-To make your own figure on the **Compose** page, pick how many samples and which ones, then a
-gene or coordinates:
-
-```{r compose-screenshot-1, echo=FALSE, out.width="100%"}
-knitr::include_graphics("figures/sample_and_gene_selection.png")
-```
-
-Drag tracks into the figure (drag again to reorder) and click **Generate figure**. **Figure
-settings** has the title, fonts, heights and colours. **Output** downloads the figure as an SVG
-or as an R script, and shows the gene's transcripts and protein domains.
-
-```{r compose-screenshot-2, echo=FALSE, out.width="100%"}
-knitr::include_graphics("figures/track_composer.png")
-```
-
-`run_plottrellis(project_dir = "PlotTrellis-example", experienced = TRUE)` opens another screen
-on the same project, for experienced users: gene, samples, tracks and figure on one page, with
-keyboard shortcuts, a strip of the figures you generated, and SVG, PNG and JPEG downloads. It
-opens empty, and closing its browser tab stops the app.
-
-Working in R instead? See [Your first figure in code](#your-first-figure-in-code).
-
-# Your own data
-
-Run the command with a new `project_dir` and no `samples_txt`:
-
-```{r own-data, eval=FALSE}
-run_plottrellis(project_dir = "my-project")
-```
-
-A wizard asks for your genome, data folder and samples, and saves them in the project folder
-as `project_samples.txt`. Click **Save and open the app**: the app reopens in a new tab (if
-not, its address is in the R console). To come back, run the same command. To quit the wizard
-without saving, stop R's command (Esc in RStudio, Ctrl+C in a terminal).
-
-```{r wizard-screenshot, echo=FALSE, out.width="100%"}
-knitr::include_graphics("figures/wizard_manual.png")
-```
-
-# Your genome: GTF, OrgDb and genome label
-
-Every project needs three things about its genome, asked for by the wizard or given in a
-`samples.txt` header. PlotTrellis works with mouse and human.
-
-- **The GTF** (`gtf_path`): the gene annotation file, gzipped or not. Use GENCODE or Ensembl,
-  not RefSeq, from the same release your Salmon index was built from: a transcript the GTF
-  lacks is left out of the expression tracks. For GENCODE, Salmon must have been run with
-  `--gencode`. The first use of a GTF takes 1 to 3 minutes.
-- **The OrgDb package** (`orgdb`): `org.Mm.eg.db` or `org.Hs.eg.db`, installed once with
-  `BiocManager::install()`. It finds genes by name. A gene it has no name for (some lncRNAs
-  and `Gm` genes) can still be shown by its coordinates.
-- **The genome label** (`genome_label`): the build's UCSC name. Its first use needs internet.
-
-| Species, build | GENCODE releases | Ensembl releases | `orgdb` | `genome_label` |
-|---|---|---|---|---|
-| Mouse, GRCm39 | M26 and later | 103 and later | `org.Mm.eg.db` | `mm39` |
-| Mouse, GRCm38 | M25 and earlier | 68 to 102 | `org.Mm.eg.db` | `mm10` |
-| Human, GRCh38 | 20 and later | 76 and later | `org.Hs.eg.db` | `hg38` |
-| Human, GRCh37 | 3c to 19 (not the "lift37" files) | 55 to 75, or the GRCh37 archive | `org.Hs.eg.db` | `hg19` |
-
-The build must be the one your reads were aligned to. GENCODE gives the most: Ensembl GTFs
-lack APPRIS labels, and releases before GENCODE 38 (mouse M27) or Ensembl 104 mark no
-transcript as Ensembl canonical.
-
-Type regions with `chr` (`chr2:103300000-103500000`), even with an Ensembl GTF. Your data
-files can name chromosomes either way (`chr2` or `2`).
-
-Downloads:
-
-- GENCODE: [human](https://www.gencodegenes.org/human/) or
-  [mouse](https://www.gencodegenes.org/mouse/), the "Comprehensive gene annotation" GTF
-  (region "CHR"). Older releases are under "Releases".
-- Ensembl: `https://ftp.ensembl.org/pub/release-<N>/gtf/<species>/`, the file
-  `<Species>.<build>.<N>.gtf.gz`, e.g.
-  [Mus_musculus.GRCm38.100.gtf.gz](https://ftp.ensembl.org/pub/release-100/gtf/mus_musculus/).
-  Human GRCh37 is under `https://ftp.ensembl.org/pub/grch37/`.
-
-# Your first figure in code
-
-The example figure from the app:
+Or in R:
 
 ```{r code-example, eval=FALSE}
-library(PlotTrellis)
-proj <- pt_project(project_dir = "PlotTrellis-example", samples_txt = pt_example())
-fig  <- pt_figure(proj, "Eya2", tracks = c("transcript_expression", "junctions", "ATAC", "H3K36me3", "transcripts_annotated", "genes"))
+proj <- pt_project(project_dir = "PlotTrellis-example",
+                   samples_txt = pt_example())
+fig  <- pt_figure(proj, "Eya2", tracks = c(
+  "transcript_expression", "junctions", "ATAC", "H3K36me3",
+  "transcripts_annotated", "genes"))
 pt_save(fig, "Eya2.pdf")   # or .svg, .png
 ```
 
-```{r code-example-run, echo=FALSE, fig.alt="Eya2 in mouse mammary basal cells and luminal progenitors: transcript expression, splice junctions, ATAC and H3K36me3 coverage for each, then the annotated transcripts and the gene."}
+Both give this figure:
+
+```{r example-figure, echo=FALSE, fig.alt="Eya2 in mouse mammary basal cells and luminal progenitors: transcript expression, splice junctions, ATAC and H3K36me3 coverage for each, then the annotated transcripts and the gene."}
 library(PlotTrellis)
 proj <- pt_project(project_dir = file.path(tempdir(), "PlotTrellis-example"), samples_txt = pt_example())
 pt_figure(proj, "Eya2", tracks = c("transcript_expression", "junctions", "ATAC", "H3K36me3", "transcripts_annotated", "genes"))
 ```
 
-# Your own data in code (writing a samples.txt)
+Then try *Lrrfip1*, *Acot7*, *Dzip1* or *Cxcl14*. Close
+the app's tab to stop it. Rerunning with just the `project_dir` reopens it. A human example (GM12878 and K562 cells around *PSME2*) can be opened with
+`samples_txt = pt_example("human")` and a new `project_dir`.
 
-A `samples.txt` is a tab-separated table, one row per sample, under a few `#` header lines.
-This example has real tabs, so copying it works:
+# Your own data
 
-```
-# data_root: /data/smithlab/tcell_2026
-# gtf_path: /data/reference/gencode.v44.annotation.gtf.gz
-# orgdb: org.Hs.eg.db
-# genome_label: hg38
-condition	colour	bw:atac	paired-end:junctions	quantdir:salmon
-Control	#1b9e77	atac/Control_merged.bw	junctions/Control_SJ.bed	salmon/Control
-KO	#d95f02	atac/KO_merged.bw	junctions/KO_SJ.bed	salmon/KO
-```
+A project is one file, `samples.txt`: your genome, then one row per sample and one column per
+kind of data. Three ways to make it, easiest first:
 
-The header lines:
+1. **In the app.** Run `run_plottrellis(project_dir = "my-project")`. A wizard asks for your
+   genome, data folder and samples, and saves the project. Can take time for large projects.
+2. **With an AI assistant.** Paste [our prompt](samples-txt-ai-prompt.html) into a chat AI
+   (ChatGPT, Claude, Copilot). It asks about your files and gives you the file and the command
+   that opens it.
+3. **Yourself.** The format is [here](samples-txt.html).
 
-- `data_root`: the folder your data is in. The table's paths are relative to it.
-- `gtf_path`, `orgdb`, `genome_label`: your genome (see above).
-- Optional: `# suggested_genes: CD4, IL7R` lists genes (names or Ensembl ids) for the gene box
-  to suggest before anything is typed (with `experienced = TRUE`).
-- Optional: any app setting, e.g. `# fontsize: 12` (a project's `project_samples.txt` lists the
-  ones changed in the app).
+PlotTrellis can intake the following processed files (incorrect ones are raised, try if unsure):
 
-The columns:
+| Data | Files |
+|---|---|
+| Coverage | bigWig, bw |
+| Transcript expression | `quant.sf`: a table of transcript IDs and TPMs (Salmon output) |
+| Splice junctions, loops | BED12, BED6, STAR `SJ.out.tab`, BEDPE, HiCCUPS |
+| Hi-C | `.hic`, `.cool`, `.mcool` |
+| Peaks, regions | BED, narrowPeak, broadPeak |
 
-- `condition`: the sample's name.
-- `colour` (optional): the sample's colour.
-- One column per data type, headed `type:name`: `bw:atac` holds bigWig files and makes tracks
-  called `atac`. Leave a cell empty if a sample lacks that data.
-- Tracks with the same name share one scale, and comparison tracks (one sample against
-  another, e.g. `atac_diff`) need a name both samples have. So use one column per data type, not one per sample. Names are case-sensitive. Wrong:
+It also needs a GENCODE or Ensembl GTF for mouse or human. Further details: [Input data](inputs.html).
 
-  ```
-  condition	bw:Grans ATAC	bw:pDC ATAC	hic:Grans HiC	hic:pDC HiC
-  Grans	atac/Grans.bw		hic/Grans.hic	
-  pDC		atac/pDC.bw		hic/pDC.hic
-  ```
+# Share it
 
-  Right:
+Send a colleague the path to your `samples.txt` (a wizard project's is `project_samples.txt`
+in its `project_dir`). Use full paths for `data_root` and `gtf_path` so they can read your data irrespective of where the `.txt` is.
 
-  ```
-  condition	bw:ATAC	hic:HiC
-  Grans	atac/Grans.bw	hic/Grans.hic
-  pDC	atac/pDC.bw	hic/pDC.hic
-  ```
+NB: They need read permissions to the data and GTF.
 
-| Type | File | Track |
-|---|---|---|
-| `bw` | bigWig | coverage (ATAC-seq, RNA-seq, ChIP-seq) |
-| `quantdir` | a Salmon output folder (with `quant.sf`) | `transcript_expression` |
-| `paired-end` | BED12 or BED6 junctions, STAR `SJ.out.tab`, BEDPE, or a HiCCUPS loop file | arcs (splice junctions, loops) |
-| `hic` | `.hic`, `.cool`, `.mcool` | Hi-C contact map |
-| `bed` | BED, narrowPeak, broadPeak (3 or more columns) | intervals (peaks, regions) |
+# Continue
 
-`bed` and `paired-end` files can be gzipped. An arc's height is its count: the score column
-(BED column 5, BEDPE column 8) or an `SJ.out.tab`'s unique reads.
+For more detail on...
 
-Open it like the example: `run_plottrellis(project_dir = "my-project", samples_txt =
-"path/to/samples.txt")`. After you edit your `samples.txt`, the same command updates the
-project.
-
-## Let an AI assistant write it
-
-A chat AI (ChatGPT, Claude, Copilot or another) can write your `samples.txt` with you. Paste
-the prompt below into a new chat; it asks for a list of your files, checks them and ends with
-the file. It also has its own page: `vignette("samples-txt-ai-prompt", package = "PlotTrellis")`.
-
-<details><summary>The prompt (click to open, then Copy)</summary>
-
-```{r ai-prompt, echo=FALSE, comment=""}
-cat(readLines(system.file("samples_txt_ai_prompt.md", package = "PlotTrellis", mustWork = TRUE)), sep = "\n")
-```
-
-</details>
-
-# More in code
-
-Tracks are listed top to bottom; `pt_tracks(proj)` lists the project's. Annotation tracks such
-as `genes` and `transcripts_annotated` need no sample. The rest are drawn for every sample, in
-`samples.txt` order, unless you say which. All options: `?pt_figure`.
-
-- **`samples = "LP"`** draws every track for that one sample. A `samples` as long as `tracks`
-  gives each track its own, `NA` for tracks that need none:
-  `tracks = c("ATAC", "ATAC", "genes"), samples = c("LP", "Basal", NA)`.
-- **`comparison = c("Basal", "LP")`** draws those two samples, in that order, and gives
-  comparison tracks the first as the reference:
-  `pt_figure(proj, "Eya2", c("ATAC", "ATAC_diff", "genes"), comparison = c("Basal", "LP"))`.
-- **`order = "sample"`** groups the tracks by sample instead of by track. Tracks without a
-  sample stay where they are written, so put them first or last.
-- **Numbers** work instead of names, e.g. `tracks = c(6, 1), samples = 2`, as listed by
-  `pt_tracks(proj)` and `pt_samples(proj)`. They change when `samples.txt` does, so use names
-  in scripts you keep.
-- **`region = "chr2:165,430,000-165,620,000"`** instead of a gene shows any coordinates.
-- **Many genes in one file**: put the figures in a list and call
-  `pt_stitch(figs, "all_genes.pdf")` (`ncol = 2` for side by side; see `?pt_stitch`).
-- **`pt_script(fig, "Eya2.R")`** writes an R script that redraws the figure, for edits the
-  API doesn't offer.
-- **`run_plottrellis(proj)`** opens the project in the app.
-
-# Sharing
-
-To share a project, send the path to your `samples.txt` (for a wizard project, the
-`project_samples.txt` in its folder). The other person runs:
-
-```{r sharing, eval=FALSE}
-run_plottrellis(project_dir = "tcell-project",
-                samples_txt = "/data/smithlab/tcell_2026/samples.txt")
-```
-
-They must be able to read your data files and GTF, so keep them on a shared drive and give
-`data_root` and `gtf_path` as full paths. Their project is their own copy. When you edit your
-`samples.txt`, their next run picks up the edit and replaces the settings they changed in the
-app.
+- **Clicking in the app:** [In the app](in-the-app.html) covers key tips: comparisons, saving
+  figures, fine tuning settings and keyboard shortcuts.
+- **Writing R:** [In R](in-r.html) covers choosing tracks and samples, many genes in one file,
+  and editable plotgardener scripts.
 
 # Troubleshooting
 
-Everything a project keeps (settings, a copy of its samples table, caches) is in its
-`project_dir`; your data files stay where they are. The app's **Edit project settings** shows
-the folder. Close the app first, then:
-
-- **A figure looks stale**: delete the `cache/` folder inside it (or in the app: Edit project
-  settings, Advanced, Clear all caches). The next start rebuilds it in 1 to 3 minutes, which
-  needs internet.
-- **To start fresh**: delete the `project_dir` and create the project again from your
-  `samples.txt`. A wizard project's only samples table is its `project_samples.txt`: copy it
-  somewhere else first. Deleting is safe only if the folder holds nothing else, so never use
-  your data folder as a `project_dir`.
+Everything a project keeps is in its `project_dir`. Close the app first. To start fresh, keep a
+copy of your `samples.txt` outside the `project_dir` (a wizard-made project keeps it inside, as
+`project_samples.txt`), delete the `project_dir`, and recreate the project as above.
 
 <style>
-.code-box { position: relative; margin: 0 150px 0.5em 0; }
+.code-box { position: relative; margin: 1.2em 150px 1.2em 0; }
 @media screen and (max-width: 991px) { .code-box { margin-right: 0; } }
-.code-box pre { margin: 0; }
-.copy-code { position: absolute; top: 4px; right: 4px; font-size: 12px; }
+.code-box pre { margin: 0; padding-top: 12px; padding-bottom: 12px; }
+.copy-code { position: absolute; top: 4px; right: 4px; font-size: 12px; opacity: 0; }
+.code-box:hover .copy-code, .copy-code:focus { opacity: 1; }
 </style>
 <script>
 if (navigator.clipboard) document.querySelectorAll("pre").forEach(function (pre) {

@@ -106,14 +106,7 @@ parse_samples_txt <- function(samples_txt,
     stop("Can't create project settings from '", samples_txt, "':\n",
          paste0("- ", problems, collapse = "\n"), call. = FALSE)
 
-  # The project's own copy as the source (the rebuild the unreadable-settings
-  # error suggests): the start lines it carries stay in it, so a later import
-  # from it still gives the view.
   copy <- file.path(project_dir, "project_samples.txt")
-  start_lines <- if (file.exists(copy) &&
-                     normalizePath(copy) == normalizePath(samples_txt))
-    grep("^# start_", readLines(samples_txt, warn = FALSE),
-         value = TRUE) else character(0)
   dir.create(project_dir, recursive = TRUE, showWarnings = FALSE)
   # Same toJSON() call as the wizard's Save (null = "null", see its comment).
   writeLines(jsonlite::toJSON(settings, auto_unbox = TRUE, pretty = TRUE,
@@ -126,10 +119,6 @@ parse_samples_txt <- function(samples_txt,
     txt <- export_samples_txt(c(list(data_root = settings$data_dir),
                                 settings[names(settings) != "data_dir"]),
                               defaults = defaults)
-    # After the other "# key:" lines, as .pt_write_samples_copy() puts them.
-    txt <- append(txt, start_lines,
-                  after = match(FALSE, startsWith(txt, "#"),
-                                nomatch = length(txt) + 1) - 1)
     writeLines(txt, copy)
   },
            error = function(e) warning("Couldn't write project_samples.txt: ",
@@ -179,8 +168,8 @@ plottrellis_wizard <- function(project_dir = .pt_default_dir(), ...) {
 #' app rather than relaunching it. Blocks until the app is stopped.
 #'
 #' @inheritParams run_plottrellis
-#' @return Invisibly, the value the app stopped with: `"closed"` (Close app, or
-#'   with `experienced = TRUE` its browser tab was closed), `"edit_settings"`
+#' @return Invisibly, the value the app stopped with: `"closed"` (its browser
+#'   tab was closed), `"edit_settings"`
 #'   (Edit project settings) or `"restart"` (Reset project / Clear caches).
 #' @seealso [run_plottrellis()], [parse_samples_txt()]
 #' @examples
@@ -188,9 +177,7 @@ plottrellis_wizard <- function(project_dir = .pt_default_dir(), ...) {
 #'   plottrellis_composer(project_dir = "my_project")
 #' }
 #' @export
-plottrellis_composer <- function(project_dir = .pt_default_dir(), ...,
-                                 experienced = FALSE) {
-  .pt_check_experienced(experienced)
+plottrellis_composer <- function(project_dir = .pt_default_dir(), ...) {
   if (inherits(project_dir, "pt_project")) project_dir <- project_dir$dir
   # Checked before .pt_project() so a failed call creates no directory.
   if (!file.exists(file.path(project_dir, "project_settings.json")))
@@ -206,16 +193,15 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...,
   pool <- .pt_render_pool(start = .pt_genome_cached(p$cfg$gtf_path,
                                                     p$cache_dir))
   on.exit(pool$close(), add = TRUE)
-  app <- .pt_composer_app(p$settings_json, p$cfg, pool,
-                          experienced = experienced)
+  app <- .pt_composer_app(p$settings_json, p$cfg, pool)
   pool$warm()
   invisible(shiny::runApp(app, ...))
 }
 
 #' Launch PlotTrellis
 #'
-#' The usual way to start PlotTrellis: a Shiny app for building plotgardener
-#' figures without writing code, and downloading a standalone R script that
+#' The usual way to start PlotTrellis: a Shiny app for making a project's
+#' figures in a few clicks, and downloading a standalone R script that
 #' reproduces each one. Opens the setup wizard when `project_dir` has no
 #' `project_settings.json` yet (or after Edit project settings), otherwise the
 #' composer, and switches between the two by itself after Save, Reset or Clear
@@ -224,20 +210,13 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...,
 #' `PlotTrellisApp()` is this function's original name, kept as an alias with
 #' the same behaviour.
 #'
-#' @section The two screens:
-#' The app opens on its classic screen: Compose, then Output on the same page.
-#' `experienced = TRUE` opens the screen for experienced users instead: one
-#' page that keeps the gene, samples, tracks and figure in view together, with
-#' keyboard shortcuts, saved figures and a Download menu (SVG, PNG, JPEG, R
-#' script). Both draw the same figures from the same project.
-#'
 #' @section Stopping the app:
-#' On the classic screen, press Close app. With `experienced = TRUE`, close the
-#' app's browser tab: the app stops a few seconds after its last tab is closed.
-#' Reloading the tab, or a lost connection, does not stop it: after a lost
-#' connection, reload the tab, or stop the app from R (Esc in RStudio, Ctrl+C
-#' in a terminal). `options(PlotTrellis.stop_on_close = FALSE)` keeps the app
-#' running until R is interrupted.
+#' Close the app's browser tab: the app stops a few seconds after its last tab
+#' is closed. Reloading the tab, or a lost connection, does not stop it: after
+#' a lost connection, reload the tab, or stop the app from R (Esc in RStudio,
+#' Ctrl+C in a terminal).
+#' `options(PlotTrellis.stop_on_close = FALSE)` keeps the app running until R
+#' is interrupted.
 #'
 #' @param project_dir Directory holding this project's `project_settings.json`
 #'   and its cache/downloaded-script state, or a [pt_project()]. Defaults to a
@@ -249,22 +228,17 @@ plottrellis_composer <- function(project_dir = .pt_default_dir(), ...,
 #'   setup wizard if there is none.
 #' @param ... Passed through to [shiny::runApp()] (e.g. `launch.browser`,
 #'   `port`, `host`).
-#' @param experienced `FALSE` (the default) opens the classic screen, `TRUE`
-#'   the screen for experienced users. Give it by name. See "The two screens".
-#' @return Invisibly, the value the app finally stopped with (`"closed"` after
-#'   Close app, or when its browser tab was closed with `experienced = TRUE`).
+#' @return Invisibly, the value the app finally stopped with (`"closed"` when
+#'   its browser tab was closed).
 #' @seealso [plottrellis_wizard()], [plottrellis_composer()],
 #'   [parse_samples_txt()]
 #' @examples
 #' if (interactive()) {
 #'   run_plottrellis(project_dir = tempfile())
-#'   # the screen for experienced users
-#'   run_plottrellis(project_dir = tempfile(), experienced = TRUE)
 #' }
 #' @export
 run_plottrellis <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
-                            ..., experienced = FALSE) {
-  .pt_check_experienced(experienced)
+                            ...) {
   if (inherits(project_dir, "pt_project")) project_dir <- project_dir$dir
   # Same rules as pt_project(): created or refreshed from samples_txt, one
   # project per folder.
@@ -292,20 +266,12 @@ run_plottrellis <- function(project_dir = .pt_default_dir(), samples_txt = NULL,
           edit_settings) {
       plottrellis_wizard(project_dir, ...)
     } else {
-      plottrellis_composer(project_dir, experienced = experienced, ...)
+      plottrellis_composer(project_dir, ...)
     }
     if (!identical(result, "restart") && !identical(result, "edit_settings"))
       return(invisible(result))
     edit_settings <- identical(result, "edit_settings")
   }
-}
-
-# `experienced` is TRUE or FALSE, nothing else. It comes after `...` in both
-# launchers, so it is only ever given by name and an unnamed argument goes on to
-# shiny::runApp() as it did before the argument existed.
-.pt_check_experienced <- function(experienced) {
-  if (!isTRUE(experienced) && !isFALSE(experienced))
-    stop("`experienced` must be TRUE or FALSE.", call. = FALSE)
 }
 
 # TRUE when project_dir has a project_settings.json whose genome label is blank

@@ -1,7 +1,7 @@
 info_junctions_mirrored_diff_tpm_scaled <- function() list(
   kind = "comparison", data_type = "paired-end", order = 30,
   label = "{name} mirrored diff (TPM-scaled)",
-  api = "{name}_diff_tpm", filter = c(comparison = "Comparisons"),
+  api = "{name}_diff_tpm",
   needs_gene = TRUE
 )
 

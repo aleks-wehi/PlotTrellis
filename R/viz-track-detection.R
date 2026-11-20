@@ -108,39 +108,7 @@ build_comparison_track_items <- function(samples_list) {
   items
 }
 
-# The app's track filters: track type -> the id of the filter button that lists
-# it.
-.pt_type_filters <- function(infos = .pt_viz_infos()) {
-  infos <- Filter(function(info) !is.null(info$filter), infos)
-  lapply(infos, function(info) names(info$filter))
-}
-
-# The app's filter buttons after "All": one per filter id, labelled as declared.
-# A button whose tracks are all comparisons shows in Two-sample mode only, and
-# those come first; then the others, by label.
-.pt_filter_buttons <- function(infos = .pt_viz_infos()) {
-  .pt_check_filter_labels(infos)
-  infos <- Filter(function(info) !is.null(info$filter), infos)
-  ids <- vapply(infos, function(info) names(info$filter), character(1))
-  labels <- vapply(infos, function(info) unname(info$filter), character(1))
-  groups <- unique(data.frame(id = ids, label = labels,
-                              stringsAsFactors = FALSE))
-  groups$two_only <- vapply(groups$id, function(id) {
-    all(vapply(infos[ids == id], function(info) info$kind == "comparison",
-               logical(1)))
-  }, logical(1))
-  groups <- groups[order(!groups$two_only, groups$label, method = "radix"), ]
-  lapply(seq_len(nrow(groups)), function(i) {
-    btn <- tags$button(groups$label[i],
-                       class = "btn btn-lg btn-default filter-btn",
-                       `data-filter` = groups$id[i])
-    if (groups$two_only[i])
-      conditionalPanel("input.view_mode === 'two'", btn) else btn
-  })
-}
-
-# Track types that draw only for a gene (needs_gene), flagged in a coordinates
-# view.
+# Track types that draw only for a gene (needs_gene): refused for a region.
 .pt_gene_required_types <- function(infos = .pt_viz_infos()) {
   names(Filter(function(info) info$needs_gene, infos))
 }

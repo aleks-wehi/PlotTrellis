@@ -171,8 +171,7 @@
     unsaved_settings_note <- function()
       .pt_unsaved_settings_note(fs$settings_dirty())
     .pt_project_actions_server(input, session, unsaved_settings_note,
-                               ctx$PROJECT_DIR, SETTINGS_JSON, ctx$CACHE_DIR,
-                               experienced = TRUE)
+                               ctx$PROJECT_DIR, SETTINGS_JSON, ctx$CACHE_DIR)
 
     reply <- function(id, x)
       session$sendCustomMessage("pt_rpc_reply",

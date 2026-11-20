@@ -1,6 +1,5 @@
 info_junctions <- function() list(
   kind = "sample", data_type = "paired-end", order = 40,
-  filter = c(junctions = "Junctions"),
   path_field = "junction_path"
 )
 

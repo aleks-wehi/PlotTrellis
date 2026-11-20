@@ -1,22 +1,20 @@
-# The app's look (colours, type, buttons, track slots), as one <style> tag for
-# the composer's and the setup wizard's page head: inst/www/plottrellis.css,
-# read at page build.
+# The app's look (colours, type, buttons), as one <style> tag for the main
+# screen's and the setup wizard's page head: inst/www/plottrellis.css, read at
+# page build.
 .pt_theme_css <- function() {
   includeCSS(system.file("www", "plottrellis.css", package = "PlotTrellis",
                          mustWork = TRUE))
 }
 
-# The title bar's name and version: navbarPage()'s title in the composer, and
-# the same in the setup wizard's .pt_title_bar().
+# The name and version in the setup wizard's title bar (.pt_title_bar()).
 .pt_brand <- function() {
   tags$span("PlotTrellis",
             tags$small(class = "plottrellis-version",
                        paste0("v", utils::packageVersion("PlotTrellis"))))
 }
 
-# The composer's title bar, for a page that is not a navbarPage() (the setup
-# wizard): the markup navbarPage() writes, without its (hidden) tab list, so the
-# stylesheet draws the two the same.
+# The setup wizard's title bar: the markup navbarPage() writes, without its
+# (hidden) tab list, which is what the stylesheet's .navbar rules draw.
 .pt_title_bar <- function() {
   tags$nav(class = "navbar navbar-default navbar-static-top",
            role = "navigation",

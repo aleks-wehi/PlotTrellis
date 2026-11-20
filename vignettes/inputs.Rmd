@@ -1,0 +1,82 @@
+---
+title: "Input data"
+output:
+  BiocStyle::html_document:
+    toc: false
+vignette: >
+  %\VignetteIndexEntry{Input data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+PlotTrellis reads processed files, not raw reads. You list each sample's files in its
+`samples.txt` (see the Quick Start) under the type given here.
+
+| Data | Files | Type in `samples.txt` | Track |
+|---|---|---|---|
+| Coverage | bigWig | `bw` | signal along the genome |
+| Transcript expression | Salmon output folder | `quantdir` | TPM per transcript, per sample |
+| Splice junctions, loops | BED12, BED6, STAR `SJ.out.tab`, BEDPE, HiCCUPS | `paired-end` | arcs |
+| Hi-C | `.hic`, `.cool`, `.mcool` | `hic` | contact map |
+| Intervals | BED, narrowPeak, broadPeak, gappedPeak | `bed` | boxes (peaks, regions) |
+
+Plus, once per project, the genome: a GTF, an OrgDb package and a build name.
+
+# Coverage: bigWig
+
+- `.bw` or `.bigWig`: ATAC-seq, ChIP-seq, CUT&Tag, RNA-seq coverage, fold change.
+- Values are drawn as they are in the file. Normalise when you make the bigWig (e.g.
+  deepTools `bamCoverage --normalizeUsing CPM`) so samples compare.
+- From BAM: deepTools `bamCoverage`. From bedGraph or wig: UCSC `bedGraphToBigWig`,
+  `wigToBigWig`.
+- Not readable on Windows (a limit of rtracklayer); use Linux or macOS.
+
+# Transcript expression: Salmon
+
+- The Salmon output folder, the one holding `quant.sf` (give the folder, not the file).
+- Read: the `Name` and `TPM` columns. A transcript missing from `quant.sf` counts as 0.
+- Transcript IDs must match the GTF's (version numbers like `.3` are ignored). Use the GTF
+  release your Salmon index was built from, and for a GENCODE index run Salmon with
+  `--gencode`, or the IDs will not match.
+- Not read: kallisto, RSEM or count tables.
+
+# Splice junctions and loops: paired-end
+
+Arcs between two positions. The format is recognised from the file; it can be gzipped.
+
+| Format | Recognised by | Arc height |
+|---|---|---|
+| BED12 junctions | 12 columns, two blocks per line (the two exons' ends) | score, column 5 |
+| BED6 junctions | 6 columns, a strand in column 6; the interval is the intron | score, column 5 |
+| STAR `SJ.out.tab` | 9 columns, as STAR writes it | unique reads, column 7 |
+| BEDPE | 6 to 10 columns | score, column 8 (else a numeric column 7, else all equal) |
+| HiCCUPS loops | its `#chr1 x1 x2 chr2 y1 y2 ... observed` header | `observed` |
+
+A peaks file given here is refused: use `bed`.
+
+# Hi-C
+
+- `.hic` (Juicer), `.cool` or `.mcool` (cooler).
+- The bin size is picked for the view from the file's own bin sizes; you can fix one in the
+  figure settings.
+- Normalisation: KR by default; also SCALE, VC, VC_SQRT (in `.hic` files), BALANCE
+  (cooler's weights) or NONE (raw counts). If the file lacks it, the track says so.
+- From `.pairs`: Juicer Tools `pre` (to `.hic`) or cooler (to `.mcool`).
+
+# Intervals: BED
+
+- BED, narrowPeak, broadPeak or gappedPeak, 3 or more columns; can be gzipped.
+- Read: chromosome, start and end (columns 1 to 3). Other columns are ignored. Header,
+  `track` and `browser` lines are skipped.
+
+# Genome
+
+- **GTF**: GENCODE or Ensembl (not RefSeq), the comprehensive gene annotation, for the build
+  your reads were aligned to: GENCODE [human](https://www.gencodegenes.org/human/) or
+  [mouse](https://www.gencodegenes.org/mouse/), or
+  [Ensembl](https://www.ensembl.org/info/data/ftp/index.html).
+- **OrgDb**: `org.Mm.eg.db` (mouse) or `org.Hs.eg.db` (human), installed in R.
+- **Genome label**: the build's UCSC name, e.g. `mm39`, `mm10`, `hg38`, `hg19`.
+
+Protein domains are fetched from UniProt (needs internet), for the gene's canonical protein.
+Files may name chromosomes either way (`chr2` or `2`).

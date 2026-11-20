@@ -13,12 +13,11 @@ ba_sample <- list(list(condition = "Ba", colour = "#1B9E77", data = list(list(ty
 
 # A server made of nothing but the Save block for the project in `proj`. The genome fields
 # are inputs (Save reads them there); the samples, folder and collected settings are plain
-# reactives; `txt` is the lines of an imported samples.txt, or NULL.
-save_app <- function(proj, samples = ba_sample, txt = NULL) {
+# reactives.
+save_app <- function(proj, samples = ba_sample) {
   function(input, output, session) {
     data_root   <- reactiveVal(file.path(proj, "data"))
     wiz_samples <- reactiveVal(samples)
-    imported    <- reactiveVal(txt)
     save_failed <- reactiveVal(FALSE)
     write_error <- reactiveVal(NULL)
     flat <- function() c(list(gtf_path = wiz_clean_optional_text(input$wiz_gtf_path),
@@ -26,7 +25,7 @@ save_app <- function(proj, samples = ba_sample, txt = NULL) {
                               genome_label = wiz_clean_optional_text(input$wiz_genome_label)),
                          .pt_collect_display_settings(list(), "", .pt_default_settings()))
     res <- .pt_wizard_save_server(input, output, file.path(proj, "project_settings.json"),
-                                  file.path(proj, "project_samples.txt"), data_root, wiz_samples, imported, flat,
+                                  file.path(proj, "project_samples.txt"), data_root, wiz_samples, flat,
                                   save_failed, write_error)
   }
 }
@@ -102,21 +101,6 @@ test_that("a re-Save keeps the project's samples.txt source", {
   expect_identical(json$samples[[1]]$condition, "Ba")
 })
 
-test_that("an imported file's start lines that don't fit are noted, and don't block the Save", {
-  proj <- new_save_project(); on.exit(unlink(proj, recursive = TRUE), add = TRUE)
-  txt <- c("# start_gene: Elf5", "# start_tracks: genes, Nope", "condition\tcolour\tbw:ATAC", "Ba\t#1B9E77\tatac/a.bw")
-  got <- catch_saved()
-  msgs <- character(0)
-  withCallingHandlers(shiny::testServer(save_app(proj, txt = txt), {
-    session$setInputs(wiz_gtf_path = "/x/genes.gtf.gz", wiz_orgdb = "org.Mm.eg.db", wiz_genome_label = "mm10")
-    session$setInputs(wiz_save = 1)
-  }), message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") })
-  expect_true(file.exists(file.path(proj, "project_settings.json")))
-  expect_true(any(grepl("the imported samples.txt's start lines", msgs, fixed = TRUE)))
-  expect_match(got$shown[[1]], "start_", fixed = TRUE)
-  expect_identical(trimws(got$stops), 'stopApp(returnValue = "restart")')
-})
-
 test_that("a folder that can't be written gives a message, cleared by the next Save", {
   proj <- new_save_project()
   on.exit({ Sys.chmod(proj, "0755"); unlink(proj, recursive = TRUE) }, add = TRUE)
@@ -128,8 +112,15 @@ test_that("a folder that can't be written gives a message, cleared by the next S
     session$setInputs(wiz_save = 1)
     expect_match(write_error(), "Couldn't write .*project_settings.json.*Permission denied")
     expect_match(shown_error(output$wiz_completion_error), "Not saved:", fixed = TRUE)
+    # The folder fixed, a field emptied: the next Save lists that field, not the old write error.
     Sys.chmod(proj, "0755")
-    suppressMessages(session$setInputs(wiz_save = 2))
+    session$setInputs(wiz_gtf_path = "")
+    session$setInputs(wiz_save = 2)
+    expect_null(write_error())
+    expect_match(shown_error(output$wiz_completion_error), "Not saved yet. Please fix", fixed = TRUE)
+    expect_no_match(shown_error(output$wiz_completion_error), "Permission denied", fixed = TRUE)
+    session$setInputs(wiz_gtf_path = "/x/genes.gtf.gz")
+    suppressMessages(session$setInputs(wiz_save = 3))
     expect_null(write_error())
     expect_identical(shown_error(output$wiz_completion_error), "")
   })

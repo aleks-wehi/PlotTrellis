@@ -198,12 +198,7 @@ test_that("wiz_help() is a popover button carrying its text, not a title tooltip
   page <- as.character(wizard_ui(file.path(tempdir(), "no-such-settings.json")))
   expect_match(page, "pt-help-pinned", fixed = TRUE)
   expect_match(page, ".popover.pt-help-popover", fixed = TRUE)
-  # So does the composer: its page head is built by .pt_composer_head(), so the source is checked,
-  # which only exists in a source tree (not under R CMD check or an installed package).
-  app_src <- testthat::test_path("..", "..", "R", "app-ui.R")
-  skip_if_not(file.exists(app_src), "package source not available")
-  expect_true(any(grepl(".pt_help_assets()", readLines(app_src, warn = FALSE), fixed = TRUE)))
-  # And the experienced screen's page (.pt_main_ui(), which builds it from no project data).
+  # So does the app's page (.pt_main_ui(), which builds it from no project data).
   app_page <- unlist(htmltools::renderTags(.pt_main_ui(list()))[c("head", "html")])
   app_page <- paste(app_page, collapse = "\n")
   expect_match(app_page, "pt-help-pinned", fixed = TRUE)

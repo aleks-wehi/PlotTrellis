@@ -31,14 +31,14 @@ local_example_chrom_sizes <- function(env = parent.frame()) {
 
 share_project <- function(...) suppressWarnings(suppressMessages(pt_project(...)))
 
-# The figure every sharing test compares: `gene`, every track type of the project, its first
-# two samples as the comparison (so the comparison tracks are drawn too). Left out: protein
+# The figure every sharing test compares: `gene`, every track type of the project, its second
+# sample against its first, the reference (so the comparison tracks are drawn too). Left out: protein
 # domains (fetched from UniProt, not read from the shared files: a network hiccup between two
 # renders would change one) and every transcript of the region (slow, and drawn from the GTF
 # as the transcripts track is).
 share_figure <- function(proj, gene = "PSME2") {
   tracks <- setdiff(pt_tracks(proj)$track, c("protein_domains", "transcripts_all"))
-  pt_figure(proj, gene, tracks, comparison = names(proj$colours)[1:2])
+  pt_figure(proj, gene, tracks, comparison = names(proj$colours)[2:1])
 }
 
 # `fig` saved as SVG; returns the file's md5. A failed track would put "track failed" in the

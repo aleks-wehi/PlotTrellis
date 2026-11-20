@@ -43,19 +43,23 @@ test_that("any other length of samples is an error saying what lengths work", {
 })
 
 test_that("comparison repeats per-sample tracks over its samples and gives comparison tracks their 2", {
-  expect_equal(res(c("atac", "junctions_diff", "genes"), comparison = c("A", "C")), c("atac_A", "atac_C", "diff_A_vs_C", "genes"))
+  # comparison = c("C", "A") is C against the reference A ("C vs A"); per-sample tracks in that order.
+  expect_equal(res(c("atac", "junctions_diff", "genes"), comparison = c("C", "A")), c("atac_C", "atac_A", "diff_A_vs_C", "genes"))
   expect_equal(res("atac", comparison = c("C", "A")), c("atac_C", "atac_A"))
-  expect_equal(suppressMessages(res(c("atac", "junctions", "junctions_diff"), comparison = c("A", "B"), order = "sample")),
-               c("atac_A", "junc_A", "atac_B", "diff_A_vs_B"))
+  expect_equal(suppressMessages(res(c("junctions", "atac", "junctions_diff"), comparison = c("B", "A"), order = "sample")),
+               c("atac_B", "junc_A", "atac_A", "diff_A_vs_B"))
   expect_error(res("atac", comparison = c("A", "A")), "comparison lists 'A' twice")
   expect_error(res("atac", comparison = c("A", NA)), "comparison can't contain NA")
 })
 
-test_that("a comparison track needs comparison with exactly 2 samples, the first the reference", {
-  expect_error(res("junctions_diff"), "'junctions_diff' compares 2 samples: set comparison = c\\(\"A\", \"B\"\\) \\(reference first\\)")
-  expect_error(res("junctions_diff", comparison = c("A", "B", "C")), "comparison needs exactly 2 \\(reference first\\); it has 3")
-  expect_error(res(c("atac", "junctions_diff"), samples = "A"), "which samples = can't give: drop samples and set comparison")
-  expect_error(res("junctions_diff", comparison = c("B", "C")), "No 'junctions_diff' track for C vs B. Pairs that have it: B vs A, C vs A")
+test_that("a comparison track needs comparison with exactly 2 samples, the second the reference", {
+  expect_error(res("junctions_diff"), "'junctions_diff' compares 2 samples: set comparison = c\\(\"B\", \"A\"\\) \\(reference second\\)")
+  expect_error(res("junctions_diff", comparison = c("A", "B", "C")), "comparison needs exactly 2 \\(reference second\\); it has 3")
+  expect_error(res(c("atac", "junctions_diff"), samples = "A"), "which samples = can't give: drop samples and set comparison = c\\(\"B\", \"A\"\\) \\(reference second\\)")
+  expect_error(res("junctions_diff", comparison = c("B", "C")), "No 'junctions_diff' track for B vs C. Pairs that have it: B vs A, C vs A")
+  # The pair the heading writes, "B vs A", is comparison = c("B", "A"); the other way round is another pair.
+  expect_equal(res("junctions_diff", comparison = c("B", "A")), "diff_A_vs_B")
+  expect_error(res("junctions_diff", comparison = c("A", "B")), "No 'junctions_diff' track for A vs B")
 })
 
 test_that("samples and comparison together are an error", {
@@ -71,7 +75,7 @@ test_that("sample names match exactly; a near miss lists the names with their nu
 test_that("tracks and samples also take numbers (pt_tracks() ids, samples.txt rows)", {
   expect_equal(res(c(3, 1), samples = 2), c("atac_B", "genes"))
   expect_equal(res(c(1, 3, 3), samples = c(NA, 3, 1)), c("genes", "atac_C", "atac_A"))
-  expect_equal(res(c(3, 5), comparison = c(1, 3)), c("atac_A", "atac_C", "diff_A_vs_C"))
+  expect_equal(res(c(3, 5), comparison = c(3, 1)), c("atac_C", "atac_A", "diff_A_vs_C"))
   expect_error(res(9), "There is no track number 9. This project's tracks: 1 genes, 2 transcripts, 3 atac, 4 junctions, 5 junctions_diff")
   expect_error(res(1.5), "There is no track number 1.5")
   expect_error(res("atac", samples = 4), "There is no sample number 4 \\(in samples\\).*1 A, 2 B, 3 C")
@@ -79,12 +83,17 @@ test_that("tracks and samples also take numbers (pt_tracks() ids, samples.txt ro
 
 test_that("the old name@sample form and unknown names stop with a message saying what to write", {
   # A suggested call is one that draws exactly the same tracks; with none, it says how.
-  expect_error(res(c("atac@B", "atac@A", "genes")), fixed = TRUE,
-               'The same figure: tracks = c("atac", "atac", "genes"), samples = c("B", "A", NA). In a samples.txt')
+  e <- expect_error(res(c("atac@B", "atac@A", "genes")), fixed = TRUE,
+                    'The same figure: tracks = c("atac", "atac", "genes"), samples = c("B", "A", NA).')
+  expect_false(grepl("start_", conditionMessage(e), fixed = TRUE))   # no samples.txt start lines any more
+  expect_error(res(c("genes", "atac@B", "atac@A", "junctions_diff@B vs A")), fixed = TRUE,
+               'The same figure: tracks = c("genes", "atac", "junctions_diff"), comparison = c("B", "A").')
+  tab_jb <- rbind(tab, data.frame(track = "junctions", sample = "B", kind = "sample", label = "", key = "junc_B"))
+  expect_error(.pt_resolve_tracks(tab_jb, c("genes", "atac@B", "junctions@B", "atac@A", "junctions@A", "junctions_diff@B vs A"), S),
+               fixed = TRUE, 'comparison = c("B", "A"), order = "sample".')
+  # Per-sample tracks reference first, then the comparison: no comparison = call draws that order.
   expect_error(res(c("genes", "atac@A", "atac@B", "junctions_diff@B vs A")), fixed = TRUE,
-               'The same figure: tracks = c("genes", "atac", "junctions_diff"), comparison = c("A", "B").')
-  expect_error(res(c("genes", "atac@A", "junctions@A", "atac@B", "junctions_diff@B vs A")), fixed = TRUE,
-               'comparison = c("A", "B"), order = "sample".')
+               'comparison = c(other, reference) for comparison tracks')
   expect_error(res(c("atac@C", "junctions_diff@B vs A")), "form is gone.*one per track.*See \\?pt_figure")
   expect_error(res(c("atac", "junctions@A")), "form is gone.*See \\?pt_figure")
   expect_error(res("atac@D"), "form is gone.*See \\?pt_figure")
@@ -131,9 +140,9 @@ test_that("the example goes from pt_example(human) to a saved figure", {
   expect_setequal(unique(pt_tracks(proj)$track),
                   c("genes", "protein_domains", "transcripts_all", "transcripts", "transcripts_annotated",
                     "atac", "junctions", "transcript_expression", "atac_diff", "junctions_diff", "junctions_diff_tpm"))
-  fig <- pt_figure(proj, "psme2", c("genes", "atac", "junctions_diff"), comparison = c("GM12878", "K562"))
+  fig <- pt_figure(proj, "psme2", c("genes", "atac", "junctions_diff"), comparison = c("K562", "GM12878"))
   expect_equal(fig$gene, "PSME2")
-  expect_equal(fig$keys, c("genes", "bw_atac_GM12878", "bw_atac_K562", "junctions_mirrored_diff_junctions_GM12878_vs_K562"))
+  expect_equal(fig$keys, c("genes", "bw_atac_K562", "bw_atac_GM12878", "junctions_mirrored_diff_junctions_GM12878_vs_K562"))
   png <- pt_save(fig, tempfile(fileext = ".png"), dpi = 50)
   # rtracklayer and plotgardener cannot read bigWig on Windows, so the
   # atac tracks draw empty there and the PNG is small.
@@ -142,14 +151,6 @@ test_that("the example goes from pt_example(human) to a saved figure", {
   # The project's OrgDb is used through its namespace, never attached to the search path.
   expect_false(any(grepl("^package:org\\.", setdiff(search(), attached))))
   expect_gt(length(readLines(pt_script(fig, tempfile(fileext = ".R")))), 100)
-  # Preloaded for the app, and every preloaded track exists.
-  sv <- .pt_project(proj$dir)$cfg$start_view
-  expect_equal(sv$gene, "PSME2")
-  expect_true(all(unlist(sv$tracks) %in% names(proj$items)))
-  # The example's start_tracks + start_comparison give the same view the name@sample list did.
-  expect_equal(unlist(sv$tracks), c("bw_atac_GM12878", "bw_atac_K562", "junctions_junctions_GM12878",
-                                    "junctions_junctions_K562", "junctions_mirrored_diff_junctions_GM12878_vs_K562",
-                                    "tpm_usage_GM12878", "tpm_usage_K562", "transcripts_annotated", "genes"))
 })
 
 test_that("pt_figure() says what to write instead of parallel, and rejects unknown arguments", {
@@ -200,30 +201,6 @@ test_that("no 'Transcript counts' is left in text a user sees", {
   }
 })
 
-test_that("pt_preload() stores the figure as the app's start view", {
-  skip_if_not_installed("org.Hs.eg.db")
-  proj <- pt_project(EX_DIR, pt_example("human"))
-  json <- file.path(proj$dir, "project_settings.json")
-  before <- readLines(json)
-  on.exit(writeLines(before, json))
-  pt_preload(proj, pt_figure(proj, "PSME2", c("genes", "atac", "junctions_diff"), comparison = c("GM12878", "K562")))
-  sv <- jsonlite::read_json(json)$start_view
-  expect_equal(sv$view_mode, "two")
-  expect_equal(unlist(sv$conditions), c("GM12878", "K562"))   # reference first
-  expect_equal(sv$gene, "PSME2")
-  expect_equal(unlist(sv$tracks), c("genes", "bw_atac_GM12878", "bw_atac_K562",
-                                    "junctions_mirrored_diff_junctions_GM12878_vs_K562"))
-  # The app reads it back through the normal settings reader.
-  expect_equal(.pt_project(proj$dir)$cfg$start_view$gene, "PSME2")
-  # Bug 264: a figure from another project is refused, the start view left as it was.
-  other <- pt_figure(proj, "IRF9", "genes")
-  expect_identical(other$project_dir, proj$dir)
-  other$project_dir <- tempfile("pt-other-project-")
-  saved <- readLines(json)
-  expect_error(pt_preload(proj, other), "fig was made from another project")
-  expect_identical(readLines(json), saved)
-})
-
 test_that("pt_tracks(), pt_samples() and print(proj) give the numbers pt_figure() takes", {
   skip_if_not_installed("org.Hs.eg.db")
   proj <- suppressWarnings(pt_project(EX_DIR, pt_example("human")))
@@ -245,58 +222,6 @@ test_that("pt_tracks(), pt_samples() and print(proj) give the numbers pt_figure(
   ids <- pt_figure(proj, "PSME2", tr$id[match(c("genes", "atac"), tr$track)], samples = 2)
   expect_identical(ids$keys, pt_figure(proj, "PSME2", c("genes", "atac"), samples = "K562")$keys)
   expect_equal(ids$tracks, c("Gene annotation", "atac \u00b7 K562"))   # print(fig) shows the names
-})
-
-test_that("start_samples, start_comparison and start_order in a samples.txt pick the start view's samples", {
-  skip_if_not_installed("org.Hs.eg.db")
-  view <- function(...) {
-    st <- file.path(tempfile(), "samples.txt")
-    dir.create(dirname(st))
-    txt <- readLines(pt_example("human"))
-    txt <- sub("^# data_root: .*", paste("# data_root:", dirname(pt_example("human"))), txt)
-    txt <- sub("^# gtf_path: .*", paste("# gtf_path:", file.path(dirname(pt_example("human")), "annotation.gtf.gz")), txt)
-    txt <- txt[!grepl("^# start_(tracks|samples|comparison|order):", txt)]
-    writeLines(c(paste0("# ", c(...)), txt), st)
-    dir <- file.path(dirname(st), "proj")
-    suppressWarnings(pt_project(dir, st))
-    unlist(.pt_project(dir)$cfg$start_view$tracks)
-  }
-  expect_equal(view("start_tracks: atac, genes, atac", "start_samples: K562, NA, GM12878"),
-               c("bw_atac_K562", "genes", "bw_atac_GM12878"))
-  expect_equal(view("start_tracks: atac, junctions, genes", "start_order: sample"),
-               c("bw_atac_GM12878", "junctions_junctions_GM12878", "bw_atac_K562", "junctions_junctions_K562", "genes"))
-  expect_equal(view("start_tracks: atac_diff", "start_comparison: K562, GM12878"),
-               "bw_diff_stacked_atac_K562_vs_GM12878")
-  expect_error(view("start_tracks: atac@K562"), "name@sample form is gone")
-})
-
-test_that("a start track the project doesn't have is left out with one warning; other start errors stop on every open", {
-  skip_if_not_installed("org.Hs.eg.db")
-  st <- file.path(tempfile(), "samples.txt")
-  dir.create(dirname(st))
-  txt <- readLines(pt_example("human"))
-  txt <- sub("^# data_root: .*", paste("# data_root:", dirname(pt_example("human"))), txt)
-  txt <- sub("^# gtf_path: .*", paste("# gtf_path:", file.path(dirname(pt_example("human")), "annotation.gtf.gz")), txt)
-  txt <- txt[!grepl("^# start_(tracks|samples|comparison|order):", txt)]
-  writeLines(c("# start_tracks: atac, loops_diff_tpm, genes", "# start_samples: K562, GM12878, NA", txt), st)
-  dir <- file.path(dirname(st), "proj")
-  w <- character(0)
-  withCallingHandlers(pt_project(dir, st), warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") })
-  expect_length(grep("start view", w), 1)
-  expect_match(grep("start view", w, value = TRUE), "loops_diff_tpm")
-  expect_equal(unlist(.pt_project(dir)$cfg$start_view$tracks), c("bw_atac_K562", "genes"))
-  # A start line that is still an error (the old name@sample form) stops this open and the
-  # next, and leaves the project as it was (its start view too).
-  before <- readLines(file.path(dir, "project_settings.json"))
-  writeLines(c("# start_gene: PSME2", "# start_tracks: atac@K562", txt[!grepl("^# start_gene:", txt)]), st)
-  expect_error(suppressWarnings(pt_project(dir, st, overwrite = TRUE)), "name@sample form is gone")
-  expect_identical(readLines(file.path(dir, "project_settings.json")), before)
-  expect_error(suppressWarnings(pt_project(dir, st)), "name@sample form is gone")
-  expect_equal(unlist(.pt_project(dir)$cfg$start_view$tracks), c("bw_atac_K562", "genes"))
-  # A new project with such a line is not created at all.
-  dir2 <- file.path(dirname(st), "proj2")
-  expect_error(suppressWarnings(pt_project(dir2, st)), "name@sample form is gone")
-  expect_false(file.exists(file.path(dir2, "project_settings.json")))
 })
 
 test_that("pt_project() re-imports a samples.txt only when it is newer than the project", {
@@ -421,8 +346,8 @@ test_that("a sample name in the wrong case is not matched; the error lists names
   expect_error(.pt_resolve_tracks(tab, "atac", S, samples = "a"), "Unknown sample 'a'.*1 A, 2 B, 3 C")
 })
 
-# A human-example samples.txt in a new temp folder, its start lines replaced by `start`;
-# returns it and the project folder beside it.
+# A human-example samples.txt in a new temp folder, its "# start_" lines replaced by `start`
+# (lines put first); returns it and the project folder beside it.
 tab_samples_txt <- function(start = character(0)) {
   st <- file.path(tempfile(), "samples.txt")
   dir.create(dirname(st))
@@ -466,55 +391,6 @@ test_that("knit_print() of a figure outside knitr writes nothing in the working 
   expect_length(list.files(wd, recursive = TRUE, all.files = TRUE, no.. = TRUE), 0)
 })
 
-test_that("# start_comparison: orders the start view's samples without a comparison track too (bug 198)", {
-  skip_if_not_installed("org.Hs.eg.db")
-  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac", "# start_comparison: K562, GM12878"))
-  suppressWarnings(pt_project(p$dir, p$st))
-  sv <- .pt_project(p$dir)$cfg$start_view
-  expect_equal(sv$view_mode, "two")
-  expect_equal(unlist(sv$conditions), c("K562", "GM12878"))   # K562 the reference
-  expect_equal(unlist(sv$tracks), c("genes", "bw_atac_K562", "bw_atac_GM12878"))
-})
-
-test_that("a start sample the project doesn't have is left out with one warning (bug 123)", {
-  skip_if_not_installed("org.Hs.eg.db")
-  open_with <- function(...) {
-    p <- tab_samples_txt(c("# start_gene: PSME2", ...))
-    w <- character(0)
-    withCallingHandlers(pt_project(p$dir, p$st),
-                        warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") })
-    list(warned = grep("start view", w, value = TRUE), tracks = unlist(.pt_project(p$dir)$cfg$start_view$tracks))
-  }
-  # One sample per track: that sample's tracks go.
-  a <- open_with("# start_tracks: genes, atac, atac", "# start_samples: NA, Zzz, K562")
-  expect_length(a$warned, 1)
-  expect_match(a$warned, "Zzz")
-  expect_equal(a$tracks, c("genes", "bw_atac_K562"))
-  # One sample for every track: the per-sample tracks go.
-  expect_equal(open_with("# start_tracks: genes, atac", "# start_samples: Zzz")$tracks, "genes")
-  # In start_comparison: the other samples stay; a comparison track, now short of 2, goes.
-  b <- open_with("# start_tracks: genes, atac, atac_diff", "# start_comparison: Zzz, K562")
-  expect_length(b$warned, 1)
-  expect_equal(b$tracks, c("genes", "bw_atac_K562"))
-  # No comparison sample left: its per-sample tracks go too, not every sample instead.
-  expect_equal(open_with("# start_tracks: genes, atac", "# start_comparison: Zzz, Yyy")$tracks, "genes")
-  # A sample removed from a 3-sample comparison doesn't make its comparison track's pair.
-  expect_equal(open_with("# start_tracks: atac_diff, genes", "# start_comparison: K562, Zzz, GM12878")$tracks, "genes")
-  # Lines wrong otherwise keep their own error, with no warning first.
-  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac, atac", "# start_samples: Zzz, K562"))
-  w <- character(0)
-  expect_error(withCallingHandlers(pt_project(p$dir, p$st),
-                                   warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") }),
-               "Unknown sample 'Zzz'")
-  expect_length(grep("start view", w), 0)
-  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac", "# start_samples: Zzz, K562"))
-  w <- character(0)
-  expect_error(withCallingHandlers(pt_project(p$dir, p$st),
-                                   warning = function(c) { w <<- c(w, conditionMessage(c)); invokeRestart("muffleWarning") }),
-               "Unknown sample 'Zzz'")
-  expect_length(grep("start view", w), 0)
-})
-
 test_that("a samples.txt edited before Save as project default is still re-imported (bug 220)", {
   skip_if_not_installed("org.Hs.eg.db")
   p <- tab_samples_txt()
@@ -532,4 +408,24 @@ test_that("a samples.txt edited before Save as project default is still re-impor
   stamp <- file.mtime(json)
   pt_project(p$dir, p$st)
   expect_equal(file.mtime(json), stamp)
+})
+
+test_that("a samples.txt's '# start_' lines are ignored, with one message", {
+  skip_if_not_installed("org.Hs.eg.db")
+  # Lines the app once opened on, one of them naming a sample the project doesn't have.
+  p <- tab_samples_txt(c("# start_gene: PSME2", "# start_tracks: genes, atac", "# start_samples: NA, Zzz",
+                         "# start_comparison: K562, GM12878", "# start_order: sample"))
+  msgs <- character(0)
+  warns <- character(0)
+  withCallingHandlers(pt_project(p$dir, p$st),
+                      message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") },
+                      warning = function(w) { warns <<- c(warns, conditionMessage(w)); invokeRestart("muffleWarning") })
+  ignoring <- grep("Ignoring the '# start_' lines of", msgs, fixed = TRUE, value = TRUE)
+  expect_length(ignoring, 1)
+  expect_true(startsWith(ignoring, "Ignoring the '# start_' lines of 'samples.txt'"))
+  expect_length(grep("start", warns), 0)
+  settings <- jsonlite::read_json(file.path(p$dir, "project_settings.json"))
+  expect_false("start_view" %in% names(settings))
+  expect_false(any(grepl("^# start_", readLines(file.path(p$dir, "project_samples.txt")))))
+  expect_s3_class(pt_figure(pt_project(p$dir), "PSME2", "genes"), "pt_figure")
 })

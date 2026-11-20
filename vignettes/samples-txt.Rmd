@@ -1,0 +1,86 @@
+---
+title: "samples.txt"
+output:
+  BiocStyle::html_document:
+    toc: false
+    pandoc_args: ["--preserve-tabs"]
+vignette: >
+  %\VignetteIndexEntry{samples.txt}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+A PlotTrellis project is one text file, `samples.txt`: your genome, then one row per sample
+and one column per kind of data. The app's wizard writes it for you, and so can an
+[AI assistant](samples-txt-ai-prompt.html). For what each file must contain, see [Input data](inputs.html).
+
+# The file
+
+```
+# data_root: /data/smithlab/tcell_2026
+# gtf_path: /data/reference/gencode.v44.annotation.gtf.gz
+# orgdb: org.Hs.eg.db
+# genome_label: hg38
+condition	colour	bw:ATAC	paired-end:junctions	quantdir:salmon
+Control	#1b9e77	atac/Control.bw	junctions/Control_SJ.bed	salmon/Control
+KO	#d95f02	atac/KO.bw		salmon/KO
+```
+
+Columns are separated by tabs. KO has no
+junctions file, so its cell is empty.
+
+# Settings lines
+
+| Line | Holds |
+|---|---|
+| `# data_root:` | The folder your data is in. The table's paths are relative to it. |
+| `# gtf_path:` | The gene annotation, `.gtf` or `.gtf.gz` (see [Input data](inputs.html#genome)). |
+| `# orgdb:` | `org.Mm.eg.db` (mouse) or `org.Hs.eg.db` (human). |
+| `# genome_label:` | The genome build's UCSC name: `mm39`, `mm10`, `hg38` or `hg19`. |
+
+`data_root` and `gtf_path` can be full paths or relative to the folder `samples.txt` is in.
+Any other `# key: value` line sets an app setting (e.g. `# fontsize: 12`). Other lines
+starting with `#` are comments.
+
+# The table
+
+| Column | Required | Holds |
+|---|---|---|
+| `condition` | yes | The sample's name, each one different. |
+| `colour` | no | The sample's colour, e.g. `#1b9e77`. |
+| `type:name` | at least one | A path relative to `data_root`. Empty if the sample has no such file. |
+
+`type` says what kind of file it is; `name` names the track (e.g. `bw:ATAC` intakes `bw` files and makes tracks called
+`ATAC`).
+
+| Type | Files | Track |
+|---|---|---|
+| `bw` | bigWig (`.bw`, `.bigWig`) | coverage (ATAC-seq, ChIP-seq, CUT&Tag, RNA-seq) |
+| `quantdir` | a Salmon output folder, the one holding `quant.sf` | transcript expression |
+| `paired-end` | BED12 or BED6 junctions, STAR `SJ.out.tab`, BEDPE, HiCCUPS loops | arcs (splice junctions, loops) |
+| `hic` | `.hic`, `.cool`, `.mcool` | Hi-C contact map |
+| `bed` | BED, narrowPeak, broadPeak, gappedPeak | intervals (peaks, regions) |
+
+`bed` and `paired-end` files can be gzipped. An arc's height is its read count: the score
+column (BED column 5, BEDPE column 8) or an `SJ.out.tab`'s unique reads.
+
+**One column per data type, not per sample.** Tracks with the same name share one scale, and
+comparison tracks (one sample against another) need a name both samples have. Names are
+case-sensitive.
+
+Other files need converting first:
+
+| You have | Convert with |
+|---|---|
+| BAM | deepTools `bamCoverage`, to bigWig |
+| bedGraph, wig | UCSC `bedGraphToBigWig`, `wigToBigWig` |
+| Hi-C `.pairs` | Juicer Tools `pre` (to `.hic`) or cooler (to `.mcool`) |
+| kallisto, RSEM, counts | not supported: PlotTrellis reads Salmon's `quant.sf` |
+
+
+# Checks
+
+PlotTrellis checks the file when it opens it. An unknown type, a missing or repeated
+`condition`, or a bad column name stops it with a message. A path that does not resolve is a
+warning: everything else loads, and that track is marked as missing. After editing `samples.txt`, run the same
+`run_plottrellis()` command again to update the project.

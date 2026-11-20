@@ -1,18 +1,16 @@
-# PlotTrellis composer: one page with a Compose section and an Output section.
-# Figures render with render_all() in a background R process
-# (R/viz-render-worker.R), so a long render can be cancelled; the R script the page
-# shows and downloads re-runs the same functions on the same entries and
-# settings (assemble_download_script()).
+# The app for one project. Its page (R/app-screen-ui.R, inst/www/main/) keeps
+# its own state in the browser; the server (R/app-screen-server.R) answers its
+# questions and draws its figures with render_all() in a background R process
+# (R/viz-render-worker.R), so a long render can be cancelled; the R script the
+# page downloads re-runs the same functions on the same entries and settings
+# (assemble_download_script()).
 #
 # The exported entry points (run_plottrellis() and friends) are in
-# R/api-entry-points.R; this file holds the project-settings defaults/reader and the
-# composer app builder (.pt_composer_app()). .pt_composer_app() builds the
-# startup context (R/app-context.R) and the page (R/app-ui.R), and its
-# server calls one top-level function per block (the R/app-*.R block files); the
-# closure keeps only the names tests read through it.
+# R/api-entry-points.R; this file holds the project-settings defaults/reader
+# and the app builder (.pt_composer_app()).
 
 # The display settings and their defaults: how any track is drawn or filtered.
-# These are the settings of the composer's Figure settings panel, and the ones
+# These are the settings of the app's Figure settings panel, and the ones
 # render_all() fills in when a caller leaves them out (.pt_fill_settings()).
 # NULL means "decided when the figure is drawn".
 .pt_display_defaults <- function() list(
@@ -101,8 +99,8 @@
     # identifies a sample, so a replicate is a separate entry with its own
     # condition.
     samples      = list(),
-    # The genes the experienced screen's gene box offers before anything is
-    # typed: gene symbols or Ensembl ids, comma-separated, as a samples.txt's
+    # The genes the app's gene box offers before anything is typed: gene
+    # symbols or Ensembl ids, comma-separated, as a samples.txt's
     # `# suggested_genes:` line gives them. Blank: none.
     suggested_genes = ""
   ),
@@ -208,160 +206,12 @@
        cache_dir = file.path(project_dir, "cache"))
 }
 
-# A chromosome's length from the chrom sizes (CHR_LENGTHS), or `default` for
-# one they lack (a GTF scaffold UCSC does not list): `[[` on the named vector
-# stops there.
-.pt_chr_length <- function(lengths, chrom, default) {
-  if (length(chrom) == 1L && !is.na(chrom) && chrom %in% names(lengths))
-    lengths[[chrom]] else default
-}
-
-# Builds (does not run) the composer app for one project. Its startup below
-# (genome migration, TxDb load, ...) runs on each call.
-.pt_composer_app <- function(SETTINGS_JSON, CFG, RENDER_POOL = NULL,
-                             experienced = FALSE) {
-
-# CFG/SETTINGS_JSON come from .pt_project(), see R/api-entry-points.R. RENDER_POOL:
-# the launcher's render processes (.pt_render_pool(), R/viz-render-worker.R), or
-# NULL: one per session. experienced: TRUE for the screen for experienced users
-# (run_plottrellis()'s argument).
-
-# Startup: everything loaded once per launch (R/app-context.R).
-ctx <- .pt_composer_context(SETTINGS_JSON, CFG)
-# The screen for experienced users (R/app-screen-server.R) when asked for; the
-# rest of this function is the classic composer.
-if (isTRUE(experienced))
-  return(.pt_main_app(ctx, SETTINGS_JSON, RENDER_POOL))
-# Tests read the app's startup state through the server's environment
-# (environment(app$serverFuncSource())): these names stay as locals here.
-TRACK_ITEMS <- ctx$TRACK_ITEMS
-RENDER_CFG  <- ctx$RENDER_CFG
-START_VIEW  <- ctx$START_VIEW
-PROJECT_DIR <- ctx$PROJECT_DIR
-CACHE_DIR   <- ctx$CACHE_DIR
-track_split <- function(conditions)
-  .pt_track_split(conditions, TRACK_ITEMS, START_VIEW)
-
-# ── UI ────────────────────────────────────────────────────────────────────────
-# The page (R/app-ui.R); its stylesheet and script are
-# inst/www/composer.css and composer.js.
-ui <- .pt_composer_ui(ctx)
-
-# ── Server ────────────────────────────────────────────────────────────────────
-server <- function(input, output, session) {
-  # repeat-click gate for the "pt-once" buttons (R/app-once-gate.R)
-  .pt_once_server(input, session)
-
-  # This session's background render process (R/viz-render-worker.R), from
-  # RENDER_POOL (the launcher's, .pt_render_pool()) when there is one.
-  # shiny::testServer()'s mock session renders in-process instead, so its tests
-  # see the figure as soon as they click.
-  render_worker <- if (!inherits(session, "MockShinySession"))
-    if (is.null(RENDER_POOL)) .pt_render_worker() else RENDER_POOL$take()
-  session$onSessionEnded(function() {
-    if (is.null(render_worker)) return()
-    if (is.null(RENDER_POOL)) render_worker$close()
-    else RENDER_POOL$give_back(render_worker)
-  })
-
-  # selected= is always passed explicitly, as "" rather than character(0) --
-  # server-mode selectize defaults to ALL_GENES's first alphabetical entry if
-  # given a zero-length selected, so "" (a value absent from ALL_GENES) is
-  # the only way to start with nothing shown. No gene is preselected unless the
-  # preloaded start view has one.
-  # A start gene named only in the GTF is not among the OrgDb's symbols.
-  updateSelectizeInput(session, "gene_name",
-                       choices = union(ctx$ALL_GENES, ctx$START_VIEW$gene),
-                       server = TRUE, selected = ctx$START_VIEW$gene %||% "")
-
-  # ── Mode switch: single/two/compose is one radio (input$view_mode), read
-  # directly -- no derived reactiveVal/output needed, same as input$region_mode.
-  # Coordinates is selectable in every sample-count mode, so there's no
-  # selection to reset on a mode switch.
-
-  state <- reactiveValues(
-    gene_region          = NULL,
-    gene_error           = NULL,
-    gene_note            = NULL,
-    svg_path             = NULL,
-    rcode                = NULL,
-    plot_error           = NULL,
-    start_parse_err      = NULL,
-    end_parse_err        = NULL,
-    last_region          = NULL,
-    # track labels and title of the last figure, so zoom and Apply rebuild it
-    # with the live settings
-    last_labels          = NULL,
-    last_title           = "",
-    rendering            = FALSE
-  )
-
-  # Figure settings: saved and live settings, the panel, Save and Revert
-  # (R/app-settings.R).
-  fs <- .pt_figure_settings_server(input, output, RENDER_CFG, SETTINGS_JSON)
-  saved_cfg       <- fs$saved_cfg
-  live_cfg        <- fs$live_cfg
-  settings_dirty  <- fs$settings_dirty
-  settings_ui_gen <- fs$settings_ui_gen
-  display_keys    <- fs$display_keys
-
-  session$onSessionEnded(function() {
-    isolate({
-      if (!is.null(state$svg_path) && file.exists(state$svg_path))
-        unlink(state$svg_path)
-    })
-  })
-
-  # Edit project settings, Reset, Clear all caches, Close app:
-  # R/app-project-actions.R.
-  unsaved_settings_note <- function()
-    .pt_unsaved_settings_note(settings_dirty())
-  .pt_project_actions_server(input, session, unsaved_settings_note, PROJECT_DIR, SETTINGS_JSON, CACHE_DIR)
-
-  # Renders read live_cfg() (Figure settings, above); core lookups read
-  # RENDER_CFG directly.
-
-  # Coordinates: chromosome, slider and text boxes, region validity
-  # (R/app-region.R).
-  rg <- .pt_region_server(input, output, session, state, ctx$CHR_LENGTHS)
-  chr_len_r    <- rg$chr_len_r
-  region_valid <- rg$region_valid
-
-  # Gene lookup: the gene box to a region in state (R/app-gene.R).
-  .pt_gene_lookup_server(input, output, session, state, ctx, saved_cfg)
-
-  # Gene / protein info: Output page, about the rendered figure's gene
-  # (R/app-gene-info-panel.R).
-  .pt_gene_info_server(output, session, state, ctx$txdb, ctx$CDS_BY_TX,
-    genome = RENDER_CFG[c("orgdb_pkg", "tx_name_lookup_path",
-                          "tx_meta_lookup_path", "genome_label", "cache_dir")],
-    reviewed_only = reactive(input$s_uniprot_reviewed_only %||%
-                               saved_cfg()$uniprot_reviewed_only))
-
-  # Conditions: Reference/Comparison exclusion, the picked conditions, the track
-  # pool (R/app-conditions.R).
-  cs <- .pt_conditions_server(input, output, session, ctx)
-  sel_prev             <- cs$sel_prev
-  selected_conditions  <- cs$selected_conditions
-  has_conditions_ready <- cs$has_conditions_ready
-  figure_pool_key      <- cs$figure_pool_key
-
-  # Stage gating: resolved region, locks, invalid tracks, Generate
-  # (R/app-gate.R).
-  gt <- .pt_generate_gate_server(input, output, session, state, ctx,
-                                 region_valid, has_conditions_ready)
-  resolved_region       <- gt$resolved_region
-  has_mode              <- gt$has_mode
-  invalid_figure_tracks <- gt$invalid_figure_tracks
-
-  # Generate, Cancel, zoom and Apply to figure (R/app-render.R).
-  .pt_render_server(input, output, session, state, ctx, render_worker, live_cfg,
-                    resolved_region, has_mode)
-
-  # The Output section's outputs and downloads (R/app-output.R).
-  .pt_output_server(output, state)
-}
-
-shinyApp(ui = ui, server = server)
-
-}
+# Builds (does not run) the app for one project: the startup context
+# (R/app-context.R: genome migration, TxDb load, ..., run on each call) and the
+# main screen on it (R/app-screen-server.R). CFG/SETTINGS_JSON come from
+# .pt_project(), see R/api-entry-points.R. RENDER_POOL: the launcher's render
+# processes (.pt_render_pool(), R/viz-render-worker.R), or NULL: one per
+# session.
+.pt_composer_app <- function(SETTINGS_JSON, CFG, RENDER_POOL = NULL)
+  .pt_main_app(.pt_composer_context(SETTINGS_JSON, CFG), SETTINGS_JSON,
+               RENDER_POOL)

@@ -9,28 +9,19 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-A chat AI (ChatGPT, Claude, Copilot or another) can write your `samples.txt` with you (the
-table of your samples and their data files, see `vignette("PlotTrellis")`).
+A chat AI (ChatGPT, Claude, Copilot or another) can set up your project with you: it asks about
+your files, writes your [samples.txt](samples-txt.html) and gives you the command that opens it.
 
-1. Paste the prompt below into a new chat (the Copy button copies all of it).
-2. Answer its first question: biologist or bioinformatician.
-3. Give it what you have: a list of your files (e.g. `ls -R` of your data folder), a screenshot
-   of a folder, or a sample sheet, and answer its questions.
-4. Save what it gives you as `samples.txt` (plain text, not a Word file), or run the R command
-   it gives, which keeps the tabs. Then:
-   `run_plottrellis(project_dir = "my-project", samples_txt = "samples.txt")`.
+Paste the prompt below to get started.
 
-The AI can make mistakes. PlotTrellis checks the file when it opens it; paste its message back
-into the chat to fix it.
-
-```{r ai-prompt, echo=FALSE, comment=""}
+```{r ai-prompt, echo=FALSE, comment="", class.output="prompt"}
 cat(readLines(system.file("samples_txt_ai_prompt.md", package = "PlotTrellis", mustWork = TRUE)), sep = "\n")
 ```
 
 <style>
-.code-box { position: relative; margin: 0 150px 0.5em 0; }
+.code-box { position: relative; margin: 1.2em 150px 1.2em 0; }
 @media screen and (max-width: 991px) { .code-box { margin-right: 0; } }
-.code-box pre { margin: 0; }
+.code-box pre { margin: 0; padding-top: 12px; padding-bottom: 12px; }
 .copy-code { position: absolute; top: 4px; right: 4px; font-size: 12px; }
 </style>
 <script>

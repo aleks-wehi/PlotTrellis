@@ -8,9 +8,9 @@
 .pt_main_www <- function(file)
   system.file("www", "main", file, package = "PlotTrellis", mustWork = TRUE)
 
-# The Figure settings panel: the same inputs as the classic screen's section
-# (plot title, every display setting, Save as project default, Revert), in a
-# panel the page's "Figure settings" button shows beside the figure. It is in
+# The Figure settings panel (plot title, every display setting, Save as
+# project default, Revert), which the page's "Figure settings" button shows
+# beside the figure. It is in
 # the page from the start and only hidden, never removed: live_cfg() reads its
 # inputs on every render.
 .pt_main_settings_panel <- function() {

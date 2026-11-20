@@ -19,9 +19,9 @@
 }
 
 # Core settings: what identifies and locates the project's data, set only in
-# the wizard, and the genes the experienced screen's gene box suggests, set only
-# by a samples.txt (`# suggested_genes:`). Every other .pt_default_settings()
-# key is a display setting, adjustable live in the app.
+# the wizard, and the genes its gene box suggests, set only by a samples.txt
+# (`# suggested_genes:`). Every other .pt_default_settings() key is a display
+# setting, adjustable live in the app.
 .PT_CORE_SETTINGS <- c("gtf_path", "orgdb", "genome_label", "data_dir",
                        "samples", "suggested_genes")
 
@@ -329,43 +329,8 @@
              samples = settings$samples), flat),
       defaults = .pt_default_settings()
     )
-    # The start view as start lines after the other "# key:" lines, so the copy
-    # restores it too.
-    if (is.list(settings$start_view))
-      txt <- append(txt, tryCatch(.pt_start_view_lines(settings$start_view,
-                                                       settings),
-                                  error = function(e) character(0)),
-                    after = match(FALSE, startsWith(txt, "#"),
-                                  nomatch = length(txt) + 1) - 1)
     writeLines(txt, file.path(dirname(settings_json), "project_samples.txt"))
     TRUE
   }, warning = function(w) stop(conditionMessage(w), call. = FALSE)),
   error = function(e) FALSE)
-}
-
-# The start view (pt_preload(), or a samples.txt's start_gene/start_tracks) of
-# the saved settings `old`, if the wizard's new settings `new` still have
-# everything it refers to: the same GTF and OrgDb (its gene is looked up in
-# them), each of its samples, and each of its tracks (same key, i.e. same sample
-# and data name; a changed file path or data folder keeps it). Otherwise NULL:
-# the app then opens blank rather than on a view the user changed underneath it.
-# Other samples can come and go.
-.pt_kept_start_view <- function(old, new) {
-  sv <- old$start_view
-  if (!is.list(sv)) return(NULL)
-  path <- function(p)
-    if (is.character(p) && length(p) == 1 && nzchar(p))
-      normalizePath(p, mustWork = FALSE) else ""
-  if (!identical(path(old$gtf_path), path(new$gtf_path)) ||
-      !identical(old$orgdb, new$orgdb))
-    return(NULL)
-  samples <- load_samples_from_settings(new$samples, new$data_dir)
-  conds <- vapply(samples, function(s) s$display, character(1))
-  keys <- names(c(build_track_items(samples),
-                  build_comparison_track_items(samples)))
-  if (!all(as.character(unlist(sv$conditions)) %in% conds) ||
-      !all(.pt_renamed_junctions_key(as.character(unlist(sv$tracks))) %in%
-             keys))
-    return(NULL)
-  sv
 }

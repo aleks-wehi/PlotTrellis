@@ -75,18 +75,13 @@
 #'   \item{`order`}{Its position in detection among tracks of its kind (a
 #'     number, default last). It orders [pt_tracks()] and decides which of two
 #'     same-named types keeps the plain name.}
-#'   \item{`filter`}{The app's filter button that lists it, as
-#'     `c(<button id> = "<button label>")`; types sharing an id share the
-#'     button. A button whose tracks are all comparisons shows in Two-sample
-#'     mode only. Default none (listed under All only).}
 #'   \item{`scale_bar`}{`TRUE`: when it is the figure's first track,
 #'     `ctx$is_first` is `TRUE` (unless the scale bar is switched off) and the
 #'     module draws the scale bar with `draw_scale_bar(ctx)`. Default `FALSE`.}
 #'   \item{`row_panel`}{`TRUE`: adjacent tracks of the type draw as one panel
 #'     (below). Default `FALSE`.}
 #'   \item{`needs_gene`}{`TRUE`: it draws only for a gene, not for coordinates;
-#'     the classic screen flags it in a coordinates view, and the screen for
-#'     experienced users does not generate it for a region. Default `FALSE`.}
+#'     the app does not generate it for a region. Default `FALSE`.}
 #'   \item{`path_field`}{The track item field holding a per-sample track's data
 #'     path. It reaches the entry as `path`; an item made by a module's own
 #'     `detect_<key>()` with no path there (`NA`, empty) gives an entry without
@@ -99,7 +94,7 @@
 #' a list of track items. A comparison can add fields to its items with
 #' `enrich_<key>(items, control_row, treatment_row)`, returning the items (an
 #' empty list offers none). A declaration that is malformed (an unknown kind or
-#' field, a missing data type, a filter button given two labels) is an error
+#' field, a missing data type) is an error
 #' naming the module, raised where tracks are listed (the app's start,
 #' [pt_project()]). A module without
 #' `info_<key>()` is offered nowhere, but still draws in a figure that names it
@@ -185,9 +180,8 @@ NULL
   bad <- function(...) stop("PlotTrellis: info_", key, "() ", ...,
                             call. = FALSE)
   if (!is.list(info)) bad("must return a list")
-  fields <- c("kind", "data_type", "label", "api", "order", "filter",
-              "scale_bar", "row_panel", "needs_gene", "path_field",
-              "entry_settings")
+  fields <- c("kind", "data_type", "label", "api", "order", "scale_bar",
+              "row_panel", "needs_gene", "path_field", "entry_settings")
   unknown <- setdiff(names(info), fields)
   if (length(unknown))
     bad("has an unknown field '", unknown[1], "' (fields: ",
@@ -218,9 +212,6 @@ NULL
   if (!(is.numeric(info$order) && length(info$order) == 1 &&
         !is.na(info$order)))
     bad("field 'order' must be one number")
-  if (!is.null(info$filter) &&
-      !(is_string(info$filter) && is_string(names(info$filter))))
-    bad("field 'filter' must be c(<button id> = \"<button label>\")")
   if (!is.character(info$entry_settings))
     bad("field 'entry_settings' must be a character vector")
   c(list(key = key, offered = !is.null(fn)), info)
@@ -231,7 +222,7 @@ NULL
 # detection order: by `order`, then key.
 .pt_viz_infos <- function() {
   keys <- .pt_viz_keys()
-  # Projects, figures and start views kept from before the junction track was
+  # Projects and figures kept from before the junction track was
   # renamed still say "sashimi"; their keys are read as "junctions"
   # (.pt_renamed_junctions_key()).
   reserved <- grep("^sashimi(_|$)", keys, value = TRUE)
@@ -253,22 +244,8 @@ NULL
          call. = FALSE)
   infos <- setNames(lapply(keys, .pt_viz_info), keys)
   infos <- Filter(function(info) info$offered, infos)
-  .pt_check_filter_labels(infos)
   infos[order(vapply(infos, `[[`, numeric(1), "order"), names(infos),
               method = "radix")]
-}
-
-# Types that share a filter button (the same id in `filter`) must give it the
-# same label.
-.pt_check_filter_labels <- function(infos) {
-  infos <- Filter(function(info) !is.null(info$filter), infos)
-  ids <- vapply(infos, function(info) names(info$filter), character(1))
-  labels <- vapply(infos, function(info) unname(info$filter), character(1))
-  for (id in unique(ids)) {
-    if (length(unique(labels[ids == id])) > 1)
-      stop("PlotTrellis: filter button '", id, "' has two labels: ",
-           paste(unique(labels[ids == id]), collapse = ", "), call. = FALSE)
-  }
 }
 
 # Stops a track's settings_<viz>() with `msg` as its in-figure message

@@ -27,7 +27,7 @@ test_that("pt_example() gives the installed five-gene example, small enough to s
   expect_length(res$warnings, 0)
 })
 
-test_that("the example opens offline with every data type and its start view", {
+test_that("the example opens offline with every data type", {
   skip_if_not_installed("org.Mm.eg.db")
   # The shipped chromosome sizes must be used, not fetched from UCSC.
   local_mocked_bindings(build_chrom_sizes = function(...) stop("tried to download chromosome sizes"))
@@ -38,7 +38,6 @@ test_that("the example opens offline with every data type and its start view", {
                     "RNA", "junctions", "transcript_expression", "ATAC", "ATAC_peaks", "H3K36me3",
                     "H3K36me3_peaks", "IgG", "HiC", "RNA_diff", "ATAC_diff", "H3K36me3_diff", "IgG_diff",
                     "junctions_diff", "junctions_diff_tpm"))
-  expect_equal(.pt_project(proj$dir)$cfg$start_view$gene, EXAMPLE_GENES[1])
   # Each gene opens by name, on its window's chromosome.
   chroms <- c(Eya2 = "chr2", Lrrfip1 = "chr1", Acot7 = "chr4", Dzip1 = "chr14", Cxcl14 = "chr13")
   for (g in EXAMPLE_GENES)
@@ -56,7 +55,7 @@ test_that("each of the example's genes draws every track type with no error", {
   proj <- example_project()
   tracks <- setdiff(unique(pt_tracks(proj)$track), "protein_domains")
   for (g in EXAMPLE_GENES) {
-    fig <- pt_figure(proj, g, tracks, comparison = c("Basal", "LP"))
+    fig <- pt_figure(proj, g, tracks, comparison = c("LP", "Basal"))
     msgs <- character(0)
     # plotgardener's "Not enough data within range to plot." (a sparse track) and "No
     # range data to plot." (a peaks track with no peak in view) are said with the full
@@ -118,23 +117,4 @@ test_that("the example Hi-C has 5 kb and coarser bins; Auto draws the genes at 5
   fixed <- modifyList(fig$settings, list(hic_res_mode = "fixed", hic_resolution = 1000))
   expect_error(load_hic(list(path = hic[1]), fig$region_params, fixed),
                "this file has no 1,000 bp bins; closest: 5,000, 10,000, 25,000 bp.", fixed = TRUE)
-})
-
-# ---- added since ---------------------------------------------------------------------------
-
-test_that("the example opens offline with every data type", {
-  skip_if_not_installed("org.Mm.eg.db")
-  # The shipped chromosome sizes must be used, not fetched from UCSC.
-  local_mocked_bindings(build_chrom_sizes = function(...) stop("tried to download chromosome sizes"))
-  proj <- example_project()
-  expect_equal(pt_samples(proj)$name, c("Basal", "LP"))
-  expect_setequal(unique(pt_tracks(proj)$track),
-                  c("genes", "protein_domains", "transcripts_all", "transcripts", "transcripts_annotated",
-                    "RNA", "junctions", "transcript_expression", "ATAC", "ATAC_peaks", "H3K36me3",
-                    "H3K36me3_peaks", "IgG", "HiC", "RNA_diff", "ATAC_diff", "H3K36me3_diff", "IgG_diff",
-                    "junctions_diff", "junctions_diff_tpm"))
-  # Each gene opens by name, on its window's chromosome.
-  chroms <- c(Eya2 = "chr2", Lrrfip1 = "chr1", Acot7 = "chr4", Dzip1 = "chr14", Cxcl14 = "chr13")
-  for (g in EXAMPLE_GENES)
-    expect_equal(pt_figure(proj, g, "genes")$region_params$chrom, chroms[[g]], info = g)
 })

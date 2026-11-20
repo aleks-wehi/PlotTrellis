@@ -80,18 +80,13 @@ the same name, the type detected later gets \verb{_<key>} appended.}
 \item{\code{order}}{Its position in detection among tracks of its kind (a
 number, default last). It orders \code{\link[=pt_tracks]{pt_tracks()}} and decides which of two
 same-named types keeps the plain name.}
-\item{\code{filter}}{The app's filter button that lists it, as
-\verb{c(<button id> = "<button label>")}; types sharing an id share the button.
-A button whose tracks are all comparisons shows in Two-sample mode only.
-Default none (listed under All only).}
 \item{\code{scale_bar}}{\code{TRUE}: when it is the figure's first track, \code{ctx$is_first}
 is \code{TRUE} (unless the scale bar is switched off) and the module draws the
 scale bar with \code{draw_scale_bar(ctx)}. Default \code{FALSE}.}
 \item{\code{row_panel}}{\code{TRUE}: adjacent tracks of the type draw as one panel
 (below). Default \code{FALSE}.}
 \item{\code{needs_gene}}{\code{TRUE}: it draws only for a gene, not for coordinates;
-the classic screen flags it in a coordinates view, and the screen for
-experienced users does not generate it for a region. Default \code{FALSE}.}
+the app does not generate it for a region. Default \code{FALSE}.}
 \item{\code{path_field}}{The track item field holding a per-sample track's data
 path. It reaches the entry as \code{path}; an item made by a module's own
 \verb{detect_<key>()} with no path there (\code{NA}, empty) gives an entry without \code{path}.
@@ -104,7 +99,7 @@ module with its own rule defines \verb{detect_<key>(sample_row, info)}, returnin
 a list of track items. A comparison can add fields to its items with
 \verb{enrich_<key>(items, control_row, treatment_row)}, returning the items (an
 empty list offers none). A declaration that is malformed (an unknown kind or
-field, a missing data type, a filter button given two labels) is an error
+field, a missing data type) is an error
 naming the module, raised where tracks are listed (the app's start,
 \code{\link[=pt_project]{pt_project()}}). A module without
 \verb{info_<key>()} is offered nowhere, but still draws in a figure that names it

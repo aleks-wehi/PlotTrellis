@@ -4,9 +4,9 @@
 \name{PlotTrellis-package}
 \alias{PlotTrellis}
 \alias{PlotTrellis-package}
-\title{PlotTrellis: Composable Genomic Track Visualisations for Non-Coders}
+\title{PlotTrellis: Project-Centric EDA Figures for Genome-Aligned Transcriptomics}
 \description{
-A plotgardener-based genomic track composer that lets biologists build common EDA visualisations (coverage, Hi-C, splice junctions, transcript structure, protein domains) via a Shiny interface, without writing code, and download a standalone R script that reproduces the exact figure offline.
+Pay the setup once, not per figure. One text file describes your experiment. Every gene thereafter is a few clicks in a 'shiny' app or a few lines of R from a clean, fair genome-aligned transcriptomics figure, perfect for exploring your data. Share the file, and your lab can make their own.
 }
 \details{
 For developers: adding a new track type is a matter of defining its

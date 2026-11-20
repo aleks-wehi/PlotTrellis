@@ -23,7 +23,7 @@ test_that("one column per sample warns once, naming the columns and the merged l
     expect_match(msg, col, fixed = TRUE)
   # The suggested layout: the columns' shared name without the sample's name, once per data type.
   expect_match(msg, "a row per sample: bw:ATAC, hic:HiC.", fixed = TRUE)
-  expect_match(msg, 'See vignette("PlotTrellis"), section "Your own data in code (writing a samples.txt)".', fixed = TRUE)
+  expect_match(msg, 'See vignette("samples-txt", package = "PlotTrellis").', fixed = TRUE)
   # Grans' CUT&RUN has no pDC counterpart: an extra data type, not a per-sample column.
   expect_false(grepl("CUT&RUN", msg, fixed = TRUE))
   # A warning, not an error: the samples still import.

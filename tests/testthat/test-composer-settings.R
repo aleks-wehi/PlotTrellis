@@ -1,7 +1,9 @@
-# The composer's Figure settings panel. Every non-core setting is
-# adjustable live (s_<key> inputs), reaches render_all() and the downloaded R script,
-# and is persisted only by Save as project default. Drives the real composer server
-# headlessly (pattern of test-gene-search-app.R).
+# The Figure settings panel through the app's server (.pt_main_server(),
+# R/app-screen-server.R). Every non-core setting is adjustable live (s_<key> inputs),
+# reaches render_all() and the downloaded R script, and is persisted only by Save as
+# project default. Drives the real server headlessly on the mouse fixture, with requests
+# sent as the page sends them (pattern of test-main-server.R); the block on its own is
+# test-composer-settings-block.R's.
 
 # One non-default value per non-core setting. Must list exactly the non-core keys of
 # .pt_default_settings(), so a newly added setting fails here until it is wired up.
@@ -15,10 +17,11 @@ SETTING_TEST_VALUES <- list(
   show_title = FALSE, show_scale_bar = FALSE, junction_height = 1.4, diff_shared_alpha = 0.4
 )
 # Settings that never reach render_all(): the flank is applied at gene lookup (into the
-# region), and reviewed-only only changes the Gene info link-out. Checked separately.
+# gene's view), and reviewed-only only changes the Gene info UniProt link. Checked
+# separately (below, and test-main-server.R / test-main-api.R).
 NOT_RENDER_SETTINGS <- c("gene_flank_pct", "uniprot_reviewed_only")
 
-# A fresh project (json + its folder) and the composer built for it.
+# A fresh project (json + its folder), its startup context and the app built on it.
 new_composer <- function(extra = list()) {
   proj <- tempfile("pt-composer-"); dir.create(proj)
   seed_project_genome(proj)
@@ -27,13 +30,37 @@ new_composer <- function(extra = list()) {
                               gtf_path = GENOMES$mouse$gtf_path, orgdb = GENOMES$mouse$orgdb,
                               genome_label = GENOMES$mouse$genome_label), extra),
                        json, auto_unbox = TRUE, null = "null")
-  list(proj = proj, json = json,
-       app = suppressMessages(.pt_composer_app(json, .pt_read_settings(json, .pt_default_settings()))))
+  ctx <- suppressMessages(.pt_composer_context(json, .pt_read_settings(json, .pt_default_settings())))
+  list(proj = proj, json = json, ctx = ctx, app = suppressMessages(.pt_main_app(ctx, json)))
 }
 
-# Inputs for a "genes"-only coordinates figure on the mouse fixture.
-COORD_FIGURE <- list(view_mode = "compose", region_mode = "coords", region_chr = "chr2",
-                     region_range = c(103300000L, 103500000L), figure_tracks = "genes")
+# A pt_rpc input value: the requests as the JSON array the page sends.
+rpc <- function(...) as.character(jsonlite::toJSON(list(...), auto_unbox = TRUE, digits = NA))
+
+# The reply to request `id` (a string; the last one with that id), its JSON read back.
+reply_to <- function(rec, id) {
+  r <- Filter(function(m) identical(m$type, "pt_rpc_reply") && identical(m$message$id, id), rec$custom)
+  expect_gt(length(r), 0)
+  jsonlite::fromJSON(r[[length(r)]]$message$json, simplifyVector = FALSE)
+}
+
+# Sends one request inside testServer() and returns its reply.
+ask <- function(session, rec, id, op, args = list()) {
+  session$setInputs(pt_rpc = rpc(list(id = id, op = op, args = args)))
+  reply_to(rec, id)
+}
+
+# A render request for a "genes"-only region figure on the mouse fixture.
+COORD_FIGURE <- list(chr = "chr2", s = 103300000, e = 103500000, picked = list(),
+                     tracks = list(list(type = "genes")))
+
+# render_all() stand-in that records its arguments and draws an empty figure, so the
+# server still has an SVG file to send.
+recording_render_all <- function(calls) function(entries, region_params, settings, device_fn) {
+  calls$all[[length(calls$all) + 1]] <- list(entries = entries, region = region_params, settings = settings)
+  device_fn(1, 1)
+  invisible(NULL)
+}
 
 test_that("the non-core settings list matches the panel, the collector and the test values", {
   core <- .PT_CORE_SETTINGS
@@ -48,24 +75,24 @@ test_that("the non-core settings list matches the panel, the collector and the t
   for (k in core) expect_false(grepl(sprintf('id="s_%s"', k), html, fixed = TRUE), info = k)
 })
 
-test_that("every composer setting input reaches render_all() and the R script", {
+test_that("every setting input reaches render_all() and the R script", {
   skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
-  seen <- NULL
-  local_mocked_bindings(render_all = function(entries, region_params, settings, device_fn) {
-    seen <<- settings
-    invisible(NULL)
-  })
+  calls <- new.env(); calls$all <- list()
+  local_mocked_bindings(render_all = recording_render_all(calls))
+  rec <- recording_session()
   shiny::testServer(cp$app, {
+    session$flushReact()
     # Nothing set: the live settings are the saved ones.
-    for (k in names(SETTING_TEST_VALUES)) expect_identical(live_cfg()[[k]], saved_cfg()[[k]], info = k)
-    expect_false(settings_dirty())
-    do.call(session$setInputs, COORD_FIGURE)
+    for (k in names(SETTING_TEST_VALUES)) expect_identical(fs$live_cfg()[[k]], fs$saved_cfg()[[k]], info = k)
+    expect_false(fs$settings_dirty())
     do.call(session$setInputs, setNames(SETTING_TEST_VALUES, paste0("s_", names(SETTING_TEST_VALUES))))
-    expect_true(settings_dirty())
-    session$setInputs(generate = 1)
-    expect_null(state$plot_error)
+    expect_true(fs$settings_dirty())
+    fig <- ask(session, rec, "r1", "render", COORD_FIGURE)
+    expect_null(fig$error)
+    expect_length(calls$all, 1)
+    seen <- calls$all[[1]]$settings
     for (k in setdiff(names(SETTING_TEST_VALUES), c(NOT_RENDER_SETTINGS, "zrange_cap"))) {
       v <- SETTING_TEST_VALUES[[k]]
       expect_equal(seen[[k]], v, info = k)
@@ -73,90 +100,85 @@ test_that("every composer setting input reaches render_all() and the R script", 
       # hic_style is carried by each Hi-C track instead (checked with a Hi-C figure below).
       if (k != "hic_style")
         expect_true(grepl(paste0(k, " = ", deparse(if (k == "fontsize") as.integer(v) else v)),
-                          state$rcode, fixed = TRUE), info = k)
+                          fig$script, fixed = TRUE), info = k)
     }
     expect_equal(seen$zrange_cap, 50)
     # Saved values are untouched by live changes.
-    expect_equal(saved_cfg()$fontsize, 8L)
-  })
+    expect_equal(fs$saved_cfg()$fontsize, 8L)
+  }, session = rec$session)
 })
 
-test_that("a composer font size change changes the rendered figure", {
+test_that("a Hi-C track takes the live Hi-C style in its entry, named once in the script", {
   skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
+  tab <- .pt_track_table(cp$ctx$TRACK_ITEMS)
+  hic <- tab[vapply(cp$ctx$TRACK_ITEMS[tab$key], function(x) identical(x$type, "hic"), logical(1)) &
+               tab$kind == "sample", ][1, ]
+  expect_false(is.na(hic$key))
+  figure <- COORD_FIGURE
+  figure$tracks <- list(list(type = "genes"), list(type = hic$track, sample = hic$sample))
+  calls <- new.env(); calls$all <- list()
+  local_mocked_bindings(render_all = recording_render_all(calls))
+  hic_style <- function(call) Filter(function(e) identical(e$viz, "hic"), call$entries)[[1]]$hic_style
+  rec <- recording_session()
   shiny::testServer(cp$app, {
-    do.call(session$setInputs, COORD_FIGURE)
-    session$setInputs(generate = 1)
-    svg8 <- paste(readLines(state$svg_path, warn = FALSE), collapse = "\n")
-    session$setInputs(s_fontsize = 14, generate = 2)
-    expect_null(state$plot_error)
-    svg14 <- paste(readLines(state$svg_path, warn = FALSE), collapse = "\n")
-    expect_match(state$rcode, "fontsize = 14L", fixed = TRUE)
-    # The auto title is drawn at fontsize + 2.
-    expect_false(grepl("font-size: 16", svg8, fixed = TRUE))
-    expect_true(grepl("font-size: 16", svg14, fixed = TRUE))
-  })
+    session$flushReact()
+    expect_null(ask(session, rec, "r1", "render", figure)$error)
+    expect_equal(hic_style(calls$all[[1]]), "rectangle")
+    session$setInputs(s_hic_style = "triangle", s_fontsize = 14)
+    fig <- ask(session, rec, "r2", "render", figure)
+    expect_null(fig$error)
+    expect_equal(hic_style(calls$all[[2]]), "triangle")
+    # The script has it once, on the Hi-C track, not in the settings block.
+    expect_identical(lengths(regmatches(fig$script, gregexpr("hic_style = \"triangle\"", fig$script))), 1L)
+    expect_equal(calls$all[[2]]$settings$fontsize, 14L)
+    expect_match(fig$script, "fontsize = 14L", fixed = TRUE)
+  }, session = rec$session)
 })
 
-test_that("a composer flank change re-resolves the current gene's region", {
+test_that("a font size change changes the rendered figure", {
+  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
+  cp <- new_composer()
+  on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
+  rec <- recording_session()
+  shiny::testServer(cp$app, {
+    session$flushReact()
+    fig8 <- ask(session, rec, "r1", "render", COORD_FIGURE)
+    expect_null(fig8$error)
+    session$setInputs(s_fontsize = 14)
+    fig14 <- ask(session, rec, "r2", "render", COORD_FIGURE)
+    expect_null(fig14$error)
+    expect_match(fig14$script, "fontsize = 14L", fixed = TRUE)
+    expect_false(grepl("font-size: 16", fig8$svg, fixed = TRUE))
+    expect_true(grepl("font-size: 16", fig14$svg, fixed = TRUE))
+  }, session = rec$session)
+})
+
+test_that("a flank change widens the current gene's view, around the typed ID's own gene", {
   skip_if_not(PT_TEST_DATA_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
+  rec <- recording_session()
   shiny::testServer(cp$app, {
-    session$setInputs(gene_name = "ENSMUSG00000093931")  # Amy2a1 (Milton's OrgDb) by one of its 3 IDs
-    session$setInputs(gene_name = state$gene_symbol)     # the echo (symbol depends on the OrgDb build)
-    r15 <- state$gene_region
+    session$flushReact()
+    # Amy2a1 (Milton's OrgDb) by one of its 3 IDs.
+    r15 <- ask(session, rec, "l1", "locus", list(q = "ENSMUSG00000093931"))
+    expect_null(r15$error)
     session$setInputs(s_gene_flank_pct = 50)
-    r50 <- state$gene_region
-    expect_gt(r50$end - r50$start, r15$end - r15$start)
+    r50 <- ask(session, rec, "l2", "locus", list(q = "ENSMUSG00000093931"))
+    expect_gt(r50$view$e - r50$view$s, r15$view$e - r15$view$s)
     # Still the typed ID's gene, not whichever ID the symbol resolves to first.
-    expect_equal((r50$start + r50$end) / 2, (r15$start + r15$end) / 2, tolerance = 1)
-  })
+    expect_equal((r50$view$s + r50$view$e) / 2, (r15$view$s + r15$view$e) / 2, tolerance = 1)
+    expect_identical(r50[c("chr", "s", "e")], r15[c("chr", "s", "e")])
+  }, session = rec$session)
 })
 
-test_that("zoom and Apply to figure rebuild the figure with the live settings", {
+test_that("the app draws with the project's cache folder, and Edit project settings stops it with that word", {
   skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer()
   on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
-  items <- get("TRACK_ITEMS", envir = environment(cp$app$serverFuncSource()))
-  hic_key <- names(items)[vapply(items, function(x) identical(x$type, "hic"), logical(1))][1]
-  expect_false(is.na(hic_key))
-  calls <- list()
-  local_mocked_bindings(render_all = function(entries, region_params, settings, device_fn) {
-    calls[[length(calls) + 1]] <<- list(entries = entries, region = region_params, settings = settings)
-    invisible(NULL)
-  })
-  hic_style <- function(call) Filter(function(e) identical(e$viz, "hic"), call$entries)[[1]]$hic_style
-  shiny::testServer(cp$app, {
-    fig <- utils::modifyList(COORD_FIGURE, list(figure_tracks = c("genes", hic_key)))
-    do.call(session$setInputs, fig)
-    session$setInputs(plot_title = "My title", generate = 1)
-    first <- calls[[length(calls)]]
-    expect_equal(hic_style(first), "rectangle")
-    session$setInputs(s_hic_style = "triangle", s_fontsize = 14, zoom_in_15x = 1)
-    zoomed <- calls[[length(calls)]]
-    expect_equal(hic_style(zoomed), "triangle")  # baked into the entry, rebuilt on zoom
-    # The script has it once, on the Hi-C track, not in the settings block.
-    expect_identical(lengths(regmatches(state$rcode, gregexpr("hic_style = \"triangle\"", state$rcode))), 1L)
-    expect_equal(zoomed$settings$fontsize, 14L)
-    expect_equal(zoomed$settings$title, "My title")
-    expect_lt(zoomed$region$end - zoomed$region$start, first$region$end - first$region$start)
-    expect_match(state$rcode, "fontsize = 14L", fixed = TRUE)
-    session$setInputs(s_fontsize = 10, apply_settings = 1)
-    applied <- calls[[length(calls)]]
-    expect_equal(applied$settings$fontsize, 10L)
-    expect_equal(applied$settings$title, "My title")
-    expect_equal(applied$region[c("chrom", "start", "end")], zoomed$region[c("chrom", "start", "end")])
-  })
-})
-
-test_that("the composer draws with the project's cache folder, and Edit project settings stops it with that word", {
-  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
-  cp <- new_composer()
-  on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
-  expect_identical(get("RENDER_CFG", envir = environment(cp$app$serverFuncSource()))$cache_dir,
-                   file.path(cp$proj, "cache"))
+  expect_identical(cp$ctx$RENDER_CFG$cache_dir, file.path(cp$proj, "cache"))
   # The stop is scheduled a moment later (so the page can show its message first): catch
   # what is scheduled instead of stopping anything.
   scheduled <- list()
@@ -172,20 +194,6 @@ test_that("the composer draws with the project's cache folder, and Edit project 
   expect_identical(grep("stopApp", stops, value = TRUE), "stopApp(returnValue = \"edit_settings\")")
 })
 
-test_that("zoom keeps a custom title in the rendered figure", {
-  skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
-  cp <- new_composer()
-  on.exit(unlink(cp$proj, recursive = TRUE), add = TRUE)
-  shiny::testServer(cp$app, {
-    do.call(session$setInputs, COORD_FIGURE)
-    session$setInputs(plot_title = "My title", generate = 1)
-    expect_true(any(grepl("My title", readLines(state$svg_path, warn = FALSE), fixed = TRUE)))
-    session$setInputs(zoom_in_15x = 1)
-    expect_null(state$plot_error)
-    expect_true(any(grepl("My title", readLines(state$svg_path, warn = FALSE), fixed = TRUE)))
-  })
-})
-
 test_that("live changes never touch the project files; Save writes only the non-core keys", {
   skip_if_not(PT_TEST_MOUSE_AVAILABLE, "PlotTrellis test fixture data not available on this machine")
   cp <- new_composer(list(zrange_cap = NULL, page_w = 10))
@@ -199,12 +207,12 @@ test_that("live changes never touch the project files; Save writes only the non-
 
   shiny::testServer(cp$app, {
     do.call(session$setInputs, setNames(SETTING_TEST_VALUES, paste0("s_", names(SETTING_TEST_VALUES))))
-    expect_true(settings_dirty())
+    expect_true(fs$settings_dirty())
     expect_false(is.null(unsaved_settings_note()))
     session$setInputs(save_settings = 1)
-    expect_false(settings_dirty())
+    expect_false(fs$settings_dirty())
     expect_null(unsaved_settings_note())
-    expect_equal(saved_cfg()$fontsize, 14)
+    expect_equal(fs$saved_cfg()$fontsize, 14)
   })
   old  <- jsonlite::fromJSON(paste(before, collapse = "\n"), simplifyDataFrame = FALSE)
   json <- jsonlite::fromJSON(cp$json, simplifyDataFrame = FALSE)
@@ -225,7 +233,7 @@ test_that("live changes never touch the project files; Save writes only the non-
   # Saving "auto" back writes null, not a dropped key or {}.
   shiny::testServer(cp$app, {
     session$setInputs(s_zrange_cap = NA, save_settings = 1)
-    expect_null(saved_cfg()$zrange_cap)
+    expect_null(fs$saved_cfg()$zrange_cap)
   })
   json <- jsonlite::fromJSON(cp$json, simplifyDataFrame = FALSE)
   expect_true("zrange_cap" %in% names(json))
@@ -239,7 +247,7 @@ test_that("Revert to saved re-renders the panel from the saved settings", {
   before <- readLines(cp$json)
   shiny::testServer(cp$app, {
     session$setInputs(s_fontsize = 14, s_reference_colour = "#333333")
-    expect_true(settings_dirty())
+    expect_true(fs$settings_dirty())
     session$setInputs(revert_settings = 1)
     html <- output$display_settings_ui$html
     # The re-rendered inputs show the saved values (font size 8, the default role colour).
@@ -247,8 +255,8 @@ test_that("Revert to saved re-renders the panel from the saved settings", {
     expect_match(html, "Shiny.setInputValue('s_reference_colour', \"#4D4D4D\")", fixed = TRUE)
     # What the browser then reports back:
     session$setInputs(s_fontsize = 8, s_reference_colour = "#4D4D4D")
-    expect_false(settings_dirty())
-    expect_equal(live_cfg()$fontsize, 8)
+    expect_false(fs$settings_dirty())
+    expect_equal(fs$live_cfg()$fontsize, 8)
   })
   expect_identical(readLines(cp$json), before)
 })

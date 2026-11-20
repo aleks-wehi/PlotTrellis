@@ -1,5 +1,4 @@
-info_bed <- function() list(kind = "sample", data_type = "bed", order = 30,
-                            filter = c(bed = "BED"))
+info_bed <- function() list(kind = "sample", data_type = "bed", order = 30)
 
 settings_bed <- function(dict, entry, settings, track_w, region_params) {
   if (is.null(entry$height)) entry$height <- 0.32
