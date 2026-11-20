@@ -6,35 +6,30 @@
       .wiz-page label { font-size: 15px; }
       /* Landing: what a project needs, then the two ways in. */
       .wiz-needs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 26px; }
-      .wiz-need { flex: 1 1 240px; background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; padding: 14px 16px; }
+      .wiz-need { flex: 1 1 240px; background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: var(--pt-r); padding: 14px 16px; }
       .wiz-need b { display: block; color: var(--pt-heading); margin-bottom: 4px; }
       .wiz-need, .wiz-choice p { color: var(--pt-text); }
       .wiz-choices { display: flex; gap: 16px; flex-wrap: wrap; }
-      .wiz-choice { flex: 1 1 300px; background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; padding: 20px 20px 16px; box-shadow: var(--pt-shadow); }
+      .wiz-choice { flex: 1 1 300px; background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: var(--pt-r); padding: 20px 20px 16px; box-shadow: var(--pt-shadow); }
       .wiz-choice h3 { margin-bottom: 6px; }
       .wiz-choice p { min-height: 44px; color: var(--pt-muted); }
       .wiz-choice .btn { width: 100%; }
       /* Numbered section cards. */
-      .wiz-section { background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: 12px; box-shadow: var(--pt-shadow); padding: 20px 22px 14px; margin-bottom: 18px; }
+      .wiz-section { background: var(--pt-surface); border: 1px solid var(--pt-border); border-radius: var(--pt-r); box-shadow: var(--pt-shadow); padding: 20px 22px 14px; margin-bottom: 18px; }
       .wiz-section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
       .wiz-step { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--pt-primary); color: var(--pt-on-primary); font-weight: 700; font-size: 15px; flex: none; }
       .wiz-section-intro { color: var(--pt-muted); margin-bottom: 14px; }
       .wiz-guide { margin: -4px 0 16px; }
       .wiz-guide > summary { display: list-item; cursor: pointer; font-weight: 600; color: var(--pt-link); }
       .wiz-guide > summary:hover { color: var(--pt-link-hover); }
-      .wiz-guide ul { margin-top: 10px; }
-      .wiz-guide li { margin-bottom: 6px; }
-      .wiz-guide-table { margin-bottom: 8px; }
-      .wiz-guide-table th { color: var(--pt-muted); font-weight: 600; }
-      .wiz-guide-table td, .wiz-guide-table th { border-top-color: var(--pt-border) !important; }
       /* Field status lines and errors. */
       .wiz-status { margin: -8px 0 12px; font-size: 14px; }
       .wiz-row { padding: 6px 0; border-bottom: 1px solid var(--pt-border); }
       .wiz-row-error { background: var(--pt-danger-soft); }
       .wiz-error { color: var(--pt-danger); margin-bottom: 8px; }
-      .wiz-error-box { background: var(--pt-danger-soft); border: 1px solid var(--pt-danger); border-radius: 10px; padding: 10px 14px; }
-      .wiz-warn-box { background: #FBF3E3; border: 1px solid var(--pt-warn-edge); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
-      .wiz-ok    { color: #2e7d32; }
+      .wiz-error-box { background: var(--pt-danger-soft); border: 1px solid var(--pt-danger); border-radius: var(--pt-r); padding: 10px 14px; }
+      .wiz-warn-box { background: var(--pt-warn-soft); border: 1px solid var(--pt-warn-edge); border-radius: var(--pt-r); padding: 10px 14px; margin-bottom: 8px; }
+      .wiz-ok    { color: var(--pt-ok); }
       .wiz-warn  { color: var(--pt-accent-strong); }
       .wiz-empty { color: var(--pt-muted); padding: 14px 0 6px; }
       .wiz-samples { margin-top: 12px; }
@@ -60,3 +55,13 @@
         white-space: nowrap;
       }
     
+      /* The kept screen's corners and flat buttons (main.css): one edge, no pressable lower
+         edge. Here, not in plottrellis.css, so only the wizard's page changes. */
+      .btn, .btn:active:not([disabled]) { border-radius: var(--pt-r); box-shadow: none; margin-bottom: 0; transform: none; }
+      .btn.btn-default, .btn.btn-default:focus, .btn.btn-default:hover, .btn.btn-default:active, .btn.btn-default:active:hover,
+      .btn.btn-default:active:focus, .btn.btn-default[disabled], .btn.btn-default[disabled]:hover, .btn.btn-default.disabled:hover { border-color: var(--pt-input-border); }
+      .form-control, .selectize-input, .selectize-input.full, .selectize-control.single .selectize-input,
+      .selectize-control.single .selectize-input.input-active { border-radius: var(--pt-r); }
+      .selectize-dropdown { border-radius: 0 0 var(--pt-r) var(--pt-r); }
+      .modal-content { border-radius: var(--pt-r); }
+      .modal-header { border-radius: calc(var(--pt-r) - 1px) calc(var(--pt-r) - 1px) 0 0; }

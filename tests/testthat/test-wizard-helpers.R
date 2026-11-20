@@ -295,16 +295,14 @@ test_that("wiz_section(): numbered heading, optional intro, then the content", {
   expect_no_match(hp_html(wiz_section(1, "T", NULL)), "wiz-section-intro", fixed = TRUE)
 })
 
-test_that("wiz_gtf_guide(): a closed details block with the four genome rows and the download links", {
+test_that("wiz_gtf_guide(): a closed details block, GENCODE or Ensembl, with the download links", {
   html <- hp_html(wiz_gtf_guide())
   expect_match(html, '<details class="wiz-guide">', fixed = TRUE)
-  expect_match(html, "<summary>Which GTF? Where do I get it?</summary>", fixed = TRUE)
-  expect_no_match(html, "<details class=\"wiz-guide\" open", fixed = TRUE)
-  expect_identical(hp_count(html, "<tr>"), 5L)  # a header row and four genomes
-  for (g in c("Mouse, GRCm39", "Mouse, GRCm38", "Human, GRCh38", "Human, GRCh37"))
-    expect_match(html, sprintf("<td>%s</td>", g), fixed = TRUE)
-  for (l in c("mm39", "mm10", "hg38", "hg19")) expect_match(html, sprintf("<code>%s</code>", l), fixed = TRUE)
-  expect_match(html, 'href="https://www.gencodegenes.org/mouse/" target="_blank"', fixed = TRUE)
+  expect_match(html, "<summary>Which GTF?</summary>", fixed = TRUE)
+  expect_match(html, "Must be GENCODE or Ensembl", fixed = TRUE)
+  for (u in c("https://www.gencodegenes.org/human/", "https://www.gencodegenes.org/mouse/",
+              "https://www.ensembl.org/info/data/ftp/index.html"))
+    expect_match(html, sprintf('href="%s" target="_blank"', u), fixed = TRUE)
 })
 
 # ---- Display settings: collector, defaults, reader -----------------------------------------

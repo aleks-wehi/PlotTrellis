@@ -201,12 +201,12 @@ test_that("a row's remove button takes that row out of the dialog", {
   })
 })
 
-test_that("the sample list and the dialog's rows say when they are empty", {
+test_that("the sample list shows nothing and the dialog's rows say when they are empty", {
   root <- new_data_root(); on.exit(unlink(root, recursive = TRUE), add = TRUE)
   catch_dialogs()
   shiny::testServer(samples_app(root), {
     session$flushReact()
-    expect_match(paste(as.character(output$wiz_samples_ui$html)), "No samples yet", fixed = TRUE)
+    expect_identical(paste(as.character(output$wiz_samples_ui$html), collapse = ""), "")
     expect_match(paste(as.character(output$wiz_instance_rows$html)), "No files yet", fixed = TRUE)
     wiz_samples(list(sample("Ctl", bw("ATAC", "atac/ctl.bw"))))
     session$flushReact()

@@ -374,9 +374,7 @@
   # ── Committed-sample list + edit/remove ─────────────────────────────────────
   output$wiz_samples_ui <- renderUI({
     samples <- wiz_samples()
-    if (length(samples) == 0)
-      return(p(class = "wiz-empty",
-               "No samples yet. Add one per condition; you need at least one to save."))
+    if (length(samples) == 0) return(NULL)
     div(class = "wiz-samples", lapply(seq_along(samples), function(i) {
       s <- samples[[i]]
       inst_labels <- if (length(s$data) > 0)

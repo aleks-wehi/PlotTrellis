@@ -6,6 +6,10 @@
 .pt_wizard_import_server <- function(input, output, session, wiz_samples,
                                      import_visual, DEFAULT_SETTINGS) {
   output$wiz_import_status <- renderUI(NULL)
+  # "yes" once a file is imported: import mode shows the form from then on.
+  imported <- reactiveVal(FALSE)
+  output$wiz_imported <- renderText(if (imported()) "yes" else "")
+  outputOptions(output, "wiz_imported", suspendWhenHidden = FALSE)
 
   observeEvent(input$wiz_import_load, {
     path <- trimws(input$wiz_import_path %||% "")
@@ -40,6 +44,7 @@
     if (!is.null(res$data_root))
       updateTextInput(session, "wiz_data_root", value = res$data_root)
     wiz_samples(res$samples)
+    imported(TRUE)
 
     # Apply any `# <key>: value` overrides: the genome fields onto their inputs,
     # the display settings and the suggested genes into import_visual() for

@@ -39,13 +39,13 @@ test_that("Set up by hand shows the form with a Back link and no import box", {
   })
 })
 
-test_that("Import shows the import box, empty, above the form", {
+test_that("Import shows the import box, empty, above the hidden form", {
   shiny::testServer(mode_app(), {
     session$setInputs(wiz_mode_import = 1)
     expect_identical(wiz_mode(), "import")
     html <- body_html(output$wiz_body)
     expect_match(html, 'id="wiz_import_path"[^>]*value=""')
-    expect_match(html, "The file fills in the three sections below", fixed = TRUE)
+    expect_match(html, 'data-display-if="output.wiz_imported ==', fixed = TRUE)  # form hidden until an import
     expect_match(html, 'id="wiz_gtf_path"', fixed = TRUE)
   })
 })

@@ -125,7 +125,7 @@ test_that("Set up by hand shows the form with a Back link and no import box", {
   })
 })
 
-test_that("Import a samples.txt shows the import box, blank, above the same form", {
+test_that("Import a samples.txt shows the import box, blank, and the same form only after an import", {
   proj <- ch_project(); on.exit(unlink(proj, recursive = TRUE), add = TRUE)
   shiny::testServer(ch_server(proj), {
     session$setInputs(wiz_mode_import = 1)
@@ -133,9 +133,11 @@ test_that("Import a samples.txt shows the import box, blank, above the same form
     html <- ch_html(output$wiz_body)
     expect_match(html, 'id="wiz_mode_back"', fixed = TRUE)
     expect_match(html, '<input id="wiz_import_path" type="text" class="shiny-input-text form-control" value=""', fixed = TRUE)
-    expect_match(html, "The file fills in the three sections below", fixed = TRUE)
     expect_match(html, 'id="wiz_import_load"', fixed = TRUE)
+    # The form is in the page but hidden until an import succeeds.
+    expect_match(html, 'data-display-if="output.wiz_imported ==', fixed = TRUE)
     expect_match(html, 'id="wiz_gtf_path"', fixed = TRUE)
+    expect_identical(output$wiz_imported, "")
   })
 })
 
@@ -772,11 +774,10 @@ test_that("an Edit opened before wiz_edit_sample's first flush is skipped as the
 
 # ---- Committed sample list ---------------------------------------------------------------
 
-test_that("the sample list: empty message, then one row per sample with its swatch, files and buttons", {
+test_that("the sample list: nothing when empty, then one row per sample with its swatch, files and buttons", {
   proj <- ch_project(); on.exit(unlink(proj, recursive = TRUE), add = TRUE)
   shiny::testServer(ch_server(proj), {
-    expect_identical(ch_html(output$wiz_samples_ui),
-                     '<p class="wiz-empty">No samples yet. Add one per condition; you need at least one to save.</p>')
+    expect_identical(ch_html(output$wiz_samples_ui), "")
     wiz_samples(list(
       list(condition = "Ba", colour = "#1B9E77", data = list(list(type = "bw", name = "ATAC", path = "a.bw"),
                                                           list(type = "quantdir", name = "Quant", path = "q"))),
@@ -838,6 +839,7 @@ test_that("Import of a file with a bad row lists its problems and keeps the curr
     expect_identical(ch_conds(wiz_samples()), c("Ba", "Lp"))
     expect_identical(import_visual(), list())
     expect_length(rec$updates, 0)
+    expect_identical(output$wiz_imported, "")  # import mode keeps the form hidden
   })
 })
 
@@ -849,6 +851,7 @@ test_that("Import of a good file: samples replaced, genome and folder filled, di
                   "condition\tcolour\tbw:ATAC\tquantdir:Sal", "Ko\t#111111\tatac/a.bw\tquant/S1", "Wt\t\tatac/b.bw\t"))
   shiny::testServer(ch_server(proj), {
     session$setInputs(wiz_import_path = txt, wiz_import_load = 1)
+    expect_identical(output$wiz_imported, "yes")  # import mode now shows the form
     expect_identical(wiz_samples(), list(
       list(condition = "Ko", colour = "#111111", data = list(list(type = "bw", name = "ATAC", path = "atac/a.bw"),
                                                           list(type = "quantdir", name = "Sal", path = "quant/S1"))),

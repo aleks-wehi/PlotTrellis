@@ -1,6 +1,6 @@
 Package: PlotTrellis
 Title: Project-Centric EDA Figures for Genome-Aligned Transcriptomics
-Version: 1.2.0
+Version: 1.3.0
 Authors@R:
     person("Aleksander", "Pacnik", email = "pacnik.a@wehi.edu.au", role = c("aut", "cre"),
         comment = c(ORCID = "0009-0000-4062-2582"))

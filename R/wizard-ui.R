@@ -26,67 +26,17 @@ wiz_section <- function(number, title, intro, ...) {
       ...)
 }
 
-# The "Which GTF?" guide under the GTF field: what works and why, where to get
-# it, and the OrgDb package and genome label that go with each. Every claim here
-# is checked against ensure_genome_ready() (Ensembl IDs required, UCSC
-# chromosome names applied, lengths fetched by genome_label); a plain Ensembl
-# GTF was run end to end before the Ensembl claims were written.
+# The "Which GTF?" note under the GTF field: GENCODE or Ensembl, and where to
+# download it (a RefSeq GTF finds no gene: its IDs are not Ensembl IDs).
 wiz_gtf_guide <- function() {
-  row <- function(...) tags$tr(lapply(list(...), tags$td))
+  link <- function(href, text) tags$a(href = href, target = "_blank", text)
   tags$details(class = "wiz-guide",
-    tags$summary("Which GTF? Where do I get it?"),
-    tags$ul(
-      tags$li(tags$b("GENCODE or Ensembl, not RefSeq. "),
-              "PlotTrellis finds a gene by looking its name up in the OrgDb package, which gives the ",
-              "gene's Ensembl ID (ENSG..., ENSMUSG...), then finds that ID in the GTF. GENCODE and ",
-              "Ensembl GTFs use Ensembl IDs; RefSeq (NCBI) GTFs use other IDs, so no gene would be ",
-              "found. GENCODE gives the most: an Ensembl GTF draws every track, but has no APPRIS labels ",
-              "for the Gene info table. Mouse and human are supported."),
-      tags$li(tags$b("The release your quantification used. "),
-              "Transcripts in your quant.sf files are matched to the GTF by ID, so use the GTF from ",
-              "the same GENCODE or Ensembl release as the transcript sequences Salmon was run on; a ",
-              "transcript the GTF does not have is left out of the expression tracks. For GENCODE, ",
-              "Salmon must have been run with --gencode, or no transcript name matches. A different ",
-              "genome build (mm10 vs mm39) puts every gene at the wrong coordinates."),
-      tags$li(tags$b("Keep it gzipped "),
-              "(.gtf.gz). The first launch builds an index from it, ",
-              "about 1 to 3 minutes for a whole genome, once per GTF file.")
-    ),
-    p(tags$b("Where to download it: "),
-      tags$a(href = "https://www.gencodegenes.org/human/", target = "_blank",
-             "GENCODE human"), " or ",
-      tags$a(href = "https://www.gencodegenes.org/mouse/", target = "_blank",
-             "GENCODE mouse"),
-      ", the \"Comprehensive gene annotation\" GTF (region CHR); earlier releases under \"Releases\" on the same page. ",
-      "Ensembl: ",
-      tags$code("https://ftp.ensembl.org/pub/release-<N>/gtf/<species>/"),
-      ", the file ",
-      tags$code("<Species>.<build>.<N>.gtf.gz"), "; human GRCh37 is under ",
-      tags$code("pub/grch37/"), " instead."),
-    tags$table(class = "table table-condensed wiz-guide-table",
-      tags$thead(tags$tr(tags$th("Species, build"), tags$th("GENCODE releases"),
-                         tags$th("Ensembl releases"), tags$th("OrgDb package"),
-                         tags$th("Genome label"))),
-      tags$tbody(
-        row("Mouse, GRCm39", "M26 and later", "103 and later",
-            tags$code("org.Mm.eg.db"), tags$code("mm39")),
-        row("Mouse, GRCm38", "M25 and earlier", "68 to 102",
-            tags$code("org.Mm.eg.db"), tags$code("mm10")),
-        row("Human, GRCh38", "20 and later", "76 and later",
-            tags$code("org.Hs.eg.db"), tags$code("hg38")),
-        row("Human, GRCh37", "3c to 19 (not the \"lift37\" files)",
-            "55 to 75, or the GRCh37 archive", tags$code("org.Hs.eg.db"),
-            tags$code("hg19"))
-      )
-    ),
-    p(class = "text-muted", style = "margin-bottom:0;",
-      "The build must be the one your reads were aligned to. GENCODE's \"lift37\" GTFs carry IDs such as ",
-      tags$code("ENSG00000290825.1_1"),
-      " that match no gene name: use GENCODE 19 instead. ",
-      "Install the OrgDb package once in R: ",
-      tags$code("BiocManager::install(\"org.Mm.eg.db\")"),
-      " (mouse) or ", tags$code("BiocManager::install(\"org.Hs.eg.db\")"),
-      " (human).")
+    tags$summary("Which GTF?"),
+    p(style = "margin:8px 0 0 0;",
+      "Must be GENCODE or Ensembl, the comprehensive gene annotation: GENCODE ",
+      link("https://www.gencodegenes.org/human/", "human"), " or ",
+      link("https://www.gencodegenes.org/mouse/", "mouse"), ", or ",
+      link("https://www.ensembl.org/info/data/ftp/index.html", "Ensembl"), ".")
   )
 }
 
@@ -98,7 +48,7 @@ wiz_gtf_guide <- function() {
 wiz_shared_form <- function(cfg, is_edit) {
   tagList(
     wiz_section(1, "Genome",
-      "The gene annotation (GTF) PlotTrellis draws genes and transcripts from, and the R package it looks gene names up in.",
+      "The gene annotation (GTF)",
       fluidRow(
         column(5, selectizeInput("wiz_genome_preset",
                     wiz_help("Species and genome build",
@@ -112,7 +62,7 @@ wiz_shared_form <- function(cfg, is_edit) {
                     width = "100%"))
       ),
       textInput("wiz_gtf_path",
-                wiz_help("GTF file (path on the computer running R)",
+                wiz_help("GTF file",
                          "A GENCODE or Ensembl GTF of the genome build your reads were aligned to (RefSeq GTFs do not work)."),
                 value = cfg$gtf_path %||% "", width = "100%",
                 placeholder = "e.g. /data/reference/gencode.vM32.annotation.gtf.gz"),
@@ -133,23 +83,17 @@ wiz_shared_form <- function(cfg, is_edit) {
                uiOutput("wiz_genome_label_status"))
       )
     ),
-    wiz_section(2, "Data folder",
-      "The folder your data files are in (bigWig, Hi-C, BED, junction or loop files, salmon quant folders), on the computer running R. Each sample's files are then picked from it, so one folder for everything is easiest.",
-      textInput("wiz_data_root",
-                wiz_help("Data folder (full path)",
-                         "Files in any subfolder of it are found."),
+    wiz_section(2, "Data folder (full path)", NULL,
+      textInput("wiz_data_root", NULL,
                 value = if (is_edit) cfg$data_dir else "", width = "100%",
                 placeholder = "e.g. /data/smithlab/tcell_2026"),
       uiOutput("wiz_data_root_status")
     ),
-    wiz_section(3, "Samples",
-      "A sample is one condition you want to look at (Control, KO, Basal, LP...), with its files. Add one per condition; the figure then draws them side by side or compares two of them.",
+    wiz_section(3, "Samples", NULL,
       actionButton("wiz_add_sample", "+ Add a sample",
                    class = "pt-once btn-primary"),
       uiOutput("wiz_samples_ui")
     ),
-    p(class = "text-muted",
-      "Fonts, track heights and other display settings are changed in the app's Figure settings panel, not here."),
     uiOutput("wiz_completion_error"),
     div(class = "wiz-actions",
       if (is_edit) tagList(
@@ -177,8 +121,13 @@ wiz_shared_form <- function(cfg, is_edit) {
 wizard_ui <- function(SETTINGS_JSON) {
   is_edit <- file.exists(SETTINGS_JSON)
   # The composer's title bar, full width above the page (.pt_title_bar()). The
-  # theme goes in the head, so the bar is never drawn without it.
-  tagList(tags$head(.pt_theme_css()), .pt_title_bar(), fluidPage(
+  # theme goes in the head, so the bar is never drawn without it. Dark mode as
+  # the screen picks it (main.js): ?mode=dark, else the mode last chosen there.
+  tagList(tags$head(.pt_theme_css(), tags$script(HTML(
+    "(function () { var m = new URLSearchParams(location.search).get('mode');",
+    "if (!m) { try { m = localStorage.getItem('pt-mode'); } catch (e) {} }",
+    "if (m === 'dark') document.documentElement.setAttribute('data-pt-mode', 'dark'); })();"))),
+    .pt_title_bar(), fluidPage(
     class = "wiz-page",
     tags$head(tags$title(if (is_edit) "PlotTrellis: project settings" else
                          "PlotTrellis: set up your project")),
@@ -190,12 +139,7 @@ wizard_ui <- function(SETTINGS_JSON) {
       h1("Project settings"),
       p(class = "wiz-lead",
         "Change your project's genome, data folder or samples. Save restarts the app with the new settings; Close keeps the old ones.")
-    ) else tagList(
-      h1("Welcome to PlotTrellis"),
-      p(class = "wiz-lead",
-        "Let's set up your project: where your data is, which genome annotation to use, and what your samples are. ",
-        "It takes a few minutes, and everything can be changed later from the app.")
-    ),
+    ) else h1("Welcome to PlotTrellis"),
     uiOutput("wiz_body")
   ))
 }

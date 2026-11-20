@@ -1,6 +1,9 @@
 /* PlotTrellis look, shared by the main screen and the setup wizard (.pt_theme_css()). Colours come
-   from the logo; every one is a --pt-* token below, so a second scheme only redefines the tokens. */
+   from the logo; every one is a --pt-* token below, so a second scheme only redefines the tokens.
+   The tokens are the app's only ones: the screen's main.css and the wizard's wizard.css use these.
+   Dark mode is <html data-pt-mode='dark'>. */
 :root {
+  color-scheme: light;
   --pt-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --pt-font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
   --pt-bg: #F5F1E8; --pt-surface: #FFFFFF; --pt-surface-2: #EDF0E8; --pt-tray: #F1F3EC;
@@ -9,17 +12,36 @@
   --pt-nav-bg: #1F3A2E; --pt-nav-text: #F4EFE3; --pt-nav-line: rgba(244, 239, 227, 0.45); --pt-nav-hover: rgba(244, 239, 227, 0.14);
   --pt-nav-warn: #F2C879; --pt-nav-danger: #F5A492;
   --pt-primary: #2F6B4A; --pt-primary-hover: #28593E; --pt-primary-edge: #1E4630; --pt-on-primary: #FFFFFF; --pt-primary-soft: #DCEBD9;
+  --pt-select: #2F6B4A; --pt-select-soft: #DCEBD9; --pt-on-select: #FFFFFF;   /* what is picked */
   --pt-accent: #E07A4F; --pt-accent-strong: #B4532B;
   --pt-link: #2F6B4A; --pt-link-hover: #1E4630;
   --pt-focus: #2F6B4A; --pt-focus-ring: rgba(141, 191, 106, 0.35);
   --pt-input-bg: #FFFFFF; --pt-hover: #E9F2E2;
-  --pt-warn: #E9B04F; --pt-on-warn: #2A1E05; --pt-warn-edge: #B9832A;
+  --pt-warn: #E9B04F; --pt-on-warn: #2A1E05; --pt-warn-edge: #B9832A; --pt-warn-soft: #FBF3E3; --pt-ok: #2E7D32;
   --pt-danger-btn: #B5412F; --pt-on-danger: #FFFFFF; --pt-danger-edge: #8A2E20;
   --pt-danger: #C4503C; --pt-danger-soft: #FBE9E5;
   --pt-code-bg: #F3F1EA; --pt-code-text: #1F2A24;
   --pt-overlay: rgba(245, 241, 232, 0.84);
   --pt-shadow: 0 1px 2px rgba(31, 58, 46, 0.06), 0 4px 14px rgba(31, 58, 46, 0.07);
+  --pt-r: 4px; --pt-r-sm: 3px;   /* corners: boxes and buttons, and small parts inside them */
   --pt-tip-bg: #1F3A2E; --pt-tip-text: #F4EFE3;
+}
+:root[data-pt-mode='dark'] {
+  color-scheme: dark;
+  --pt-bg: #14241C; --pt-surface: #1F3A2E; --pt-surface-2: #264536; --pt-tray: #1A3127;
+  --pt-border: #35574A; --pt-border-strong: #4C7060; --pt-input-border: #7A9C8B;
+  --pt-text: #ECE7DA; --pt-muted: #A8B6AB; --pt-heading: #F4EFE3;
+  --pt-nav-bg: #101D17;
+  --pt-primary: #8DBF6A; --pt-primary-hover: #9DCB7C; --pt-primary-edge: #5E8F45; --pt-on-primary: #12211A; --pt-primary-soft: #2B4D3C;
+  --pt-select: #8DBF6A; --pt-select-soft: #2B4D3C; --pt-on-select: #12211A;
+  --pt-accent-strong: #E07A4F;
+  --pt-focus: #8DBF6A; --pt-input-bg: #14241C; --pt-hover: #2B4D3C; --pt-link: #A5D184; --pt-link-hover: #F4EFE3;
+  --pt-warn-soft: #4A3B1E; --pt-ok: #8DBF6A;
+  --pt-danger: #F08A76; --pt-danger-soft: #4A2A24;
+  --pt-code-bg: #264536; --pt-code-text: #ECE7DA;
+  --pt-overlay: rgba(20, 36, 28, 0.84);
+  --pt-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  --pt-tip-bg: #F4EFE3; --pt-tip-text: #1F3A2E;
 }
 
 body { background: var(--pt-bg); color: var(--pt-text); font-family: var(--pt-font); }
@@ -79,6 +101,9 @@ html { scroll-padding-top: 66px; }
   border-color: var(--pt-focus); box-shadow: 0 0 0 3px var(--pt-focus-ring);
 }
 .selectize-input input, .selectize-input > .item { color: var(--pt-text); }
+/* Selectize's arrow is drawn #333, lost on a dark input. */
+:root[data-pt-mode='dark'] .selectize-control.single .selectize-input:not(.no-arrow):after { border-top-color: var(--pt-muted); }
+:root[data-pt-mode='dark'] .selectize-control.single .selectize-input:not(.no-arrow).dropdown-active:after { border-top-color: transparent; border-bottom-color: var(--pt-muted); }
 .selectize-input input::placeholder, .form-control::placeholder { color: var(--pt-muted); opacity: 1; }
 .selectize-dropdown { background: var(--pt-surface); color: var(--pt-text); border: 1px solid var(--pt-border-strong); border-radius: 0 0 6px 6px; }
 .selectize-dropdown .active, .selectize-dropdown .active:not(.selected) { background: var(--pt-hover); color: var(--pt-text); }
